@@ -26,11 +26,16 @@
   - 읽을 수 있는 레퍼런스: `github.com/hobuinc/hobu.co` 의 `copc-viewer.html`, `moon.html`(NASA LOLA).
 - **결론**: 오픈소스 빌딩블록(copc.js+laz-perf+Cesium)은 다 있으나, **재사용 가능한 오픈소스 COPC↔Cesium 통합 라이브러리는 부재** = 대회 과제의 갭이 실재. 연구 리스크 아님, 엔지니어링 문제.
 
-### baseline 구현 (계획 승인 후)
-- [ ] 샘플 COPC 데이터 확보 (공개 데이터셋)
-- [ ] 루트 노드 포인트 → Cesium에 렌더 (PointPrimitiveCollection 또는 Primitive)
-- [ ] 좌표계 정합 (header.wkt → ECEF)
-- [ ] 4축 중 어디가 먼저 터지는지 측정 → 기록
+### baseline = "갭 실증 데모" (범위·기준 확정 2026-06-16)
+문제정의·범위: `docs/PROBLEM.md` · 이진 기준: `.claude-criteria.md`
+> 목적: naive 직접 로드의 정확성(T0) + 성능 벽(4축 중 어느 축, 몇 점)을 측정해 보인다. **데모는 느려도 된다.**
+
+- [ ] 공개 COPC 데이터 확보 (소형=정확성 / 대형=벽 찾기)
+- [ ] copc.js `Getter.http` → 점 → Cesium native 렌더 (PointPrimitiveCollection/Primitive)
+- [ ] georeferencing (header.wkt → ECEF), 맞는 위치에 표시 [C1]
+- [ ] 점 수 올리며 인터랙티브 임계 N 특정 [C2-1]
+- [ ] 벽 지점의 지배 축을 4축 중 하나로 측정·명시 [C2-2]
+- [ ] 측정 절차 재현 가능하게 기록 [C3]
 
 ## Phase 2 — 스트리밍 / LOD 엔진 🔒
 SSE 기반 옥트리 순회 + range 스트리밍 + 메모리 캐시. (핵심 난관·STOP 규칙)
