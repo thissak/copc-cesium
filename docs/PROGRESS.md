@@ -30,12 +30,15 @@
 문제정의·범위: `docs/PROBLEM.md` · 이진 기준: `.claude-criteria.md`
 > 목적: naive 직접 로드의 정확성(T0) + 성능 벽(4축 중 어느 축, 몇 점)을 측정해 보인다. **데모는 느려도 된다.**
 
-- [ ] 공개 COPC 데이터 확보 (소형=정확성 / 대형=벽 찾기)
-- [ ] copc.js `Getter.http` → 점 → Cesium native 렌더 (PointPrimitiveCollection/Primitive)
-- [ ] georeferencing (header.wkt → ECEF), 맞는 위치에 표시 [C1]
+- [x] 공개 COPC 데이터 확보 — autzen(77MB)/millsite/sofi, Range 206+CORS 검증 (`src/datasets.ts`)
+- [x] copc.js `Getter.http` → 점 → Cesium native 렌더 (PointPrimitiveCollection, 브라우저 동작)
+- [x] **georeferencing [C1] PASS** — headless verify: center **-123.069°, 44.056° = Autzen, Oregon** (소수점 4자리 일치)
+- [x] **측정 재현 가능 [C3]** — `npm run verify` 헤드리스 하네스(Node, stdout JSON+PASS/FAIL). source/render 분리(`copc-core.ts`)
 - [ ] 점 수 올리며 인터랙티브 임계 N 특정 [C2-1]
-- [ ] 벽 지점의 지배 축을 4축 중 하나로 측정·명시 [C2-2]
-- [ ] 측정 절차 재현 가능하게 기록 [C3]
+- [ ] 벽 지점의 지배 축을 4축 중 하나로 측정·명시 [C2-2] — ①②③은 verify로, ④GPU는 브라우저로
+
+> **디버깅 로그 (딸깍 아님의 증거):** AI 생성 georef가 실제 데이터에서 2회 무너짐 → 측정으로 근본원인 짚어 수정.
+> ① `proj4`가 COMPD_CS(복합좌표계) 미지원 → 내부 PROJCS 추출 + 피트→미터 Z 보정. ② laz-perf WASM이 Vite에서 미서빙(HTML 반환) → web 빌드 + `?url` 주입.
 
 ## Phase 2 — 스트리밍 / LOD 엔진 🔒
 SSE 기반 옥트리 순회 + range 스트리밍 + 메모리 캐시. (핵심 난관·STOP 규칙)

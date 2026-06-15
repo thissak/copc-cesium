@@ -6,13 +6,17 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "verify": "tsx scripts/verify.ts"
   },
   "dependencies": {
     "cesium": "^1.142.0",
-    "copc": "^0.0.8"
+    "copc": "^0.0.8",
+    "proj4": "^2.20.9"
   },
   "devDependencies": {
+    "@types/proj4": "^2.5.6",
+    "tsx": "^4.22.4",
     "typescript": "^6.0.3",
     "vite": "^8.0.16",
     "vite-plugin-cesium": "^1.2.23"
