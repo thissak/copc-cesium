@@ -1,0 +1,20 @@
+{
+  "name": "copc-cesium-lab",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "cesium": "^1.142.0",
+    "copc": "^0.0.8"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "vite": "^8.0.16",
+    "vite-plugin-cesium": "^1.2.23"
+  }
+}

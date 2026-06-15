@@ -1,0 +1,15 @@
+node_modules/
+dist/
+*.log
+
+# 대용량 COPC 원본은 커밋하지 않는다
+data/
+*.copc.laz
+*.laz
+*.las
+
+.DS_Store
+.vite/
+
+# docsite (mkdocs) 빌드 산출물
+site/

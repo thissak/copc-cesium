@@ -1,0 +1,45 @@
+site_name: "CopcCesiumLab — 학습 사이트"
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  language: ko
+  font: false
+  palette:
+    - scheme: default
+      toggle: { icon: material/weather-night, name: 다크 모드 }
+    - scheme: slate
+      toggle: { icon: material/weather-sunny, name: 라이트 모드 }
+  features:
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+plugins:
+  - search:
+      separator: '[\s\-_,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.details
+
+# nav: 생략 → MkDocs가 docs/ 트리에서 사이드바를 자동 생성한다.
+# study/ journal/ learning/ 등 폴더명이 프로젝트마다 달라도 그대로 흡수되므로
+# 이 템플릿은 프로젝트별 수정 없이 재사용된다.
