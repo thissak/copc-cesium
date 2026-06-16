@@ -18,7 +18,8 @@
 1. **결과물 = 재사용 Cesium provider 플러그인.** `CopcTileset.fromUrl(url, options)` 스타일 (TIFFImageryProvider 패턴). 일회용 앱 아님.
 2. **아키텍처 = A (on-the-fly 3D Tiles).** COPC 옥트리를 **동적 `Cesium3DTileset`으로 노출**(geometricError = `spacing / 2^깊이`). Cesium SSE가 노드를 요청하면, 그 노드만 range로 읽어 **pnts로 실시간 변환**해 공급. **LOD·컬링·스트리밍 traversal은 Cesium에 위임.**
 3. **기각**: B(custom primitive — Cesium이 가진 LOD를 재발명), C(Potree 오버레이 — Cesium 플러그인이 아니라 별도 렌더러, 과제 취지 위반).
-4. **CRS**: proj4 + `projFunc` 옵션 (COMPD_CS는 내부 PROJCS 추출 + 선형단위 Z 보정으로 해결됨 — `copc-core.ts`).
+4. **CRS**: proj4 + ~~`projFunc` 옵션~~ (COMPD_CS는 내부 PROJCS 추출 + 선형단위 Z 보정으로 해결됨 — `copc-core.ts`).
+   - **정정(2026-06-17)**: `projFunc`(JS 함수) **드롭**. 디코드/reproject는 워커의 per-point 핫루프 → 함수를 comlink로 넘기면 점마다 async IPC 왕복(호출이 Promise화)으로 마비. 레퍼런스 검증: prior art는 **누구도 워커에 per-point 함수를 넘기지 않고 직렬화 CRS 문자열**을 쓴다(Giro3D `registerCRS(code, proj4문자열)`·Potree proj4 문자열·deck.gl 선언적 CRS·proj4 `defs`). 오버라이드가 필요하면 `sourceCrs?: string`(또는 워커-사이드 `(wkt)=>transform` 팩토리)로 후속. 현재는 파일 WKT 자동 처리로 충분(미구현).
 5. **점 표현**: 컴팩트 typed buffer (점당 객체 금지 — C2 교훈).
 
 ## API 스케치
@@ -32,7 +33,7 @@ const copc = await CopcTileset.fromUrl('https://…/autzen.copc.laz', {
   pointSize: 2,
   colorBy: 'elevation' | 'rgb' | 'classification' | 'intensity',
   maximumScreenSpaceError: 16,  // Cesium LOD 노브
-  projFunc,                     // 비 4326/3857 CRS 처리
+  // CRS: 파일 WKT 자동. 오버라이드 필요시 sourceCrs?: string (후속 — 결정 §4 정정 참조)
 });
 viewer.scene.primitives.add(copc);
 copc.destroy();                 // 생명주기
@@ -45,6 +46,8 @@ copc.destroy();                 // 생명주기
 | `requestImage(x,y,z)` ← Cesium 콜백 | Cesium3DTileset 노드 content 요청 ← Cesium 콜백 |
 | 타일 → 2D 이미지 | 노드 → .pnts (점 묶음) |
 | `imageryLayers.addImageryProvider` | `scene.primitives.add` |
+
+> **각주(2026-06-17 정정)**: TIFFImageryProvider의 `projFunc`는 워커를 넘나드는 per-point 함수가 아니라 **빌드당 1회 호출되는 `(code)=>{project,unproject}` 팩토리**이며, 반환된 transform은 **메인스레드에서** 워커 디코드 *이후* 적용된다(워커 경계를 넘지 않음). 즉 본보기는 "per-point 함수 전달"의 예가 아니라 *팩토리 패턴*의 선례다. 우리 워크로드는 reproject가 **워커 내부** per-point라 함수형 자체가 부적합 → §4 정정대로 `sourceCrs` 문자열/워커-사이드 팩토리로 간다.
 
 ## 결과 (Consequences)
 

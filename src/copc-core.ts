@@ -145,21 +145,47 @@ export async function openCopc(url: string): Promise<CopcSession> {
   };
 }
 
-/** 한 노드(key='D-X-Y-Z')의 모든 점을 디코드해 경위도+높이로 반환. 없으면 null. */
+/**
+ * 한 노드(key='D-X-Y-Z')의 모든 점을 디코드해 경위도+높이로 반환. 없으면 null.
+ * wantRgb=true 이고 Red/Green/Blue 디멘션이 있으면 점당 RGB(0-255)도 반환(colorBy:'rgb' 용).
+ */
 export async function decodeNode(
   s: CopcSession,
   key: string,
   lazPerf?: LazPerf,
-): Promise<{ lonLatH: number[]; zVals: number[]; count: number } | null> {
+  wantRgb = false,
+): Promise<{ lonLatH: number[]; zVals: number[]; count: number; rgb?: Uint8Array } | null> {
   const node = s.nodes[key];
   if (!node) return null;
   const view = await Copc.loadPointDataView(s.getter, s.copc, node, lazPerf ? { lazPerf } : undefined);
+  const n = view.pointCount;
   const gx = view.getter('X');
   const gy = view.getter('Y');
   const gz = view.getter('Z');
+
+  // RGB(옵션): Red/Green/Blue 디멘션이 모두 있을 때만. LAS RGB 는 보통 uint16 →
+  // 노드 최댓값이 255 초과면 16-bit 로 보고 >>8 로 8-bit 스케일.
+  const hasRgb =
+    wantRgb && 'Red' in view.dimensions && 'Green' in view.dimensions && 'Blue' in view.dimensions;
+  const gr = hasRgb ? view.getter('Red') : undefined;
+  const gg = hasRgb ? view.getter('Green') : undefined;
+  const gb = hasRgb ? view.getter('Blue') : undefined;
+  const rgb = hasRgb ? new Uint8Array(n * 3) : undefined;
+  let shift = 0;
+  if (hasRgb) {
+    let max = 0;
+    for (let i = 0; i < n; i++) {
+      const r = gr!(i), g = gg!(i), b = gb!(i);
+      if (r > max) max = r;
+      if (g > max) max = g;
+      if (b > max) max = b;
+    }
+    shift = max > 255 ? 8 : 0;
+  }
+
   const lonLatH: number[] = [];
   const zVals: number[] = [];
-  for (let i = 0; i < view.pointCount; i++) {
+  for (let i = 0; i < n; i++) {
     const x = gx(i);
     const y = gy(i);
     const z = gz(i) * s.zUnit;
@@ -172,6 +198,11 @@ export async function decodeNode(
     }
     lonLatH.push(lon, lat, z);
     zVals.push(z);
+    if (rgb) {
+      rgb[i * 3] = gr!(i) >> shift;
+      rgb[i * 3 + 1] = gg!(i) >> shift;
+      rgb[i * 3 + 2] = gb!(i) >> shift;
+    }
   }
-  return { lonLatH, zVals, count: view.pointCount };
+  return { lonLatH, zVals, count: n, rgb };
 }

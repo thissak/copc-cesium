@@ -13,13 +13,15 @@
 - 검증: `npm run verify`/`sweep`, `?bench`(fps), `?spike`~`?spike5`, 기본=데모
 
 ## 다음 작업 (성능·마감)
-- **③ 성능**: 디코드를 페이지 메인스레드 → **Web Worker**로 이동 (대용량 UI 끊김 방지) + **LRU 캐시**(메모리 상한) + 컴팩트 buffer
-- **④ 마감**: `options`(colorBy/pointSize/projFunc/attenuation) + README/라이선스 + 데모 페이지 다듬기
+- ~~③-A 성능: 디코드 → Web Worker 이동 + 컴팩트 buffer~~ **완료(2026-06-17)** — `comlink` 단일 워커 + `POSITION_QUANTIZED`. `src/decode.worker.ts`·`src/pnts-quantized.ts`, C1~C6 PASS.
+- **③-B (측정 후 판단)**: LRU 캐시(`lru-cache`)·워커풀(`workerpool`). BP상 Cesium `cacheBytes`와 중복 가능성 → **착수 전 측정**(재디코드 빈도/디코드 큐잉). 손코딩 금지·STOP 규칙.
+- **④ 마감**: ~~`options`~~ **options 완료(2026-06-17)** — `pointSize`/`attenuation`/`eyeDomeLighting`/`colorBy`. `projFunc`(JS함수)는 드롭 — prior art(Giro3D `registerCRS`·Potree)는 직렬화 CRS 문자열을 씀(레퍼런스 검증). 오버라이드 필요시 `sourceCrs` 문자열/워커-사이드 팩토리로 후속. (TIFFImageryProvider의 projFunc는 메인스레드 1회 팩토리였음 — ADR-001 §4 정정). **남음**: README/라이선스 + 데모 페이지 다듬기
 - **단차 마무리**: Z조임 fix 효과 실 GPU 확인 → 남으면 attenuation/EDL 옵션 ON
-- **실 GPU 대용량 fps** 측정 (헤드리스 불가)
+- **실 GPU 대용량 fps** 측정 (헤드리스 불가) — ③-A 효과(메인스레드 끊김↓) 정량 확인 겸
 
 ## 알려진 이슈 / 주의
-- 디코드 현재 메인스레드 → ③에서 Worker 필수
+- 디코드 세션이 워커·페이지 양쪽에 1개씩(각자 `openCopc`) → 헤더+옥트리 fetch 2회(1회성·경량). 페이지 세션은 디코드 안 함(WASM 불필요)
+- 양자화 정밀도는 per-tile QUANTIZED_VOLUME(타일 ECEF extent)에 상대 → 도시 스케일 cm~mm. 전역 단일 볼륨 쓰면 정밀도 붕괴(주의)
 - **stale SW 제어권 race**: `register` 전 unregister 또는 `reg.update()` + controllerchange 대기
 - Cesium은 content를 XHR로 가져옴 → 가로채기는 fetch 패치 ❌, **서비스워커 필수**
 - 정밀도: pnts에 **RTC_CENTER 필수**. CRS는 proj4 (COMPD_CS는 PROJCS 추출 + 단위보정, `copc-core.ts`)

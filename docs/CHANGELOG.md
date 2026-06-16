@@ -2,6 +2,12 @@
 
 날짜별 변경 내역 + 결정 사유. 최신이 위.
 
+### 2026-06-17
+- [feat] **본편 ④ options — `CopcTileset.fromUrl(url, opts)` 렌더 옵션.** `pointSize`(Cesium3DTileStyle), `attenuation`·`eyeDomeLighting`(pointCloudShading, EDL은 attenuation 동반 — 거친 LOD 단차 가림), `colorBy:'height'|'rgb'`(워커가 COPC Red/Green/Blue 디멘션 읽음, 16-bit면 >>8, 없으면 height 자동 폴백). 검증: Autzen `hasRgb:true`, 'rgb' vs 'height' 색 바이트 상이·점수 동일(61201)·둘 다 양자화, `tileLoad:6/fail:0`, 기본(옵션 없음) 회귀 없음, build·verify PASS. C1~C6 PASS. 신규 의존성 0. (`copc-tileset.ts`+`decode.worker.ts`+`copc-core.decodeNode`(wantRgb)+`pnts-quantized`(rgb))
+- [decision] **`projFunc`(JS 함수) 드롭 — 레퍼런스 검증 완료.** 디코드/reproject가 워커 per-point 핫루프라 함수를 comlink로 넘기면 점마다 async IPC 왕복(호출이 Promise화) → 마비. 검증: prior art는 **누구도 워커에 per-point 함수를 안 넘기고 직렬화 CRS 문자열**을 씀(Giro3D `registerCRS(code, proj4문자열)`·Potree proj4 문자열·deck.gl 선언적 CRS·proj4 `defs`). **정정**: ADR이 본보기로 든 TIFFImageryProvider의 `projFunc`는 워커를 넘나드는 per-point 함수가 아니라 **메인스레드 1회 `(code)=>transform` 팩토리**였음(워커 per-point 워크로드엔 부적합한 결론은 동일). 오버라이드 필요시 `sourceCrs?: string`(또는 워커-사이드 팩토리)로 후속. 좌표계는 파일 WKT로 자동 처리(현재 충분). ADR-001 §4·각주 정정.
+- [feat] **본편 ③-A 성능 — 디코드를 Web Worker로 이동(comlink) + POSITION_QUANTIZED 컴팩트 버퍼.** 메인스레드 inline 디코드(laz-perf WASM + proj4 + pnts 빌드)를 `src/decode.worker.ts`로 분리(`copc-tileset.ts`는 `comlink`로 위임). 디코드 세션은 워커가, tileset.json 지오메트리는 페이지가 보관(둘 다 `openCopc`, 병렬). pnts는 `src/pnts-quantized.ts`에서 Cesium 없이 생성 — uint16×3 양자화로 위치 바이트 12→6(점당 15→9B, −40%), RTC_CENTER + per-tile QUANTIZED_VOLUME. 검증: 기본 데모 `tileLoad:10/fail:0`·콘솔에러0, `npm run verify` PASS(Autzen), ECEF 공식 Cesium 대비 1.4e-9m 일치(`scripts/check-ecef.ts`). C1~C6 PASS.
+- [decision] **③의 LRU·워커풀은 보류(측정 후).** BP 조사 결과 Cesium이 이미 `cacheBytes`로 타일 바이트 상한·축출 → 앱 레벨 디코드 캐시는 중복 가능성(Giro3D조차 COPC 캐싱 TODO). 단일 워커로 시작, 재디코드/디코드 큐잉이 관측되면 `lru-cache`·`workerpool`로(손코딩 금지). STOP 규칙 준수: 계획+검증기준 승인 후 착수. 신규 의존성 = comlink 1개.
+
 ### 2026-06-16
 - [chore] 프로젝트 스캐폴드 — Vite + CesiumJS + copc.js + 4축 프로파일링 하네스 (Phase 0). 실브라우저 부팅 검증.
 - [feat] Phase 1 갭 실증 — naive COPC→Cesium baseline + 헤드리스 `verify`/`sweep`/`?bench`. C1 정확성(georef=Autzen), C2 naive 벽(~2~3M점), C3 재현 PASS. **벽의 원인은 GPU가 아니라 `PointPrimitiveCollection` 점당 오버헤드(메모리 1KB/점)** — 측정으로 확인.

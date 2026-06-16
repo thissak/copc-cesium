@@ -50,8 +50,9 @@
 - [x] **본편 ① 진짜 COPC via SW** — 진짜 Autzen 노드를 SW 경로로 온디맨드 렌더 (`?spike4`)
 - [x] **본편 ② 옥트리 LOD 스트리밍** — 옥트리(278노드)→동적 tileset 트리, Cesium SSE가 **24노드만** 선택 요청→온디맨드 디코드 `tileLoad:24/fail:0` (`?spike5`, `src/tileset.ts`+`copc-core` openCopc/decodeNode). **핵심 동작 작동.**
 - [x] **본편 ④(코어) `CopcTileset.fromUrl()` 공개 API + 기본 데모** — spike5 로직을 라이브러리로 추출(`src/copc-tileset.ts`). 기본 페이지가 변환 없이 LOD 스트리밍 (`tileLoad:5/fail:0`)
-- [ ] 본편 ③ 디코드를 Web Worker로 + LRU 캐시 + 컴팩트 버퍼 (성능)
-- [ ] 본편 ④(마감) options(colorBy/projFunc/pointSize) + README/라이선스 + 데모 페이지 다듬기
+- [x] **본편 ③-A 성능** — 디코드를 **Web Worker(comlink)로 이동** + **POSITION_QUANTIZED**(uint16×3, 위치 바이트 절반) 컴팩트 버퍼. 기본 데모 `tileLoad:10/fail:0`, ECEF는 Cesium 대비 1.4e-9m 일치. (`src/decode.worker.ts`, `src/pnts-quantized.ts`, C1~C6 PASS)
+- [ ] 본편 ③-B (측정 후 판단) LRU 캐시(`lru-cache`)·워커풀(`workerpool`) — BP상 Cesium `cacheBytes`와 중복 가능성 → 재디코드/큐잉 관측 시 착수
+- [~] 본편 ④(마감) **options 완료** — `pointSize`/`attenuation`/`eyeDomeLighting`/`colorBy('height'|'rgb')` (`projFunc`는 per-point IPC 마비로 드롭). C1~C6 PASS. **남음**: README/라이선스 + 데모 페이지 다듬기
 - [ ] 실 GPU 대용량 fps 확인 (사용자 머신)
 
 ## Phase 3 — 평가 / 입상 판정 🔒
