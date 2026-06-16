@@ -6,7 +6,7 @@ import lazPerfWasmUrl from 'laz-perf/lib/web/laz-perf.wasm?url';
 import { loadCopcPoints } from './copc-core';
 
 let lazPerfPromise: ReturnType<typeof LazPerf.create> | undefined;
-function getLazPerf() {
+export function getLazPerf() {
   if (!lazPerfPromise) lazPerfPromise = LazPerf.create({ locateFile: () => lazPerfWasmUrl });
   return lazPerfPromise;
 }

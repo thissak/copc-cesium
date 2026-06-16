@@ -47,8 +47,8 @@
 - [x] **스파이크① 다리 확정** — 런타임 pnts(data URI) → Cesium3DTileset `tileLoad:1/fail:0`, RTC_CENTER로 Autzen 정확. (`?spike`, `src/pnts.ts`)
 - [x] **스파이크②③ 온디맨드 가로채기 확정** — Cesium은 XHR로 요청(진단) → **서비스워커**가 가로채 요청 시점 pnts 생성·응답 `tileLoad:1`. (`?spike2`/`?spike3`, `public/copc-sw.js`)
 - → **아키텍처 끝까지 디리스킹 완료.** 남은 건 "알려진 조립":
-- [x] **본편 ① 진짜 COPC via SW** — 진짜 Autzen 노드를 SW 경로로 온디맨드 렌더 (`?spike4`, SW→페이지 라우팅) `swAsked:1/tileLoad:1`
-- [ ] 본편 ② 옥트리 전체 → 동적 tileset 트리(geometricError=spacing/2^깊이) = **진짜 LOD 스트리밍**
+- [x] **본편 ① 진짜 COPC via SW** — 진짜 Autzen 노드를 SW 경로로 온디맨드 렌더 (`?spike4`)
+- [x] **본편 ② 옥트리 LOD 스트리밍** — 옥트리(278노드)→동적 tileset 트리, Cesium SSE가 **24노드만** 선택 요청→온디맨드 디코드 `tileLoad:24/fail:0` (`?spike5`, `src/tileset.ts`+`copc-core` openCopc/decodeNode). **핵심 동작 작동.**
 - [ ] 본편 ③ 디코드를 Web Worker로 + LRU 캐시 + 컴팩트 버퍼
 - [ ] 본편 ④ `CopcTileset.fromUrl` API + projFunc + 데모/문서
 

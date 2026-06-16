@@ -10,3 +10,4 @@
 - [feat] Phase 2 스파이크 — 런타임 pnts→Cesium3DTileset 다리 확정(`src/pnts.ts`, `?spike`); Cesium은 content를 XHR로 요청 → **서비스워커**가 가로채 온디맨드 pnts 응답(`public/copc-sw.js`, `?spike2`/`?spike3`). 아키텍처 끝에서 끝까지 디리스킹.
 - [docs] 학습 사이트(MkDocs Material) — learn/ 6장 + 친절 개요 랜딩 + mermaid 다이어그램. (참고: mini-sim study 스타일)
 - [feat] Phase 2 본편 ① — 진짜 COPC 노드를 서비스워커 경로로 온디맨드 렌더(`?spike4`). SW가 페이지로 라우팅(MessageChannel)→페이지 copc.js 디코드. stale SW 제어권 race는 unregister 선행으로 수정.
+- [feat] Phase 2 본편 ② — **옥트리 LOD 스트리밍 작동**(`?spike5`). `copc-core.openCopc/decodeNode` + `tileset.ts`(옥트리→region tileset 트리). Cesium SSE가 278노드 중 **24노드만** 선택→온디맨드 디코드(`tileLoad:24/fail:0`). "보는 만큼만"이 Cesium 주도로 실데이터에서 구현됨.

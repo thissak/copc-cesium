@@ -1,4 +1,4 @@
-import { Copc, Getter } from 'copc';
+import { Copc, Getter, Hierarchy } from 'copc';
 import proj4 from 'proj4';
 import type { LazPerf } from 'laz-perf/lib/web';
 
@@ -112,4 +112,66 @@ export function extractHorizontalCrs(wkt: string): { proj: string; linearUnit: n
     if (units.length) linearUnit = Number(units[units.length - 1][1]);
   }
   return { proj, linearUnit };
+}
+
+// ── 스트리밍 세션 (Phase 2 본편) ───────────────────────────────────────
+type Reproj = { forward: (coord: number[]) => number[] };
+
+export interface CopcSession {
+  copc: Copc;
+  getter: Getter;
+  nodes: Hierarchy.Node.Map;
+  toWgs?: Reproj;
+  zUnit: number;
+  cube: number[]; // [minx,miny,minz,maxx,maxy,maxz] (root, 큐브)
+  spacing: number;
+}
+
+/** COPC 를 열어 헤더 + 옥트리(루트 페이지) + 좌표변환을 준비 (스트리밍 세션). */
+export async function openCopc(url: string): Promise<CopcSession> {
+  const getter = Getter.http(url);
+  const copc = await Copc.create(getter);
+  const { nodes } = await Copc.loadHierarchyPage(getter, copc.info.rootHierarchyPage);
+  const horiz = copc.wkt ? extractHorizontalCrs(copc.wkt) : undefined;
+  const toWgs = horiz ? (proj4(horiz.proj, proj4.WGS84) as unknown as Reproj) : undefined;
+  return {
+    copc,
+    getter,
+    nodes,
+    toWgs,
+    zUnit: horiz ? horiz.linearUnit : 1,
+    cube: copc.info.cube,
+    spacing: copc.info.spacing,
+  };
+}
+
+/** 한 노드(key='D-X-Y-Z')의 모든 점을 디코드해 경위도+높이로 반환. 없으면 null. */
+export async function decodeNode(
+  s: CopcSession,
+  key: string,
+  lazPerf?: LazPerf,
+): Promise<{ lonLatH: number[]; zVals: number[]; count: number } | null> {
+  const node = s.nodes[key];
+  if (!node) return null;
+  const view = await Copc.loadPointDataView(s.getter, s.copc, node, lazPerf ? { lazPerf } : undefined);
+  const gx = view.getter('X');
+  const gy = view.getter('Y');
+  const gz = view.getter('Z');
+  const lonLatH: number[] = [];
+  const zVals: number[] = [];
+  for (let i = 0; i < view.pointCount; i++) {
+    const x = gx(i);
+    const y = gy(i);
+    const z = gz(i) * s.zUnit;
+    let lon = x;
+    let lat = y;
+    if (s.toWgs) {
+      const o = s.toWgs.forward([x, y]);
+      lon = o[0];
+      lat = o[1];
+    }
+    lonLatH.push(lon, lat, z);
+    zVals.push(z);
+  }
+  return { lonLatH, zVals, count: view.pointCount };
 }

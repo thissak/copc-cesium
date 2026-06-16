@@ -5,11 +5,14 @@ import {
   BoundingSphere,
   Cartographic,
   Cartesian3,
+  Color,
   Math as CesiumMath,
   Cesium3DTileset,
 } from 'cesium';
 import 'cesium/Build/Cesium/Widgets/widgets.css';
-import { loadCopcNaive } from './copc';
+import { loadCopcNaive, getLazPerf } from './copc';
+import { openCopc, decodeNode } from './copc-core';
+import { buildTileset } from './tileset';
 import { DATASETS } from './datasets';
 import { buildPnts, toBase64 } from './pnts';
 
@@ -439,6 +442,109 @@ async function runSpike4() {
   }
 }
 
+// ── 본편 ②: 옥트리 LOD 스트리밍 — 옥트리 전체를 tileset 트리로, 노드별 온디맨드 디코드 ──
+async function runSpike5() {
+  log('spike5: 옥트리 LOD 스트리밍 …');
+  try {
+    if (!('serviceWorker' in navigator)) throw new Error('서비스워커 미지원');
+    const regs = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(regs.map((rg) => rg.unregister()));
+    await navigator.serviceWorker.register('/copc-sw.js');
+    await navigator.serviceWorker.ready;
+    if (!navigator.serviceWorker.controller) {
+      await new Promise<void>((res) =>
+        navigator.serviceWorker.addEventListener('controllerchange', () => res(), { once: true }),
+      );
+    }
+
+    const lazPerf = await getLazPerf();
+    const session = await openCopc(ds.url);
+    const contentBase = `${location.origin}/__copc-real/`;
+    const nodeCount = Object.values(session.nodes).filter(Boolean).length;
+
+    let swAsked = 0;
+    let decoded = 0;
+    navigator.serviceWorker.addEventListener('message', async (ev: MessageEvent) => {
+      const data = ev.data as { type?: string; key?: string };
+      if (data?.type !== 'copc-tile') return;
+      swAsked++;
+      const port = ev.ports[0];
+      try {
+        const key = (data.key || '').replace('.pnts', '');
+        const nd = await decodeNode(session, key, lazPerf);
+        if (!nd) {
+          port?.postMessage({ error: `node ${key} not found` });
+          return;
+        }
+        const positions = Cartesian3.fromDegreesArrayHeights(nd.lonLatH);
+        const bs = BoundingSphere.fromPoints(positions);
+        let zmin = Infinity;
+        let zmax = -Infinity;
+        for (const z of nd.zVals) {
+          if (z < zmin) zmin = z;
+          if (z > zmax) zmax = z;
+        }
+        const span = zmax - zmin || 1;
+        const rgb = new Uint8Array(positions.length * 3);
+        for (let i = 0; i < nd.zVals.length; i++) {
+          const c = Color.fromHsl((1 - (nd.zVals[i] - zmin) / span) * 0.66, 1, 0.5);
+          rgb[i * 3] = Math.round(c.red * 255);
+          rgb[i * 3 + 1] = Math.round(c.green * 255);
+          rgb[i * 3 + 2] = Math.round(c.blue * 255);
+        }
+        const pnts = buildPnts(positions, bs.center, rgb);
+        decoded++;
+        port?.postMessage(pnts, [pnts]);
+      } catch (err) {
+        port?.postMessage({ error: (err as Error)?.message ?? String(err) });
+      }
+    });
+
+    const tilesetUri =
+      'data:application/json;base64,' + btoa(JSON.stringify(buildTileset(session, contentBase)));
+
+    let tileLoaded = 0;
+    let tileFailed = 0;
+    let failMsg = '';
+    const tileset = await Cesium3DTileset.fromUrl(tilesetUri);
+    tileset.maximumScreenSpaceError = 2; // 공격적 refine → 여러 노드 로드(테스트)
+    tileset.tileLoad.addEventListener(() => {
+      tileLoaded++;
+    });
+    tileset.tileFailed.addEventListener((e: unknown) => {
+      tileFailed++;
+      failMsg = (e as { message?: string })?.message ?? String(e);
+    });
+    viewer.scene.primitives.add(tileset);
+    await viewer.zoomTo(tileset);
+    await new Promise((res) => setTimeout(res, 5000));
+
+    const stats = (tileset as unknown as {
+      statistics?: { numberOfTilesWithContentReady?: number; pointsLength?: number };
+    }).statistics;
+    const result = {
+      spike: '옥트리 LOD 스트리밍 (tileset 트리 + SW)',
+      hierarchyNodes: nodeCount,
+      swAsked,
+      decoded,
+      tileLoaded,
+      tileFailed,
+      failMsg,
+      contentReady: stats?.numberOfTilesWithContentReady,
+      pointsRendered: stats?.pointsLength,
+      lodStream: tileLoaded > 1 && tileFailed === 0 ? 'OK ✅ (다중 노드)' : 'CHECK',
+    };
+    (window as unknown as { __spike5: unknown }).__spike5 = result;
+    log('SPIKE5\n' + JSON.stringify(result, null, 2));
+    console.log('SPIKE5 RESULT ' + JSON.stringify(result));
+  } catch (e) {
+    const msg = (e as Error)?.message ?? String(e);
+    log('SPIKE5 ERROR: ' + msg);
+    console.error(e);
+    console.log('SPIKE5 RESULT ' + JSON.stringify({ lodStream: 'FAIL ❌', error: msg }));
+  }
+}
+
 const params = new URLSearchParams(location.search);
 if (params.has('bench')) {
   const custom = params.get('bench');
@@ -447,6 +553,8 @@ if (params.has('bench')) {
       ? custom.split(',').map((s) => Number(s.trim())).filter((n) => n > 0)
       : [100_000, 250_000, 500_000, 1_000_000, 2_000_000, 4_000_000];
   runBench(budgets);
+} else if (params.has('spike5')) {
+  runSpike5();
 } else if (params.has('spike4')) {
   runSpike4();
 } else if (params.has('spike3')) {
