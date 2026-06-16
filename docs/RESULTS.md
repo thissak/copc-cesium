@@ -75,6 +75,23 @@ center **-123.069°, 44.056°** = 실제 Autzen Stadium(44.058°N, 123.068°W)�
 → **GPU 원시 throughput이 병목이 아니다.** 편의 API의 CPU·메모리 오버헤드가 먼저 죽인다.
 이는 Phase 2 방향을 못박는다: **컴팩트 typed buffer(점당 객체 제거) + LOD 스트리밍** 둘 다 필요.
 
+## Phase 2 스파이크 — 다리 존재 증명 (PASS ✅, 2026-06-16)
+
+가장 큰 허들 ①(Cesium에 런타임 생성 content 먹이기)을 최소 스파이크로 디리스킹. (`?spike`, `src/pnts.ts`)
+
+```json
+{ "points": 50000, "pntsBytes": 750184,
+  "tileLoaded": 1, "tileFailed": 0,
+  "centerLonLat": [-123.06874, 44.05591], "bridge": "OK ✅" }
+```
+
+- **S1 ✅** 메모리에서 직접 만든 pnts 타일을 **파일/서버 없이 data URI**로 `Cesium3DTileset`에 먹임 → `tileLoad:1, tileFailed:0` = **Cesium이 우리 content를 거부 없이 파싱·로드.** (`tileLoad`는 스크린샷보다 강한 증거 — 매직·Feature Table 파싱 성공)
+- **S2 ✅** `RTC_CENTER`로 좌표 = Autzen Oregon 정확. (정밀도 메커니즘 작동; 시각 jitter 정밀확인은 실 GPU)
+- **S3 ✅** 헤드리스 콘솔로 검증.
+- 한계: 헤드리스라 "픽셀이 정확히 그려졌나"까지는 단정 불가 — 단 content-accepted + 위치-정확 신호는 강함.
+
+→ **핵심 난관이 data URI로 뚫림.** 남은 Phase 2는 "알려진 배관"(옥트리→동적 tileset 트리 + 온디맨드 공급 + 워커 디코드 + LRU). 단 data URI는 전부 미리 만들어야 하므로, **진짜 스트리밍은 서비스워커/blob 온디맨드로** 확장 필요.
+
 ## 레퍼런스 기준점 (같은 Autzen, 2026-06-16)
 
 같은 Autzen URL을 기존 뷰어에 물려 거동 측정 (Playwright). **신뢰 축 = 네트워크 거동**(fps는 헤드리스 한계).

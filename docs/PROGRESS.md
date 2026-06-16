@@ -40,13 +40,15 @@
 > **디버깅 로그 (딸깍 아님의 증거):** AI 생성 georef가 실제 데이터에서 2회 무너짐 → 측정으로 근본원인 짚어 수정.
 > ① `proj4`가 COMPD_CS(복합좌표계) 미지원 → 내부 PROJCS 추출 + 피트→미터 Z 보정. ② laz-perf WASM이 Vite에서 미서빙(HTML 반환) → web 빌드 + `?url` 주입.
 
-## Phase 2 — COPC Provider 플러그인 (LOD 스트리밍) 🔒
-**아키텍처 확정([ADR-001](adr/001-provider-plugin-architecture-A.md)): A안 = 결과물 = `CopcTileset.fromUrl()` 플러그인, COPC 옥트리를 동적 Cesium3DTileset으로 노출, LOD는 Cesium 위임.**
-핵심 난관 = **동적 tileset content(메모리 pnts) 실시간 공급 다리** (3D Tiles엔 requestImage 같은 훅 없음). STOP 규칙.
+## Phase 2 — COPC Provider 플러그인 (LOD 스트리밍) ⏳ 스파이크 PASS
+**아키텍처 확정([ADR-001](adr/001-provider-plugin-architecture-A.md)): A안 = `CopcTileset.fromUrl()` 플러그인, COPC 옥트리를 동적 Cesium3DTileset으로 노출, LOD는 Cesium 위임.**
 
-- [ ] BP 조사: Cesium 3D Tiles 동적 content 공급 API + Giro3D source 정독
-- [ ] 계획 + 검증기준 작성 → 승인
-- [ ] (계획 시 상세화: tileset.json 생성, 노드→pnts, 디코드 워커, 캐시, projFunc)
+- [x] BP 조사: pnts 바이너리 스펙 + Cesium 동적 content = data URI 로 가능 확인
+- [x] **스파이크 PASS (다리 확정)** — 런타임 pnts(data URI) → Cesium3DTileset `tileLoad:1/fail:0`, RTC_CENTER로 Autzen 위치 정확. (`?spike`, `src/pnts.ts`) → [RESULTS](RESULTS.md)
+- [ ] 본 스트리밍 계획 + 검증기준 → 승인
+- [ ] 옥트리 전체 → 동적 tileset 트리(geometricError=spacing/2^깊이)
+- [ ] 노드 content 온디맨드 공급 (서비스워커/blob) + 디코드 워커 + LRU 캐시
+- [ ] projFunc 옵션화, 컴팩트 버퍼, `fromUrl` API 정리
 
 ## Phase 3 — 평가 / 입상 판정 🔒
 대용량 실데이터에서 60fps / 메모리 / UX 측정 → 입상 가능성 데이터로 판정.

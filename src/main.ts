@@ -5,10 +5,12 @@ import {
   BoundingSphere,
   Cartographic,
   Math as CesiumMath,
+  Cesium3DTileset,
 } from 'cesium';
 import 'cesium/Build/Cesium/Widgets/widgets.css';
 import { loadCopcNaive } from './copc';
 import { DATASETS } from './datasets';
+import { buildPnts, toBase64 } from './pnts';
 
 // 자체 ion 토큰이 있으면 .env 의 VITE_CESIUM_ION_TOKEN 로 주입 (없으면 Cesium 기본 dev 토큰).
 const ionToken = import.meta.env.VITE_CESIUM_ION_TOKEN;
@@ -136,6 +138,73 @@ async function runBench(budgets: number[]) {
   console.log('BENCH DONE\n' + rows.join('\n'));
 }
 
+// ── Phase 2 스파이크: COPC 노드 → 런타임 pnts → Cesium3DTileset (다리 존재 증명) ──
+async function runSpike() {
+  log('spike: COPC 노드 로드 중 …');
+  try {
+    const r = await loadCopcNaive(ds.url, 50_000);
+    const bs = BoundingSphere.fromPoints(r.positions);
+    const rgb = new Uint8Array(r.positions.length * 3);
+    for (let i = 0; i < r.colors.length; i++) {
+      rgb[i * 3] = Math.round(r.colors[i].red * 255);
+      rgb[i * 3 + 1] = Math.round(r.colors[i].green * 255);
+      rgb[i * 3 + 2] = Math.round(r.colors[i].blue * 255);
+    }
+    const pnts = buildPnts(r.positions, bs.center, rgb);
+    const pntsUri = 'data:application/octet-stream;base64,' + toBase64(pnts);
+    const tilesetJson = {
+      asset: { version: '1.0' },
+      geometricError: 1e7,
+      root: {
+        boundingVolume: { sphere: [bs.center.x, bs.center.y, bs.center.z, bs.radius] },
+        geometricError: 0,
+        refine: 'ADD',
+        content: { uri: pntsUri },
+      },
+    };
+    const tilesetUri = 'data:application/json;base64,' + btoa(JSON.stringify(tilesetJson));
+
+    let tileLoaded = 0;
+    let tileFailed = 0;
+    let failMsg = '';
+    const tileset = await Cesium3DTileset.fromUrl(tilesetUri);
+    tileset.tileLoad.addEventListener(() => {
+      tileLoaded++;
+    });
+    tileset.tileFailed.addEventListener((e: unknown) => {
+      tileFailed++;
+      failMsg = (e as { message?: string })?.message ?? String(e);
+    });
+    tileset.pointCloudShading.attenuation = true;
+    viewer.scene.primitives.add(tileset);
+    await viewer.zoomTo(tileset);
+    await new Promise((res) => setTimeout(res, 2500)); // 타일 content 로드 settle
+
+    const c = Cartographic.fromCartesian(bs.center);
+    const result = {
+      spike: 'COPC→pnts→Cesium3DTileset (data URI)',
+      points: r.pointCount,
+      pntsBytes: pnts.byteLength,
+      tileLoaded,
+      tileFailed,
+      failMsg,
+      centerLonLat: [
+        +CesiumMath.toDegrees(c.longitude).toFixed(5),
+        +CesiumMath.toDegrees(c.latitude).toFixed(5),
+      ],
+      bridge: tileLoaded > 0 && tileFailed === 0 ? 'OK ✅' : 'FAIL ❌',
+    };
+    (window as unknown as { __spike: unknown }).__spike = result;
+    log('SPIKE\n' + JSON.stringify(result, null, 2));
+    console.log('SPIKE RESULT ' + JSON.stringify(result));
+  } catch (e) {
+    const msg = (e as Error)?.message ?? String(e);
+    log('SPIKE ERROR: ' + msg);
+    console.error(e);
+    console.log('SPIKE RESULT ' + JSON.stringify({ bridge: 'FAIL ❌', error: msg }));
+  }
+}
+
 const params = new URLSearchParams(location.search);
 if (params.has('bench')) {
   const custom = params.get('bench');
@@ -144,6 +213,8 @@ if (params.has('bench')) {
       ? custom.split(',').map((s) => Number(s.trim())).filter((n) => n > 0)
       : [100_000, 250_000, 500_000, 1_000_000, 2_000_000, 4_000_000];
   runBench(budgets);
+} else if (params.has('spike')) {
+  runSpike();
 } else {
   run();
 }
