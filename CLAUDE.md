@@ -8,9 +8,13 @@ COPC 점군을 사전 변환 없이 CesiumJS에 직접 렌더하는 기술 프�
 ```bash
 npm install
 npm run dev      # 개발 서버 (http://localhost:5173)
-npm run build    # 프로덕션 번들
+npm run build    # tsc + 프로덕션 번들
+npm run verify   # 헤드리스 정확성·timings 검증 (Node)
+npm run sweep    # 데이터축 성능 스윕 (Node)
 npm run preview  # 빌드 결과 미리보기
 ```
+
+브라우저 측정 모드: `?bench`(렌더 fps) · `?spike`/`?spike2`/`?spike3`(아키텍처 스파이크).
 
 ## 스택
 
@@ -30,8 +34,8 @@ npm run preview  # 빌드 결과 미리보기
 - 추측으로 단정 금지. 병목/동작은 **측정**으로 말한다 (`docs/PROFILING.md` 4축).
 - 대용량 COPC 원본을 repo에 커밋하지 않는다 (`data/`는 gitignore).
 
-## 핵심 설계 가설 (검증 대상)
+## 핵심 설계 (ADR-001 확정)
 
-- **Cesium의 3D Tiles 렌더러 재사용** — COPC 옥트리를 메모리상 가짜 tileset으로 래핑해
-  Cesium의 SSE/컬링/LOD 머신을 공짜로 쓴다. vs. WebGL custom primitive 직접 구현.
-  → 어느 쪽이 맞는지는 프로토타입 측정으로 결정한다.
+- 결과물 = `CopcTileset.fromUrl()` **Cesium provider 플러그인**. 아키텍처 = A안: COPC 옥트리를
+  동적 Cesium3DTileset으로 노출, **LOD는 Cesium 위임**. 노드 content는 **서비스워커**가 온디맨드 공급.
+  상세·근거는 `docs/adr/001-provider-plugin-architecture-A.md`.
