@@ -16,4 +16,6 @@
 - `service-worker-tile-interception` (아직 없음) — SW가 타일 요청을 가로채 페이지로 라우팅
 - `copc-octree-lod-streaming` (아직 없음) — Cesium 위임 LOD로 옥트리 노드 스트리밍
 
-작성 규칙은 [작성 가이드](writing-guide.md) 참고.
+## 메타
+
+- [작성 가이드](writing-guide.md) — 이 위키 페이지를 어떻게 쓰는지 (frontmatter·본문 규약·변동성 규칙)
