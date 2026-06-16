@@ -79,6 +79,73 @@ async function run() {
   }
 }
 
-run();
+// ── 렌더축(④) fps 벽 측정 — 실 GPU에서. 진입: ?bench  또는  ?bench=100000,500000,... ──
+// 헤드리스 software GPU론 fps가 무의미하므로 이 모드는 실제 GPU 머신에서 돌린다.
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+function measureFps(ms: number): Promise<number> {
+  return new Promise((res) => {
+    let frames = 0;
+    const t0 = performance.now();
+    const loop = () => {
+      frames++;
+      viewer.scene.requestRender();
+      const dt = performance.now() - t0;
+      if (dt < ms) requestAnimationFrame(loop);
+      else res(Math.round(frames / (dt / 1000)));
+    };
+    requestAnimationFrame(loop);
+  });
+}
+async function runBench(budgets: number[]) {
+  const rows: string[] = ['budget\tpoints\tbuildMs\tfps\theapMB'];
+  let flew = false;
+  for (const b of budgets) {
+    log(`bench: loading ${b.toLocaleString()} …`);
+    let r;
+    try {
+      r = await loadCopcNaive(ds.url, b);
+    } catch (e) {
+      rows.push(`${b}\tLOAD ERROR: ${(e as Error)?.message ?? e}`);
+      log('BENCH\n' + rows.join('\n'));
+      break;
+    }
+    viewer.scene.primitives.removeAll();
+    const t = performance.now();
+    const pts = new PointPrimitiveCollection();
+    for (let i = 0; i < r.positions.length; i++) {
+      pts.add({ position: r.positions[i], color: r.colors[i], pixelSize: 2 });
+    }
+    viewer.scene.primitives.add(pts);
+    const buildMs = performance.now() - t;
+    if (!flew) {
+      viewer.camera.flyToBoundingSphere(BoundingSphere.fromPoints(r.positions), { duration: 0 });
+      flew = true;
+    }
+    await sleep(400); // GPU 버퍼 업로드 settle
+    const fps = await measureFps(2000);
+    const mem = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory;
+    const heapMB = mem ? (mem.usedJSHeapSize / 1048576).toFixed(0) : '?';
+    rows.push(`${b.toLocaleString()}\t${r.pointCount.toLocaleString()}\t${buildMs.toFixed(0)}\t${fps}\t${heapMB}`);
+    // 매 스텝 즉시 갱신 → 고예산에서 프리즈해도 직전 결과는 남는다
+    log('BENCH (실 GPU) — 점↑ 시 fps 무릎 = 렌더 벽\n' + rows.join('\n'));
+    console.log(rows[rows.length - 1]);
+  }
+  log('BENCH DONE\n' + rows.join('\n'));
+  console.log('BENCH DONE\n' + rows.join('\n'));
+}
+
+const params = new URLSearchParams(location.search);
+if (params.has('bench')) {
+  const custom = params.get('bench');
+  const budgets =
+    custom && custom.includes(',')
+      ? custom.split(',').map((s) => Number(s.trim())).filter((n) => n > 0)
+      : [100_000, 250_000, 500_000, 1_000_000, 2_000_000, 4_000_000];
+  runBench(budgets);
+} else {
+  run();
+}
 
 export { viewer };

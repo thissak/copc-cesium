@@ -11,7 +11,7 @@
 - [x] `docs/PROFILING.md` 4축 진단 프로토콜 문서화
 - [x] `npm run dev` / `npm run build` 동작 확인 (build+tsc 통과)
 
-## Phase 1 — COPC 단순 로드 (baseline) 🔓 BP 조사 완료, 계획 대기
+## Phase 1 — COPC 단순 로드 (baseline) ✅ 완료 — 갭 실증 (C1·C2·C3 PASS)
 한 COPC 파일의 루트 노드를 *나이브하게* 렌더. 첫 프로파일링 타깃 확보.
 
 ### BP 조사 결과 (2026-06-16)
@@ -34,8 +34,8 @@
 - [x] copc.js `Getter.http` → 점 → Cesium native 렌더 (PointPrimitiveCollection, 브라우저 동작)
 - [x] **georeferencing [C1] PASS** — headless verify: center **-123.069°, 44.056° = Autzen, Oregon** (소수점 4자리 일치)
 - [x] **측정 재현 가능 [C3]** — `npm run verify` 헤드리스 하네스(Node, stdout JSON+PASS/FAIL). source/render 분리(`copc-core.ts`)
-- [ ] 점 수 올리며 인터랙티브 임계 N 특정 [C2-1]
-- [ ] 벽 지점의 지배 축을 4축 중 하나로 측정·명시 [C2-2] — ①②③은 verify로, ④GPU는 브라우저로
+- [x] **임계 N 특정 [C2-1]** — 실 GPU: fps 1M(74)→2M(40)→4M(17), 인터랙티브 벽 ≈ **2~3M점** (`?bench`)
+- [x] **지배 축 [C2-2]** — GPU 아님. `PointPrimitiveCollection` 점당 오버헤드: 메모리 **1KB/점**(4M=3.9GB), build 초선형, fps 선형감소. → Phase 2 = 컴팩트 버퍼 + LOD
 
 > **디버깅 로그 (딸깍 아님의 증거):** AI 생성 georef가 실제 데이터에서 2회 무너짐 → 측정으로 근본원인 짚어 수정.
 > ① `proj4`가 COMPD_CS(복합좌표계) 미지원 → 내부 PROJCS 추출 + 피트→미터 Z 보정. ② laz-perf WASM이 Vite에서 미서빙(HTML 반환) → web 빌드 + `?url` 주입.
