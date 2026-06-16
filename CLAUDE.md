@@ -14,7 +14,8 @@ npm run sweep    # 데이터축 성능 스윕 (Node)
 npm run preview  # 빌드 결과 미리보기
 ```
 
-브라우저 측정 모드: `?bench`(렌더 fps) · `?spike`/`?spike2`/`?spike3`(아키텍처 스파이크).
+브라우저: 기본 = `CopcTileset.fromUrl` 데모 · `?bench`(fps) · `?spike`~`?spike5`(스파이크) · `?naive`(Phase1 baseline).
+공개 API: `src/copc-tileset.ts` (`CopcTileset.fromUrl(url, opts)`).
 
 ## 스택
 
