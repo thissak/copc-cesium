@@ -53,7 +53,7 @@ nav:
           - learn/05-copc-cesium-integration.md
       - 위키:
           - wiki/index.md
-          - wiki/decode-on-main-thread.md
+          - wiki/decode-in-worker.md
   - "참고 (원본 문서)":
       - 문제정의: PROBLEM.md
       - 전략: STRATEGY.md

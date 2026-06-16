@@ -9,7 +9,7 @@
 
 | slug | 한 줄 | status |
 |------|-------|--------|
-| [[decode-on-main-thread]] | 디코드는 SW가 아니라 페이지 메인스레드에서 돈다 | active |
+| [[decode-in-worker]] | 디코드는 SW도 메인스레드도 아닌 Web Worker에서 돈다 | active |
 
 ## 작성 예정 (stub — 의도된 미작성)
 
