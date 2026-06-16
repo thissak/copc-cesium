@@ -38,7 +38,24 @@
 
 → **결정은 Phase 1 baseline 측정 후.** baseline(naive 로드)으로 4축 어디가 먼저 터지는지 보고, 그 데이터로 A/C를 고른다.
 
+## 갭 최종 확인 (2026-06-16)
+
+"오픈소스 + Cesium + COPC 조립품"이 정말 없는지 4갈래로 집요하게 재검증 → 전부 같은 결론.
+
+| 경로 | 결과 |
+|------|------|
+| npm `copc cesium` | COPC↔Cesium 패키지 **없음** (`copc` 데이터 lib + cesium들뿐) |
+| GitHub `copc cesium` | 결과 **딱 1개** → `endofcap/COPC_Cesium_Plugin` |
+| └ 그 1개 정체 | **빈 껍데기** — 코드 0줄, README 90B(제목+한 줄), 같은 날 3분 4커밋 후 방치 |
+| CesiumJS 네이티브 | COPC 직접 지원 **없음** (변환 필요) |
+| 열린 조립품 | Potree/Giro3D/iTowns/deck.gl — **전부 Cesium 아님** |
+
+→ **갭 확정.** 빌딩블록(copc.js·CesiumJS·laz-perf)도, 다른 엔진 조립품(Potree 등)도 다 열려 있으나,
+**Cesium 렌더 통합 반쪽**만 비어 있다. 그 유일한 동명 repo조차 *"이름만 있고 알맹이 없음"* — 남들도 갭은 보지만 안 만든다(= 인식 ≠ 실행, "딸깍으론 안 나옴"의 방증).
+신뢰도: 매우 높음(다른 이름/모노레포 매몰까지 100% 배제는 불가하나 모든 발견 경로가 동일 귀결).
+
 ## 출처
+- https://github.com/endofcap/COPC_Cesium_Plugin (빈 스텁 — 갭의 증거)
 - https://gitlab.com/giro3d/giro3d/-/merge_requests/750 (Giro3D COPC 구현)
 - https://giro3d.org/latest/apidoc/classes/sources.COPCSource.html
 - https://github.com/potree/potree/blob/develop/examples/copc.html
