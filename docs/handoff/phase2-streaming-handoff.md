@@ -1,6 +1,6 @@
 # Phase 2 (COPC Provider 스트리밍) Handoff
 
-갱신 2026-06-16. 핵심 기능 + 공개 API 작동. 성능·마감만 남음.
+갱신 2026-06-17. 핵심 기능 + 공개 API 작동. **다음 = 상용 코어 hardening** (돌기만 → 상용 퀄리티; 입상 목표).
 
 ## 완료된 작업
 - 아키텍처: [ADR-001](../adr/001-provider-plugin-architecture-A.md)(결과물=`CopcTileset.fromUrl()`, A안) + [ADR-002](../adr/002-service-worker-tile-interception.md)(서비스워커 가로채기 + 페이지 디코드 라우팅)
@@ -12,12 +12,25 @@
 - 코드 맵: `copc-core.ts`(openCopc/decodeNode) · `tileset.ts`(옥트리→tileset) · `copc-tileset.ts`(공개 API) · `pnts.ts`(pnts 생성) · `public/copc-sw.js`(SW)
 - 검증: `npm run verify`/`sweep`, `?bench`(fps), `?spike`~`?spike5`, 기본=데모
 
-## 다음 작업 (성능·마감)
-- ~~③-A 성능: 디코드 → Web Worker 이동 + 컴팩트 buffer~~ **완료(2026-06-17)** — `comlink` 단일 워커 + `POSITION_QUANTIZED`. `src/decode.worker.ts`·`src/pnts-quantized.ts`, C1~C6 PASS.
-- **③-B (측정 후 판단)**: LRU 캐시(`lru-cache`)·워커풀(`workerpool`). BP상 Cesium `cacheBytes`와 중복 가능성 → **착수 전 측정**(재디코드 빈도/디코드 큐잉). 손코딩 금지·STOP 규칙.
-- **④ 마감**: ~~`options`~~ **options 완료(2026-06-17)** — `pointSize`/`attenuation`/`eyeDomeLighting`/`colorBy`. `projFunc`(JS함수)는 드롭 — prior art(Giro3D `registerCRS`·Potree)는 직렬화 CRS 문자열을 씀(레퍼런스 검증). 오버라이드 필요시 `sourceCrs` 문자열/워커-사이드 팩토리로 후속. (TIFFImageryProvider의 projFunc는 메인스레드 1회 팩토리였음 — ADR-001 §4 정정). **남음**: README/라이선스 + 데모 페이지 다듬기
-- **단차 마무리**: Z조임 fix 효과 실 GPU 확인 → 남으면 attenuation/EDL 옵션 ON
-- **실 GPU 대용량 fps** 측정 (헤드리스 불가) — ③-A 효과(메인스레드 끊김↓) 정량 확인 겸
+## 완료 (Phase 2 코어 + 옵션)
+- **③-A 성능(2026-06-17)** — `comlink` 단일 워커 디코드 + `POSITION_QUANTIZED`(점당 15→9B). `src/decode.worker.ts`·`src/pnts-quantized.ts`, C1~C6 PASS.
+- **④ options(2026-06-17)** — `pointSize`/`attenuation`/`eyeDomeLighting`/`colorBy('height'|'rgb')`. `projFunc`는 드롭(워커 per-point IPC 마비; prior art는 직렬화 CRS 문자열 — ADR-001 §4 정정). 오버라이드는 `sourceCrs` 문자열/워커-사이드 팩토리로 후속.
+
+## 다음 작업 — 상용 코어 hardening (입상 직결, "부수"는 후순위)
+목표: 돌기만 하는 라이브러리가 아니라 **핵심 코어가 상용 퀄리티** — 국가 규모 GB COPC를 정확·고속·안정적으로. README·데모·fps 같은 포장은 뒤로.
+
+### Step 0 — 선정리 (저위험 refactor, 지금 가능) ← Codex 리뷰 최우선·최고 레버리지
+- **생명주기/destroy 소유권**: worker `sessions` 맵·SW 메시지 리스너·worker 싱글톤이 모듈 전역에 쌓이고 **해제 경로 0 = 누수**. → worker API에 `close(sid)` + `fromUrl()`이 돌려주는 tileset의 `destroy()`에 sid 정리 hooking. 디코드 라우팅을 내부 `decodeTile(sid,key)` 한 함수로 캡슐화(= 워커풀의 가장 좁은 seam). *공개 추상화는 만들지 말 것.* (Codex #1·#3, worth: **yes**)
+
+### Step 1+ — 상용 갭 (STOP 영역 → 갭 감사: 실측 + BP → 계획·검증기준 승인 후 착수)
+1. **하이어라키 페이징 (정확성·치명·TOP)**: `openCopc`가 **루트 페이지만** 로드(`{nodes}`만, `pages` 무시) → 깊은/대용량 옥트리는 일정 깊이 이상 미스트리밍. Autzen이 "되는" 건 옥트리 전체가 루트 페이지에 우연히 들어가서일 뿐. Cesium refine 시 **서브페이지 온디맨드 로드 + lazy 서브트리**. core에 단일 `getNode/childKeys` seam 도입. (Codex #2)
+2. **워커 풀**: 단일 → 바운드 풀(`navigator.hardwareConcurrency`, `workerpool`). **디코드 큐잉 실측 후.**
+3. **LRU + 메모리 상한**: 디코드 타일 캐시(`lru-cache`). **재디코드 빈도 실측 후.** Cesium `cacheBytes` 중복 주의.
+4. **속성 견고성**: intensity/classification/returns + pluggable colorBy. 색 결정이 3파일 분산(`decodeNode`·worker·`pnts-quantized`) → 속성 추가 시 **worker-local 1함수로 통합**. (Codex #4)
+5. **복원력**: range 재시도·부분실패 격리(현재 디코드 실패=타일 실패).
+
+### 부수 (후순위)
+- README/라이선스 · 데모 다듬기(옵션 토글) · 실 GPU 대용량 fps 측정(병행 가능 — ③-A 끊김↓·단차 정량 확인 겸).
 
 ## 알려진 이슈 / 주의
 - 디코드 세션이 워커·페이지 양쪽에 1개씩(각자 `openCopc`) → 헤더+옥트리 fetch 2회(1회성·경량). 페이지 세션은 디코드 안 함(WASM 불필요)
@@ -26,7 +39,14 @@
 - Cesium은 content를 XHR로 가져옴 → 가로채기는 fetch 패치 ❌, **서비스워커 필수**
 - 정밀도: pnts에 **RTC_CENTER 필수**. CRS는 proj4 (COMPD_CS는 PROJCS 추출 + 단위보정, `copc-core.ts`)
 - 인접 타일 LOD 단차: 일부는 octree LOD 본질 특성(attenuation/EDL로 *가림*), 일부는 bbox 헐거움(조임으로 완화)
+- **누수(현재)**: worker `sessions`·SW 리스너·worker 싱글톤 해제 경로 없음 → Step 0에서 per-session destroy 배선
 - 대회 범위: 버전 유지보수(허들#5) OUT, 실데이터 동물원(#4) 완화. correctness 안 깎음
+
+## 코드 리뷰 (Codex, SOLID·anti-over-eng, 2026-06-17)
+- **선정리 1건만 필수**: Step 0(생명주기/destroy). 나머지 구조 변경은 *그 기능 할 때 lazy*하게 — 지금 추상화 금지.
+- **건드리지 말 seam(이미 좋음)**: 순수 core↔Cesium 레이어 분리(`copc-core`↔`copc.ts`) · 워커의 Cesium-free 경계 · 작은 `CopcTilesetOptions` · 순수변환 `buildTileset` · 격리된 `extractHorizontalCrs`.
+- **over-eng watch**: `copc-sw.js`의 스파이크 합성경로(`/__copc/`)는 스파이크 제거 시 같이 정리 · `pnts.ts`(float32)/`pnts-quantized.ts` 병존은 데모·스파이크가 float32 쓰는 동안만 허용(상용 코어선 중복).
+- **결론**: 견고한 프로토타입 기반. Step 0(per-session destroy 배선)이 누수도 줄이고 워커풀·LRU의 가장 좁은 seam도 동시에 연다 = 최고 레버리지.
 
 ## 핵심 결정
 - 비교 기준점 = 오픈 동료(Giro3D/Potree), Eptium 아님
