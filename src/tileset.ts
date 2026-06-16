@@ -15,15 +15,17 @@ function nodeRegionAndError(s: CopcSession, key: string): { region: number[]; ge
   const side = (s.cube[3] - s.cube[0]) / 2 ** d; // 루트 큐브 한 변(투영단위)
   const minX = s.cube[0] + x * side;
   const minY = s.cube[1] + y * side;
-  const minZ = s.cube[2] + z * side;
   const c1 = s.toWgs ? s.toWgs.forward([minX, minY]) : [minX, minY];
   const c2 = s.toWgs ? s.toWgs.forward([minX + side, minY + side]) : [minX + side, minY + side];
   const west = Math.min(c1[0], c2[0]) * D2R;
   const east = Math.max(c1[0], c2[0]) * D2R;
   const south = Math.min(c1[1], c2[1]) * D2R;
   const north = Math.max(c1[1], c2[1]) * D2R;
-  const minH = minZ * s.zUnit;
-  const maxH = (minZ + side) * s.zUnit;
+  // 세로(높이)는 큐브가 과하게 크다 → 실제 데이터 Z 범위와 교집합으로 조임 (SSE 정확도↑ → LOD 일관성↑)
+  const cubeMinZ = s.cube[2] + z * side;
+  let minH = Math.max(cubeMinZ, s.copc.header.min[2]) * s.zUnit;
+  let maxH = Math.min(cubeMinZ + side, s.copc.header.max[2]) * s.zUnit;
+  if (maxH <= minH) maxH = minH + 1;
   const spacingM = s.spacing * s.zUnit;
   return { region: [west, south, east, north, minH, maxH], geomError: spacingM / 2 ** d };
 }

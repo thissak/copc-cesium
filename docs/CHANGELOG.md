@@ -12,4 +12,4 @@
 - [feat] Phase 2 본편 ① — 진짜 COPC 노드를 서비스워커 경로로 온디맨드 렌더(`?spike4`). SW가 페이지로 라우팅(MessageChannel)→페이지 copc.js 디코드. stale SW 제어권 race는 unregister 선행으로 수정.
 - [feat] Phase 2 본편 ② — **옥트리 LOD 스트리밍 작동**(`?spike5`). `copc-core.openCopc/decodeNode` + `tileset.ts`(옥트리→region tileset 트리). Cesium SSE가 278노드 중 **24노드만** 선택→온디맨드 디코드(`tileLoad:24/fail:0`). "보는 만큼만"이 Cesium 주도로 실데이터에서 구현됨.
 - [feat] **`CopcTileset.fromUrl()` 공개 API + 기본 데모**(`src/copc-tileset.ts`). spike5 로직을 라이브러리 형태로 추출(세션별 sid 라우팅). 기본 페이지가 변환 없이 LOD 스트리밍 데모(`tileLoad:5/fail:0`). 결과물이 ADR-001의 `fromUrl` 형태를 갖춤. 남음: Web Worker 디코드·캐시·options·README.
-- [fix] 점군 화질 기본값 — `maximumScreenSpaceError` 8→4(더 촘촘, 노드 4→8) + `pointCloudShading` 감쇠 + Eye-Dome Lighting 기본 ON. 거친 LOD로 "끊겨" 보이던 것 완화.
+- [fix] 타일 LOD 경계 단차 완화 — boundingVolume 높이를 큐브 대신 **실제 데이터 Z 범위로 조임**(SSE 정확도↑ → 이웃 타일 refine 일관성↑). 점 감쇠·EDL은 단차 *진단*을 가려서 보류(④에서 옵션화). MSSE 기본 8. (사용자 관찰: 인접 타일 LOD 단차 — 일부는 octree LOD 본질 특성)

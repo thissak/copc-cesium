@@ -96,12 +96,8 @@ export const CopcTileset = {
     const tileset = await Cesium3DTileset.fromUrl(
       'data:application/json;base64,' + btoa(JSON.stringify(tilesetJson)),
     );
-    // LOD 노브: 낮을수록 더 촘촘히 refine (기본 4 — 점군은 빽빽해야 자연스러움)
-    tileset.maximumScreenSpaceError = options.maximumScreenSpaceError ?? 4;
-    // 점군 화질: 감쇠(빈틈 메움) + Eye-Dome Lighting(윤곽·깊이감 → 노드 경계 덜 거슬림)
-    const shading = tileset.pointCloudShading;
-    shading.attenuation = true;
-    shading.eyeDomeLighting = true;
+    // LOD 노브 (기본 8 — 진단용으로 듬성/작은 점). 화질용 감쇠·EDL 은 ④ 마감에서 옵션화.
+    tileset.maximumScreenSpaceError = options.maximumScreenSpaceError ?? 8;
     return tileset;
   },
 };
