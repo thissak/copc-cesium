@@ -49,8 +49,10 @@
 - → **아키텍처 끝까지 디리스킹 완료.** 남은 건 "알려진 조립":
 - [x] **본편 ① 진짜 COPC via SW** — 진짜 Autzen 노드를 SW 경로로 온디맨드 렌더 (`?spike4`)
 - [x] **본편 ② 옥트리 LOD 스트리밍** — 옥트리(278노드)→동적 tileset 트리, Cesium SSE가 **24노드만** 선택 요청→온디맨드 디코드 `tileLoad:24/fail:0` (`?spike5`, `src/tileset.ts`+`copc-core` openCopc/decodeNode). **핵심 동작 작동.**
-- [ ] 본편 ③ 디코드를 Web Worker로 + LRU 캐시 + 컴팩트 버퍼
-- [ ] 본편 ④ `CopcTileset.fromUrl` API + projFunc + 데모/문서
+- [x] **본편 ④(코어) `CopcTileset.fromUrl()` 공개 API + 기본 데모** — spike5 로직을 라이브러리로 추출(`src/copc-tileset.ts`). 기본 페이지가 변환 없이 LOD 스트리밍 (`tileLoad:5/fail:0`)
+- [ ] 본편 ③ 디코드를 Web Worker로 + LRU 캐시 + 컴팩트 버퍼 (성능)
+- [ ] 본편 ④(마감) options(colorBy/projFunc/pointSize) + README/라이선스 + 데모 페이지 다듬기
+- [ ] 실 GPU 대용량 fps 확인 (사용자 머신)
 
 ## Phase 3 — 평가 / 입상 판정 🔒
 대용량 실데이터에서 60fps / 메모리 / UX 측정 → 입상 가능성 데이터로 판정.

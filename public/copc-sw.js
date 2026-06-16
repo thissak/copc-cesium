@@ -47,13 +47,14 @@ self.addEventListener('fetch', (e) => {
           client = all[0];
         }
         if (!client) return new Response('no client', { status: 503 });
-        const key = url.pathname.split('/').pop();
+        const prefix = '/__copc-real/';
+        const rest = url.pathname.slice(url.pathname.indexOf(prefix) + prefix.length); // "{sid}/{key}.pnts" 또는 "{key}.pnts"
         try {
           const buf = await new Promise((resolve, reject) => {
             const ch = new MessageChannel();
             ch.port1.onmessage = (ev) =>
               ev.data && ev.data.error ? reject(new Error(ev.data.error)) : resolve(ev.data);
-            client.postMessage({ type: 'copc-tile', key }, [ch.port2]);
+            client.postMessage({ type: 'copc-tile', key: rest.split('/').pop(), path: rest }, [ch.port2]);
           });
           return new Response(buf, { status: 200, headers: { 'Content-Type': 'application/octet-stream' } });
         } catch (err) {

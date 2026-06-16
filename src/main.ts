@@ -15,6 +15,7 @@ import { openCopc, decodeNode } from './copc-core';
 import { buildTileset } from './tileset';
 import { DATASETS } from './datasets';
 import { buildPnts, toBase64 } from './pnts';
+import { CopcTileset } from './copc-tileset';
 
 // 자체 ion 토큰이 있으면 .env 의 VITE_CESIUM_ION_TOKEN 로 주입 (없으면 Cesium 기본 dev 토큰).
 const ionToken = import.meta.env.VITE_CESIUM_ION_TOKEN;
@@ -545,6 +546,37 @@ async function runSpike5() {
   }
 }
 
+// 기본 페이지 = 공개 API 데모: CopcTileset.fromUrl 로 변환 없이 LOD 스트리밍
+async function runDemo() {
+  log('CopcTileset.fromUrl 데모 …');
+  try {
+    const t0 = performance.now();
+    const tileset = await CopcTileset.fromUrl(ds.url, { maximumScreenSpaceError: 8 });
+    let tileLoaded = 0;
+    let tileFailed = 0;
+    tileset.tileLoad.addEventListener(() => {
+      tileLoaded++;
+    });
+    tileset.tileFailed.addEventListener(() => {
+      tileFailed++;
+    });
+    viewer.scene.primitives.add(tileset);
+    await viewer.zoomTo(tileset);
+    await new Promise((res) => setTimeout(res, 4000));
+    log(
+      `${ds.label} — CopcTileset.fromUrl()\n` +
+        `변환 없이 원본 COPC 직접 · LOD 스트리밍\n` +
+        `로드된 노드: ${tileLoaded} (실패 ${tileFailed})\n` +
+        `로드 ${(performance.now() - t0).toFixed(0)}ms · 줌하면 디테일이 채워집니다`,
+    );
+    console.log('DEMO RESULT ' + JSON.stringify({ tileLoaded, tileFailed }));
+  } catch (e) {
+    log('DEMO ERROR: ' + ((e as Error)?.message ?? e));
+    console.error(e);
+    console.log('DEMO RESULT ' + JSON.stringify({ error: (e as Error)?.message }));
+  }
+}
+
 const params = new URLSearchParams(location.search);
 if (params.has('bench')) {
   const custom = params.get('bench');
@@ -563,8 +595,10 @@ if (params.has('bench')) {
   runSpike2();
 } else if (params.has('spike')) {
   runSpike();
+} else if (params.has('naive')) {
+  run(); // Phase 1 naive baseline (참고용)
 } else {
-  run();
+  runDemo(); // 기본 = 공개 API 데모
 }
 
 export { viewer };
