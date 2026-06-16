@@ -352,6 +352,93 @@ async function runSpike3() {
   }
 }
 
+// ── 본편 ①: 진짜 COPC via 서비스워커 (SW가 페이지에 라우팅 → 페이지 copc.js가 디코드) ──
+async function runSpike4() {
+  log('spike4: 진짜 COPC via 서비스워커 …');
+  try {
+    if (!('serviceWorker' in navigator)) throw new Error('서비스워커 미지원');
+    // 옛 SW(이전 스파이크)가 제어 중이면 stale → 먼저 모두 해제 후 새로 등록 (제어권 강제 교체)
+    const regs = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(regs.map((rg) => rg.unregister()));
+    await navigator.serviceWorker.register('/copc-sw.js');
+    await navigator.serviceWorker.ready;
+    if (!navigator.serviceWorker.controller) {
+      await new Promise<void>((res) =>
+        navigator.serviceWorker.addEventListener('controllerchange', () => res(), { once: true }),
+      );
+    }
+
+    const r = await loadCopcNaive(ds.url, 50_000); // 진짜 Autzen 루트 노드
+    const bs = BoundingSphere.fromPoints(r.positions);
+    const rgb = new Uint8Array(r.positions.length * 3);
+    for (let i = 0; i < r.colors.length; i++) {
+      rgb[i * 3] = Math.round(r.colors[i].red * 255);
+      rgb[i * 3 + 1] = Math.round(r.colors[i].green * 255);
+      rgb[i * 3 + 2] = Math.round(r.colors[i].blue * 255);
+    }
+    const pnts = buildPnts(r.positions, bs.center, rgb);
+    let swAsked = 0;
+
+    navigator.serviceWorker.addEventListener('message', (ev: MessageEvent) => {
+      if ((ev.data as { type?: string })?.type === 'copc-tile') {
+        swAsked++;
+        ev.ports[0]?.postMessage(pnts.slice(0)); // 진짜 pnts 복사본 응답
+      }
+    });
+
+    const uri = `${location.origin}/__copc-real/root.pnts`;
+    const tilesetJson = {
+      asset: { version: '1.0' },
+      geometricError: 1e7,
+      root: {
+        boundingVolume: { sphere: [bs.center.x, bs.center.y, bs.center.z, bs.radius] },
+        geometricError: 0,
+        refine: 'ADD',
+        content: { uri },
+      },
+    };
+    const tilesetUri = 'data:application/json;base64,' + btoa(JSON.stringify(tilesetJson));
+
+    let tileLoaded = 0;
+    let tileFailed = 0;
+    let failMsg = '';
+    const tileset = await Cesium3DTileset.fromUrl(tilesetUri);
+    tileset.tileLoad.addEventListener(() => {
+      tileLoaded++;
+    });
+    tileset.tileFailed.addEventListener((e: unknown) => {
+      tileFailed++;
+      failMsg = (e as { message?: string })?.message ?? String(e);
+    });
+    viewer.scene.primitives.add(tileset);
+    await viewer.zoomTo(tileset);
+    await new Promise((res) => setTimeout(res, 3000));
+
+    const c = Cartographic.fromCartesian(bs.center);
+    const result = {
+      spike: '진짜 COPC via 서비스워커 (SW→페이지 라우팅)',
+      points: r.pointCount,
+      swAsked,
+      tileLoaded,
+      tileFailed,
+      failMsg,
+      centerLonLat: [
+        +CesiumMath.toDegrees(c.longitude).toFixed(5),
+        +CesiumMath.toDegrees(c.latitude).toFixed(5),
+      ],
+      realCopcStream: swAsked > 0 && tileLoaded > 0 && tileFailed === 0 ? 'OK ✅' : 'CHECK',
+    };
+    (window as unknown as { __spike4: unknown }).__spike4 = result;
+    log('SPIKE4\n' + JSON.stringify(result, null, 2));
+    console.log('SPIKE4 RESULT ' + JSON.stringify(result));
+  } catch (e) {
+    const msg = (e as Error)?.message ?? String(e);
+    log('SPIKE4 ERROR: ' + msg);
+    console.error(e);
+    console.log('SPIKE4 RESULT ' + JSON.stringify({ realCopcStream: 'FAIL ❌', error: msg }));
+  }
+}
+
 const params = new URLSearchParams(location.search);
 if (params.has('bench')) {
   const custom = params.get('bench');
@@ -360,6 +447,8 @@ if (params.has('bench')) {
       ? custom.split(',').map((s) => Number(s.trim())).filter((n) => n > 0)
       : [100_000, 250_000, 500_000, 1_000_000, 2_000_000, 4_000_000];
   runBench(budgets);
+} else if (params.has('spike4')) {
+  runSpike4();
 } else if (params.has('spike3')) {
   runSpike3();
 } else if (params.has('spike2')) {

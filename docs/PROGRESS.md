@@ -47,10 +47,10 @@
 - [x] **스파이크① 다리 확정** — 런타임 pnts(data URI) → Cesium3DTileset `tileLoad:1/fail:0`, RTC_CENTER로 Autzen 정확. (`?spike`, `src/pnts.ts`)
 - [x] **스파이크②③ 온디맨드 가로채기 확정** — Cesium은 XHR로 요청(진단) → **서비스워커**가 가로채 요청 시점 pnts 생성·응답 `tileLoad:1`. (`?spike2`/`?spike3`, `public/copc-sw.js`)
 - → **아키텍처 끝까지 디리스킹 완료.** 남은 건 "알려진 조립":
-- [ ] 본 스트리밍 계획 + 검증기준 → 승인
-- [ ] 옥트리 전체 → 동적 tileset 트리(geometricError=spacing/2^깊이)
-- [ ] SW로 COPC 노드 fetch+디코드(copc.js/laz-perf) 이동 + LRU 캐시
-- [ ] projFunc 옵션화, 컴팩트 버퍼, `CopcTileset.fromUrl` API 정리
+- [x] **본편 ① 진짜 COPC via SW** — 진짜 Autzen 노드를 SW 경로로 온디맨드 렌더 (`?spike4`, SW→페이지 라우팅) `swAsked:1/tileLoad:1`
+- [ ] 본편 ② 옥트리 전체 → 동적 tileset 트리(geometricError=spacing/2^깊이) = **진짜 LOD 스트리밍**
+- [ ] 본편 ③ 디코드를 Web Worker로 + LRU 캐시 + 컴팩트 버퍼
+- [ ] 본편 ④ `CopcTileset.fromUrl` API + projFunc + 데모/문서
 
 ## Phase 3 — 평가 / 입상 판정 🔒
 대용량 실데이터에서 60fps / 메모리 / UX 측정 → 입상 가능성 데이터로 판정.
