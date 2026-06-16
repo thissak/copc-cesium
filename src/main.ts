@@ -4,6 +4,7 @@ import {
   PointPrimitiveCollection,
   BoundingSphere,
   Cartographic,
+  Cartesian3,
   Math as CesiumMath,
   Cesium3DTileset,
 } from 'cesium';
@@ -205,6 +206,152 @@ async function runSpike() {
   }
 }
 
+// ── 스파이크 ②: on-demand 가로채기 — Cesium 타일 요청을 가로채 요청 시점에 pnts 생성 ──
+// 자가진단: Cesium이 fetch를 쓰는지 XHR을 쓰는지 동시에 감지 (XHR이면 서비스워커 필요).
+async function runSpike2() {
+  log('spike2: on-demand 가로채기 …');
+  const flags = { fetchHit: false, xhrAttempted: false, generatedAtRequest: false };
+  try {
+    const r = await loadCopcNaive(ds.url, 50_000);
+    const bs = BoundingSphere.fromPoints(r.positions);
+    const rgb = new Uint8Array(r.positions.length * 3);
+    for (let i = 0; i < r.colors.length; i++) {
+      rgb[i * 3] = Math.round(r.colors[i].red * 255);
+      rgb[i * 3 + 1] = Math.round(r.colors[i].green * 255);
+      rgb[i * 3 + 2] = Math.round(r.colors[i].blue * 255);
+    }
+
+    const origFetch = window.fetch.bind(window);
+    window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes('/__copc/')) {
+        flags.fetchHit = true;
+        flags.generatedAtRequest = true;
+        const pnts = buildPnts(r.positions, bs.center, rgb); // ← 요청 시점에 생성
+        return Promise.resolve(
+          new Response(pnts, { status: 200, headers: { 'Content-Type': 'application/octet-stream' } }),
+        );
+      }
+      return origFetch(input, init);
+    }) as typeof window.fetch;
+
+    const origOpen = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function (method: string, url: string | URL, ...rest: unknown[]) {
+      if (String(url).includes('/__copc/')) flags.xhrAttempted = true;
+      return (origOpen as (...a: unknown[]) => void).call(this, method, url, ...rest);
+    };
+
+    const tilesetJson = {
+      asset: { version: '1.0' },
+      geometricError: 1e7,
+      root: {
+        boundingVolume: { sphere: [bs.center.x, bs.center.y, bs.center.z, bs.radius] },
+        geometricError: 0,
+        refine: 'ADD',
+        content: { uri: location.origin + '/__copc/root.pnts' }, // 평범한 URL — Cesium이 fetch
+      },
+    };
+    const tilesetUri = 'data:application/json;base64,' + btoa(JSON.stringify(tilesetJson));
+
+    let tileLoaded = 0;
+    let tileFailed = 0;
+    let failMsg = '';
+    const tileset = await Cesium3DTileset.fromUrl(tilesetUri);
+    tileset.tileLoad.addEventListener(() => {
+      tileLoaded++;
+    });
+    tileset.tileFailed.addEventListener((e: unknown) => {
+      tileFailed++;
+      failMsg = (e as { message?: string })?.message ?? String(e);
+    });
+    viewer.scene.primitives.add(tileset);
+    await viewer.zoomTo(tileset);
+    await new Promise((res) => setTimeout(res, 2500));
+
+    const mechanism = flags.fetchHit ? 'fetch ✅' : flags.xhrAttempted ? 'XHR(서비스워커 필요)' : '미요청?';
+    const result = {
+      spike: 'on-demand 가로채기',
+      mechanism,
+      ...flags,
+      tileLoaded,
+      tileFailed,
+      failMsg,
+      onDemand: flags.fetchHit && tileLoaded > 0 ? 'OK ✅' : 'CHECK',
+    };
+    (window as unknown as { __spike2: unknown }).__spike2 = result;
+    log('SPIKE2\n' + JSON.stringify(result, null, 2));
+    console.log('SPIKE2 RESULT ' + JSON.stringify(result));
+  } catch (e) {
+    const msg = (e as Error)?.message ?? String(e);
+    log('SPIKE2 ERROR: ' + msg);
+    console.error(e);
+    console.log('SPIKE2 RESULT ' + JSON.stringify({ onDemand: 'FAIL ❌', error: msg }));
+  }
+}
+
+// ── 스파이크 ③: 서비스워커 가로채기 — Cesium의 타일 XHR을 SW가 잡아 온디맨드 pnts 응답 ──
+async function runSpike3() {
+  log('spike3: 서비스워커 가로채기 …');
+  try {
+    if (!('serviceWorker' in navigator)) throw new Error('서비스워커 미지원');
+    await navigator.serviceWorker.register('/copc-sw.js');
+    await navigator.serviceWorker.ready;
+    if (!navigator.serviceWorker.controller) {
+      await new Promise<void>((res) =>
+        navigator.serviceWorker.addEventListener('controllerchange', () => res(), { once: true }),
+      );
+    }
+    const center = Cartesian3.fromDegrees(-123.0687, 44.0559, 200);
+    const radius = 400;
+    const uri = `${location.origin}/__copc/root.pnts?cx=${center.x}&cy=${center.y}&cz=${center.z}`;
+    const tilesetJson = {
+      asset: { version: '1.0' },
+      geometricError: 1e7,
+      root: {
+        boundingVolume: { sphere: [center.x, center.y, center.z, radius] },
+        geometricError: 0,
+        refine: 'ADD',
+        content: { uri },
+      },
+    };
+    const tilesetUri = 'data:application/json;base64,' + btoa(JSON.stringify(tilesetJson));
+
+    let tileLoaded = 0;
+    let tileFailed = 0;
+    let failMsg = '';
+    const tileset = await Cesium3DTileset.fromUrl(tilesetUri);
+    tileset.tileLoad.addEventListener(() => {
+      tileLoaded++;
+    });
+    tileset.tileFailed.addEventListener((e: unknown) => {
+      tileFailed++;
+      failMsg = (e as { message?: string })?.message ?? String(e);
+    });
+    viewer.scene.primitives.add(tileset);
+    await viewer.zoomTo(tileset);
+    await new Promise((res) => setTimeout(res, 2500));
+
+    const controlled = !!navigator.serviceWorker.controller;
+    const result = {
+      spike: '서비스워커 가로채기',
+      swControlled: controlled,
+      tileLoaded,
+      tileFailed,
+      failMsg,
+      // 진짜 네트워크엔 이 URL이 없으므로 tileLoad>0 = SW가 XHR을 잡아 응답한 것
+      swIntercept: controlled && tileLoaded > 0 ? 'OK ✅ (XHR도 가로챔)' : 'CHECK',
+    };
+    (window as unknown as { __spike3: unknown }).__spike3 = result;
+    log('SPIKE3\n' + JSON.stringify(result, null, 2));
+    console.log('SPIKE3 RESULT ' + JSON.stringify(result));
+  } catch (e) {
+    const msg = (e as Error)?.message ?? String(e);
+    log('SPIKE3 ERROR: ' + msg);
+    console.error(e);
+    console.log('SPIKE3 RESULT ' + JSON.stringify({ swIntercept: 'FAIL ❌', error: msg }));
+  }
+}
+
 const params = new URLSearchParams(location.search);
 if (params.has('bench')) {
   const custom = params.get('bench');
@@ -213,6 +360,10 @@ if (params.has('bench')) {
       ? custom.split(',').map((s) => Number(s.trim())).filter((n) => n > 0)
       : [100_000, 250_000, 500_000, 1_000_000, 2_000_000, 4_000_000];
   runBench(budgets);
+} else if (params.has('spike3')) {
+  runSpike3();
+} else if (params.has('spike2')) {
+  runSpike2();
 } else if (params.has('spike')) {
   runSpike();
 } else {

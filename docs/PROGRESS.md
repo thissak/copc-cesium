@@ -43,12 +43,14 @@
 ## Phase 2 — COPC Provider 플러그인 (LOD 스트리밍) ⏳ 스파이크 PASS
 **아키텍처 확정([ADR-001](adr/001-provider-plugin-architecture-A.md)): A안 = `CopcTileset.fromUrl()` 플러그인, COPC 옥트리를 동적 Cesium3DTileset으로 노출, LOD는 Cesium 위임.**
 
-- [x] BP 조사: pnts 바이너리 스펙 + Cesium 동적 content = data URI 로 가능 확인
-- [x] **스파이크 PASS (다리 확정)** — 런타임 pnts(data URI) → Cesium3DTileset `tileLoad:1/fail:0`, RTC_CENTER로 Autzen 위치 정확. (`?spike`, `src/pnts.ts`) → [RESULTS](RESULTS.md)
+- [x] BP 조사: pnts 바이너리 스펙 + Cesium 동적 content
+- [x] **스파이크① 다리 확정** — 런타임 pnts(data URI) → Cesium3DTileset `tileLoad:1/fail:0`, RTC_CENTER로 Autzen 정확. (`?spike`, `src/pnts.ts`)
+- [x] **스파이크②③ 온디맨드 가로채기 확정** — Cesium은 XHR로 요청(진단) → **서비스워커**가 가로채 요청 시점 pnts 생성·응답 `tileLoad:1`. (`?spike2`/`?spike3`, `public/copc-sw.js`)
+- → **아키텍처 끝까지 디리스킹 완료.** 남은 건 "알려진 조립":
 - [ ] 본 스트리밍 계획 + 검증기준 → 승인
 - [ ] 옥트리 전체 → 동적 tileset 트리(geometricError=spacing/2^깊이)
-- [ ] 노드 content 온디맨드 공급 (서비스워커/blob) + 디코드 워커 + LRU 캐시
-- [ ] projFunc 옵션화, 컴팩트 버퍼, `fromUrl` API 정리
+- [ ] SW로 COPC 노드 fetch+디코드(copc.js/laz-perf) 이동 + LRU 캐시
+- [ ] projFunc 옵션화, 컴팩트 버퍼, `CopcTileset.fromUrl` API 정리
 
 ## Phase 3 — 평가 / 입상 판정 🔒
 대용량 실데이터에서 60fps / 메모리 / UX 측정 → 입상 가능성 데이터로 판정.

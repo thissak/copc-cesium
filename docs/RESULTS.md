@@ -90,7 +90,18 @@ center **-123.069°, 44.056°** = 실제 Autzen Stadium(44.058°N, 123.068°W)�
 - **S3 ✅** 헤드리스 콘솔로 검증.
 - 한계: 헤드리스라 "픽셀이 정확히 그려졌나"까지는 단정 불가 — 단 content-accepted + 위치-정확 신호는 강함.
 
-→ **핵심 난관이 data URI로 뚫림.** 남은 Phase 2는 "알려진 배관"(옥트리→동적 tileset 트리 + 온디맨드 공급 + 워커 디코드 + LRU). 단 data URI는 전부 미리 만들어야 하므로, **진짜 스트리밍은 서비스워커/blob 온디맨드로** 확장 필요.
+→ **핵심 난관이 data URI로 뚫림.** 단 data URI는 전부 미리 만들어야 하므로, 진짜 스트리밍은 온디맨드 가로채기 필요 → 아래.
+
+## Phase 2 스파이크 ②③ — 온디맨드 가로채기 (PASS ✅, 2026-06-16)
+
+스파이크①은 data URI(전부 미리 생성)였다. 진짜 스트리밍 = "Cesium이 요청할 때 그 노드만 생성". 그 가로채기가 되는지.
+
+- **②진단 (자가진단 스파이크)**: `window.fetch` 패치 → `fetchHit:false, xhrAttempted:true, tileFailed:1`. → **Cesium은 타일 content를 XHR로 가져온다** (fetch 아님). 한 번에 메커니즘 확정.
+- **③서비스워커 (`public/copc-sw.js`)**: SW가 `/__copc/*` XHR을 네트워크 계층에서 가로채 **요청 시점에 pnts 생성·응답** → `swControlled:true, tileLoad:1, tileFailed:0`. 진짜 서버엔 그 URL이 없으므로 **tileLoad=SW가 응답한 것**.
+
+→ **스트리밍 메커니즘 확정 = 서비스워커.** (fetch·XHR 둘 다 잡는 네트워크 계층) 이로써 Phase 2 아키텍처가 **끝에서 끝까지** 증명됨:
+`COPC 옥트리 → 동적 tileset 트리 → Cesium SSE가 노드 XHR 요청 → SW 가로채 노드→pnts 온디맨드 → 렌더`.
+남은 일은 전부 알려진 조립(SW에 COPC 디코드 이동 + 트리 생성 + 캐시).
 
 ## 레퍼런스 기준점 (같은 Autzen, 2026-06-16)
 
