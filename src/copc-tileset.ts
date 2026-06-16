@@ -96,9 +96,12 @@ export const CopcTileset = {
     const tileset = await Cesium3DTileset.fromUrl(
       'data:application/json;base64,' + btoa(JSON.stringify(tilesetJson)),
     );
-    if (options.maximumScreenSpaceError != null) {
-      tileset.maximumScreenSpaceError = options.maximumScreenSpaceError;
-    }
+    // LOD 노브: 낮을수록 더 촘촘히 refine (기본 4 — 점군은 빽빽해야 자연스러움)
+    tileset.maximumScreenSpaceError = options.maximumScreenSpaceError ?? 4;
+    // 점군 화질: 감쇠(빈틈 메움) + Eye-Dome Lighting(윤곽·깊이감 → 노드 경계 덜 거슬림)
+    const shading = tileset.pointCloudShading;
+    shading.attenuation = true;
+    shading.eyeDomeLighting = true;
     return tileset;
   },
 };

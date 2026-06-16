@@ -551,7 +551,7 @@ async function runDemo() {
   log('CopcTileset.fromUrl 데모 …');
   try {
     const t0 = performance.now();
-    const tileset = await CopcTileset.fromUrl(ds.url, { maximumScreenSpaceError: 8 });
+    const tileset = await CopcTileset.fromUrl(ds.url); // API 기본값(MSSE 4 + 감쇠 + EDL)
     let tileLoaded = 0;
     let tileFailed = 0;
     tileset.tileLoad.addEventListener(() => {
