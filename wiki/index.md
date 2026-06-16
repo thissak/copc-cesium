@@ -1,0 +1,19 @@
+# CopcCesiumLab 학습 위키
+
+> 코드·ADR·PROGRESS(SoT)를 읽고 **내 언어로 합성한 학습 층**. 사본이 아니라 의미·연결·약점을 적는다.
+> 구체 수치/파일 경로는 본문이 아니라 각 페이지의 `## 참고 (RAW 인용)` 에만 둔다.
+
+마지막 갱신: 2026-06-17
+
+## 개념 페이지
+
+| slug | 한 줄 | status |
+|------|-------|--------|
+| [[decode-on-main-thread]] | 디코드는 SW가 아니라 페이지 메인스레드에서 돈다 | active |
+
+## 작성 예정 (stub — 의도된 미작성)
+
+- `service-worker-tile-interception` (아직 없음) — SW가 타일 요청을 가로채 페이지로 라우팅
+- `copc-octree-lod-streaming` (아직 없음) — Cesium 위임 LOD로 옥트리 노드 스트리밍
+
+작성 규칙은 [작성 가이드](writing-guide.md) 참고.

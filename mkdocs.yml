@@ -40,6 +40,35 @@ markdown_extensions:
           format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.details
 
-# nav: 생략 → MkDocs가 docs/ 트리에서 사이드바를 자동 생성한다.
-# study/ journal/ learning/ 등 폴더명이 프로젝트마다 달라도 그대로 흡수되므로
-# 이 템플릿은 프로젝트별 수정 없이 재사용된다.
+# 메뉴: 학습 콘텐츠(index/learn/wiki)를 앞, 원본 AI 작업문서를 "참고" 뒤로.
+nav:
+  - 홈: index.md
+  - 학습:
+      - 커리큘럼:
+          - learn/index.md
+          - learn/01-point-clouds.md
+          - learn/02-copc.md
+          - learn/03-cesiumjs.md
+          - learn/04-coordinate-systems.md
+          - learn/05-copc-cesium-integration.md
+      - 위키:
+          - wiki/index.md
+          - wiki/decode-on-main-thread.md
+  - "참고 (원본 문서)":
+      - 문제정의: PROBLEM.md
+      - 전략: STRATEGY.md
+      - 진행상태: PROGRESS.md
+      - 변경이력: CHANGELOG.md
+      - 프로파일링: PROFILING.md
+      - 결과: RESULTS.md
+      - 레퍼런스: REFERENCES.md
+      - "설계결정 (ADR)":
+          - adr/001-provider-plugin-architecture-A.md
+          - adr/002-service-worker-tile-interception.md
+      - 핸드오프:
+          - handoff/phase2-streaming-handoff.md
+
+# 빌드 산출물/메타 문서는 메뉴에서 제외(빌드 경고 억제)
+not_in_nav: |
+  /superpowers/**
+  /wiki/writing-guide.md
