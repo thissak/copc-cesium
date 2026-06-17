@@ -1,6 +1,7 @@
 node_modules/
 dist/
 demo-dist/
+*.tgz
 *.log
 
 # 대용량 COPC 원본은 커밋하지 않는다
@@ -20,3 +21,4 @@ site/
 copc-phaseA-demo.jpeg
 round1-*.png
 cahokia-*.png
+smoke-*.png
