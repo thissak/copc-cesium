@@ -19,8 +19,9 @@
 ## 다음 작업 — 상용 코어 hardening (입상 직결, "부수"는 후순위)
 목표: 돌기만 하는 라이브러리가 아니라 **핵심 코어가 상용 퀄리티** — 국가 규모 GB COPC를 정확·고속·안정적으로. README·데모·fps 같은 포장은 뒤로.
 
-### Step 0 — 선정리 (저위험 refactor, 지금 가능) ← Codex 리뷰 최우선·최고 레버리지
-- **생명주기/destroy 소유권**: worker `sessions` 맵·SW 메시지 리스너·worker 싱글톤이 모듈 전역에 쌓이고 **해제 경로 0 = 누수**. → worker API에 `close(sid)` + `fromUrl()`이 돌려주는 tileset의 `destroy()`에 sid 정리 hooking. 디코드 라우팅을 내부 `decodeTile(sid,key)` 한 함수로 캡슐화(= 워커풀의 가장 좁은 seam). *공개 추상화는 만들지 말 것.* (Codex #1·#3, worth: **yes**)
+### Step 0 — 선정리 ✅ 완료(2026-06-17)
+- **생명주기/destroy 소유권**: 워커 `close(sid)` + tileset `destroy()` 확장(=`scene.primitives.remove()` 경유 자동 호출)로 세션 정리. `activeSids` 추적 → 마지막 세션이면 `worker.terminate()` + SW 리스너 제거(누수 차단). 디코드 라우팅 `decodeTile(sid,key)` 단일 seam 캡슐화. wrapper 없음. C1~C6 PASS(SW-서빙 200/500으로 결정 판정). (Codex #1·#3)
+  - **주의(사용법)**: 정리는 `viewer.scene.primitives.remove(tileset)` 또는 `removeAll()` 경유가 정석. `tileset.destroy()`를 씬에서 빼지 않고 직접 부르면 Cesium이 파괴된 객체를 렌더하다 크래시(Cesium 표준 동작).
 
 ### Step 1+ — 상용 갭 (STOP 영역 → 갭 감사: 실측 + BP → 계획·검증기준 승인 후 착수)
 1. **하이어라키 페이징 (정확성·치명·TOP)**: `openCopc`가 **루트 페이지만** 로드(`{nodes}`만, `pages` 무시) → 깊은/대용량 옥트리는 일정 깊이 이상 미스트리밍. Autzen이 "되는" 건 옥트리 전체가 루트 페이지에 우연히 들어가서일 뿐. Cesium refine 시 **서브페이지 온디맨드 로드 + lazy 서브트리**. core에 단일 `getNode/childKeys` seam 도입. (Codex #2)
@@ -39,7 +40,7 @@
 - Cesium은 content를 XHR로 가져옴 → 가로채기는 fetch 패치 ❌, **서비스워커 필수**
 - 정밀도: pnts에 **RTC_CENTER 필수**. CRS는 proj4 (COMPD_CS는 PROJCS 추출 + 단위보정, `copc-core.ts`)
 - 인접 타일 LOD 단차: 일부는 octree LOD 본질 특성(attenuation/EDL로 *가림*), 일부는 bbox 헐거움(조임으로 완화)
-- **누수(현재)**: worker `sessions`·SW 리스너·worker 싱글톤 해제 경로 없음 → Step 0에서 per-session destroy 배선
+- ~~누수: worker `sessions`·SW 리스너·worker 싱글톤 해제 경로 없음~~ **해결(Step 0)**: `primitives.remove`/`destroy` 시 per-session close + idle 시 worker terminate·리스너 제거
 - 대회 범위: 버전 유지보수(허들#5) OUT, 실데이터 동물원(#4) 완화. correctness 안 깎음
 
 ## 코드 리뷰 (Codex, SOLID·anti-over-eng, 2026-06-17)

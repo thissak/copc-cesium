@@ -27,8 +27,8 @@ export interface CopcTilesetOptions {
   colorBy?: ColorBy;
 }
 
-let handlerInstalled = false;
 let sidCounter = 0;
+const activeSids = new Set<string>(); // 살아있는 tileset 세션 (생명주기 추적)
 
 let worker: Worker | undefined;
 let workerApi: Comlink.Remote<DecodeApi> | undefined;
@@ -40,10 +40,15 @@ function getWorkerApi(): Comlink.Remote<DecodeApi> {
   return workerApi;
 }
 
+// 디코드 라우팅 한 곳 — 워커 풀은 여기에만 얹으면 된다 (Codex #3).
+function decodeTile(sid: string, key: string): Promise<ArrayBuffer | null> {
+  return getWorkerApi().decode(sid, key);
+}
+
+let messageHandler: ((ev: MessageEvent) => void) | undefined;
 function installHandler() {
-  if (handlerInstalled) return;
-  handlerInstalled = true;
-  navigator.serviceWorker.addEventListener('message', async (ev: MessageEvent) => {
+  if (messageHandler) return;
+  messageHandler = async (ev: MessageEvent) => {
     const d = ev.data as { type?: string; path?: string };
     if (d?.type !== 'copc-tile' || !d.path) return;
     const port = ev.ports[0];
@@ -51,13 +56,28 @@ function installHandler() {
       const slash = d.path.indexOf('/'); // path = "{sid}/{D-X-Y-Z}.pnts"
       const sid = d.path.slice(0, slash);
       const key = d.path.slice(slash + 1).replace('.pnts', '');
-      const pnts = await getWorkerApi().decode(sid, key); // 워커에서 디코드(메인스레드 밖)
+      const pnts = await decodeTile(sid, key); // 워커에서 디코드(메인스레드 밖)
       if (!pnts) return void port?.postMessage({ error: `no node ${key}` });
       port?.postMessage(pnts, [pnts]); // zero-copy 로 SW 에 전달
     } catch (err) {
       port?.postMessage({ error: (err as Error)?.message ?? String(err) });
     }
-  });
+  };
+  navigator.serviceWorker.addEventListener('message', messageHandler);
+}
+
+// 마지막 세션이 사라지면 SW 리스너 제거 + 워커 종료 (전역 상태 누수 차단).
+function cleanupIfIdle() {
+  if (activeSids.size > 0) return;
+  if (messageHandler) {
+    navigator.serviceWorker.removeEventListener('message', messageHandler);
+    messageHandler = undefined;
+  }
+  if (worker) {
+    worker.terminate();
+    worker = undefined;
+    workerApi = undefined;
+  }
 }
 
 async function ensureServiceWorker(): Promise<void> {
@@ -79,6 +99,7 @@ export const CopcTileset = {
     installHandler();
 
     const sid = `s${++sidCounter}`;
+    activeSids.add(sid);
     // 디코드 세션(laz-perf 포함)은 워커가 보관, 지오메트리(tileset.json)용 세션은 페이지에서.
     // 페이지 openCopc 는 헤더+옥트리만(점 디코드·WASM 불필요) → 경량. 둘은 병렬로 연다.
     const api = getWorkerApi();
@@ -103,6 +124,17 @@ export const CopcTileset = {
       tileset.pointCloudShading.attenuation = true;
       tileset.pointCloudShading.eyeDomeLighting = edl;
     }
+
+    // 생명주기: tileset.destroy() 시 워커 세션 정리. 마지막 세션이면 워커 종료 + SW 리스너 제거.
+    // (wrapper 없이 Cesium 인스턴스의 destroy 만 확장 — ADR-001 의 copc.destroy() 그대로 동작)
+    const tilesetDestroy = tileset.destroy.bind(tileset);
+    (tileset as unknown as { destroy: () => void }).destroy = () => {
+      if (activeSids.delete(sid)) {
+        if (activeSids.size > 0) void getWorkerApi().close(sid);
+        else cleanupIfIdle();
+      }
+      tilesetDestroy();
+    };
     return tileset;
   },
 };

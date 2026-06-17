@@ -34,6 +34,10 @@ const api = {
     const pnts = buildQuantizedPnts(nd.lonLatH, nd.zVals, wantRgb ? nd.rgb : undefined);
     return Comlink.transfer(pnts, [pnts]);
   },
+  /** 세션 정리 (tileset.destroy 시). */
+  async close(sid: string): Promise<void> {
+    sessions.delete(sid);
+  },
 };
 
 export type DecodeApi = typeof api;
