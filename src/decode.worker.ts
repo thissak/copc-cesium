@@ -55,7 +55,10 @@ const api = {
           e.attrSpecsPromise = (async () => {
             const v = await Copc.loadPointDataView(e.session.getter, e.session.copc, node, { lazPerf });
             return resolveAttributes(Object.keys(v.dimensions), e.attrReq);
-          })();
+          })().catch((err) => {
+            e.attrSpecsPromise = undefined; // 실패 시 캐시 비워 다음 decode 가 재시도
+            throw err;
+          });
         }
         e.attrSpecs = await e.attrSpecsPromise;
       }

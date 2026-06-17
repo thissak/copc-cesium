@@ -15,7 +15,30 @@ const CT_BYTES: Record<ComponentType, number> = {
   BYTE: 1, UNSIGNED_BYTE: 1, SHORT: 2, UNSIGNED_SHORT: 2,
   INT: 4, UNSIGNED_INT: 4, FLOAT: 4, DOUBLE: 8,
 };
+
+/** 정수 컴포넌트 타입의 표현 가능 범위 [min, max]. 부동소수점 타입은 null. */
+function intRange(t: ComponentType): [number, number] | null {
+  switch (t) {
+    case 'BYTE': return [-128, 127];
+    case 'UNSIGNED_BYTE': return [0, 255];
+    case 'SHORT': return [-32768, 32767];
+    case 'UNSIGNED_SHORT': return [0, 65535];
+    case 'INT': return [-2147483648, 2147483647];
+    case 'UNSIGNED_INT': return [0, 4294967295];
+    default: return null; // FLOAT, DOUBLE — 범위 검사 불필요
+  }
+}
+
 function writeTyped(buf: ArrayBuffer, offset: number, t: ComponentType, vals: number[]): void {
+  const range = intRange(t);
+  if (range !== null) {
+    const [mn, mx] = range;
+    let outOfRange = false;
+    for (let i = 0; i < vals.length; i++) {
+      if (vals[i] < mn || vals[i] > mx) { outOfRange = true; break; }
+    }
+    if (outOfRange) console.warn(`[copc] 속성 값이 ${t} 범위를 벗어남 — 잘림 가능`);
+  }
   switch (t) {
     case 'BYTE': new Int8Array(buf, offset, vals.length).set(vals); break;
     case 'UNSIGNED_BYTE': new Uint8Array(buf, offset, vals.length).set(vals); break;
@@ -59,6 +82,15 @@ function quant(t: number): number {
  */
 export function buildQuantizedPnts(lonLatH: number[], colors: Uint8Array, batch?: BatchData): ArrayBuffer {
   const n = lonLatH.length / 3;
+
+  // 길이 가드 — 프로그래머 오류 조기 검출 (런타임 경고 FIX2 와 다르게 throw 가 맞음)
+  if (colors.length < n * 3) throw new Error(`buildQuantizedPnts: colors length ${colors.length} < ${n * 3}`);
+  if (batch) {
+    for (let k = 0; k < batch.specs.length; k++) {
+      if (batch.values[k].length !== n)
+        throw new Error(`buildQuantizedPnts: attribute ${batch.specs[k].batchName} values length ${batch.values[k].length} !== ${n}`);
+    }
+  }
 
   // 1) ECEF 변환 + bbox
   const ecef = new Float64Array(n * 3);

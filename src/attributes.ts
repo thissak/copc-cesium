@@ -43,5 +43,6 @@ export function resolveAttributes(availableDims: string[], req: AttributeRequest
     }
     specs.push({ lasName: name, batchName: name, componentType: TYPE_MAP[name] ?? 'FLOAT' });
   }
+  console.info(`[copc] attributes 해석: [${specs.map((s) => s.batchName).join(', ')}]`);
   return specs;
 }
