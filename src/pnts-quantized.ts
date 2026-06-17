@@ -4,6 +4,31 @@
 // (타일 ECEF extent)에 상대 → 도시 스케일 cm~mm. RTC_CENTER 로 행성 스케일 jitter 해결.
 // 스펙: github.com/CesiumGS/3d-tiles PointCloud (POSITION_QUANTIZED + QUANTIZED_VOLUME_*).
 
+import type { AttributeSpec, ComponentType } from './attributes';
+
+export interface BatchData {
+  specs: AttributeSpec[];
+  values: number[][]; // values[k] parallel to specs[k], length n
+}
+
+const CT_BYTES: Record<ComponentType, number> = {
+  BYTE: 1, UNSIGNED_BYTE: 1, SHORT: 2, UNSIGNED_SHORT: 2,
+  INT: 4, UNSIGNED_INT: 4, FLOAT: 4, DOUBLE: 8,
+};
+function writeTyped(buf: ArrayBuffer, offset: number, t: ComponentType, vals: number[]): void {
+  switch (t) {
+    case 'BYTE': new Int8Array(buf, offset, vals.length).set(vals); break;
+    case 'UNSIGNED_BYTE': new Uint8Array(buf, offset, vals.length).set(vals); break;
+    case 'SHORT': new Int16Array(buf, offset, vals.length).set(vals); break;
+    case 'UNSIGNED_SHORT': new Uint16Array(buf, offset, vals.length).set(vals); break;
+    case 'INT': new Int32Array(buf, offset, vals.length).set(vals); break;
+    case 'UNSIGNED_INT': new Uint32Array(buf, offset, vals.length).set(vals); break;
+    case 'FLOAT': new Float32Array(buf, offset, vals.length).set(vals); break;
+    case 'DOUBLE': new Float64Array(buf, offset, vals.length).set(vals); break;
+  }
+}
+const align = (x: number, a: number): number => Math.ceil(x / a) * a;
+
 const D2R = Math.PI / 180;
 // WGS84 (Cesium Ellipsoid.WGS84 와 동일): a=6378137, 1/f=298.257223563
 const A = 6378137.0;
@@ -32,7 +57,7 @@ function quant(t: number): number {
  * 노드 점(lonLatH) + 점당 colors(평탄 RGB) → POSITION_QUANTIZED pnts ArrayBuffer.
  * 색 결정은 호출부(colors.ts/decodeNode)에서 끝나 있고, 여기선 위치 양자화 + 패킹만 한다.
  */
-export function buildQuantizedPnts(lonLatH: number[], colors: Uint8Array): ArrayBuffer {
+export function buildQuantizedPnts(lonLatH: number[], colors: Uint8Array, batch?: BatchData): ArrayBuffer {
   const n = lonLatH.length / 3;
 
   // 1) ECEF 변환 + bbox
@@ -56,26 +81,51 @@ export function buildQuantizedPnts(lonLatH: number[], colors: Uint8Array): Array
   const sx = (maxX - minX) || 1, sy = (maxY - minY) || 1, sz = (maxZ - minZ) || 1; // scale 0 가드
   const ox = minX - cx, oy = minY - cy, oz = minZ - cz;
 
-  // 2) 양자화 위치 + 색 버퍼
+  // 2) 양자화 위치 + 색 + (옵션) BATCH_ID 버퍼
   const posBytes = n * 3 * 2; // uint16 x3
   const rgbBytes = n * 3; // uint8 x3
-  const ftBinLen = posBytes + rgbBytes;
+  const useBatch = !!batch && batch.specs.length > 0 && n > 0;
+  const bidType: ComponentType = n > 65535 ? 'UNSIGNED_INT' : 'UNSIGNED_SHORT';
+  const bidBytes = useBatch ? n * CT_BYTES[bidType] : 0;
+  // BATCH_ID 는 컴포넌트 크기 정렬: posBytes(짝수)+rgbBytes 뒤를 정렬.
+  const bidOffset = align(posBytes + rgbBytes, CT_BYTES[bidType]);
+  const ftBinLen = align(bidOffset + bidBytes, 8); // FT binary 끝 8B 정렬
   const ftBin = new ArrayBuffer(ftBinLen);
   const q = new Uint16Array(ftBin, 0, n * 3);
   const col = new Uint8Array(ftBin, posBytes, rgbBytes);
 
-  // 위치 양자화
   for (let i = 0; i < n; i++) {
     q[i * 3] = quant((ecef[i * 3] - minX) / sx);
     q[i * 3 + 1] = quant((ecef[i * 3 + 1] - minY) / sy);
     q[i * 3 + 2] = quant((ecef[i * 3 + 2] - minZ) / sz);
   }
-
-  // 색: 이미 계산된 점당 RGB 를 그대로 패킹 (색 매핑은 colors.ts/decodeNode 담당)
   col.set(colors.subarray(0, n * 3));
+  if (useBatch) {
+    const ids = new Array<number>(n);
+    for (let i = 0; i < n; i++) ids[i] = i;
+    writeTyped(ftBin, bidOffset, bidType, ids);
+  }
 
-  // 3) pnts 직렬화 (헤더 28B + Feature Table JSON + Feature Table Binary)
-  const ft = {
+  // 2b) batch table binary — 속성별 컴포넌트 크기 정렬
+  let btBinLen = 0;
+  const btProps: Record<string, { byteOffset: number; componentType: ComponentType; type: 'SCALAR' }> = {};
+  const btLayout: { offset: number; spec: AttributeSpec; vals: number[] }[] = [];
+  if (useBatch) {
+    let off = 0;
+    for (let k = 0; k < batch!.specs.length; k++) {
+      const spec = batch!.specs[k];
+      off = align(off, CT_BYTES[spec.componentType]);
+      btProps[spec.batchName] = { byteOffset: off, componentType: spec.componentType, type: 'SCALAR' };
+      btLayout.push({ offset: off, spec, vals: batch!.values[k] });
+      off += n * CT_BYTES[spec.componentType];
+    }
+    btBinLen = off;
+  }
+  const btBin = new ArrayBuffer(btBinLen);
+  for (const { offset, spec, vals } of btLayout) writeTyped(btBin, offset, spec.componentType, vals);
+
+  // 3) Feature Table JSON
+  const ft: Record<string, unknown> = {
     POINTS_LENGTH: n,
     RTC_CENTER: [cx, cy, cz],
     QUANTIZED_VOLUME_OFFSET: [ox, oy, oz],
@@ -83,23 +133,39 @@ export function buildQuantizedPnts(lonLatH: number[], colors: Uint8Array): Array
     POSITION_QUANTIZED: { byteOffset: 0 },
     RGB: { byteOffset: posBytes },
   };
+  if (useBatch) {
+    ft.BATCH_LENGTH = n;
+    ft.BATCH_ID = { byteOffset: bidOffset, componentType: bidType };
+  }
   let ftJSON = JSON.stringify(ft);
-  while ((28 + ftJSON.length) % 8 !== 0) ftJSON += ' '; // FT Binary 8바이트 경계 시작
+  while ((28 + ftJSON.length) % 8 !== 0) ftJSON += ' ';
   const ftJSONbytes = new TextEncoder().encode(ftJSON);
 
+  // Batch Table JSON — 8B 경계에서 BT binary 시작
+  let btJSONbytes = new Uint8Array(0);
+  if (useBatch) {
+    let btJSON = JSON.stringify(btProps);
+    while ((28 + ftJSONbytes.length + ftBinLen + btJSON.length) % 8 !== 0) btJSON += ' ';
+    btJSONbytes = new TextEncoder().encode(btJSON);
+  }
+
   const headerLen = 28;
-  const padded = Math.ceil((headerLen + ftJSONbytes.length + ftBinLen) / 8) * 8;
+  const total = headerLen + ftJSONbytes.length + ftBinLen + btJSONbytes.length + btBinLen;
+  const padded = Math.ceil(total / 8) * 8;
   const buf = new ArrayBuffer(padded);
   const dv = new DataView(buf);
   const u8 = new Uint8Array(buf);
-  dv.setUint8(0, 0x70); dv.setUint8(1, 0x6e); dv.setUint8(2, 0x74); dv.setUint8(3, 0x73); // "pnts"
-  dv.setUint32(4, 1, true); // version
-  dv.setUint32(8, padded, true); // byteLength
-  dv.setUint32(12, ftJSONbytes.length, true); // featureTableJSONByteLength
-  dv.setUint32(16, ftBinLen, true); // featureTableBinaryByteLength
-  dv.setUint32(20, 0, true); // batchTableJSONByteLength
-  dv.setUint32(24, 0, true); // batchTableBinaryByteLength
-  u8.set(ftJSONbytes, headerLen);
-  u8.set(new Uint8Array(ftBin), headerLen + ftJSONbytes.length);
+  dv.setUint8(0, 0x70); dv.setUint8(1, 0x6e); dv.setUint8(2, 0x74); dv.setUint8(3, 0x73);
+  dv.setUint32(4, 1, true);
+  dv.setUint32(8, padded, true);
+  dv.setUint32(12, ftJSONbytes.length, true);
+  dv.setUint32(16, ftBinLen, true);
+  dv.setUint32(20, btJSONbytes.length, true);
+  dv.setUint32(24, btBinLen, true);
+  let w = headerLen;
+  u8.set(ftJSONbytes, w); w += ftJSONbytes.length;
+  u8.set(new Uint8Array(ftBin), w); w += ftBinLen;
+  u8.set(btJSONbytes, w); w += btJSONbytes.length;
+  u8.set(new Uint8Array(btBin), w);
   return buf;
 }
