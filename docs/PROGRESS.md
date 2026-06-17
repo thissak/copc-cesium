@@ -1,6 +1,7 @@
 # PROGRESS — CopcCesiumLab
 
 > 페이즈 체크리스트. 상태가 바뀌면 한 줄씩 갱신.
+> 방향·입상 로드맵: [DIRECTION](DIRECTION.md) · 성능 경쟁지형: [STRATEGY](STRATEGY.md)
 
 ## Phase 0 — 부팅 + 프로파일링 하네스 ✅
 환경이 돌고, 디버깅 도구가 보인다는 것 자체를 증명.
@@ -60,7 +61,8 @@
 - [~] 본편 ④(마감) **options 완료**(`pointSize`/`attenuation`/`eyeDomeLighting`/`colorBy` 5모드; `projFunc` 드롭) + **"부드럽게" ① 기본값 격파**(EDL·attenuation·colorBy 'rgb' 기본 on → 데모 product-grade). **남음**: README/라이선스 + 데모 페이지 다듬기
 - [x] **깊은 옥트리(millsite) 렌더 정확성 — Potree 레퍼런스 대조로 2종 수정.** ① height 색 전역 Z 정규화(노드별 무지개 얼룩 제거, Potree `elevationRange` 방식) ② 노이즈 classification 필터(`hideClassifications` 기본 7·18 — 떠다니는 high-noise 13% 제거, sofi처럼 노이즈 없으면 무필터). 데모 훅 `?ds=`/`?maxReq=`. 검증: 헤드리스 44% 드롭·정합, sofi 교차확인, verify C1 PASS. (로컬 Potree `examples/copc.html` 대조)
 - [ ] 실 GPU 대용량 검증 (사용자 머신) — `?soak`/`?bench`/`?perf` 하네스 준비됨; `?soak=millsite&secs=120`로 fps·메모리 천장·③빈도 확정 → ③-B 노브값 판정 게이트
-  - [x] **렌더 파이프라인 병목 아님 확정** — `?perf` 3중 격리 + rAF 카운터로 30fps=환경 throttle(저전원·swiftshader) 판명, 추측 최적화 0. **남음**: 비-스로틀 환경 fps headline 1회 + cahokia 8.9GB 노드-메타 누적 측정(`copcNodeCount()`)
+  - [x] **렌더 파이프라인 병목 아님 확정** — `?perf` 3중 격리 + rAF 카운터로 30fps=환경 throttle(저전원·swiftshader) 판명, 추측 최적화 0.
+  - [x] **지역단위 헤드리스 검증 (fema_pr 980MB 항공·cahokia 8.9GB MLS)** — georef 일치(푸에르토리코·일리노이), **노드 메타 누적 갭=누수 아님 확정**(Cahokia 90s soak `nodes` 2173→14352 **plateau**·heap~90MB/cesiumMB 12MB/tilesReady 58 plateau), eviction(cache=4MB→`unloads 0→7`), 회귀 0(verify·tsc). Cahokia 빈 영역=MLS 회랑 커버 본질(결함 아님). 기준 `.claude-criteria.md`. **남음(C4)**: 비-스로틀 실 GPU fps headline(`?perf=cahokia` 기본 캐시·전원연결)
 
 ## Phase 3 — 평가 / 입상 판정 🔒
 대용량 실데이터에서 60fps / 메모리 / UX 측정 → 입상 가능성 데이터로 판정.
