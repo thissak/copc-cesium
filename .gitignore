@@ -1,5 +1,6 @@
 node_modules/
 dist/
+demo-dist/
 *.log
 
 # 대용량 COPC 원본은 커밋하지 않는다
@@ -14,6 +15,8 @@ data/
 # docsite (mkdocs) 빌드 산출물
 site/
 
-# Playwright MCP 테스트 산출물
+# Playwright MCP 테스트 산출물 + 탐색 스크린샷
 .playwright-mcp/
 copc-phaseA-demo.jpeg
+round1-*.png
+cahokia-*.png

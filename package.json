@@ -1,24 +1,53 @@
 {
-  "name": "copc-cesium-lab",
-  "private": true,
-  "version": "0.0.0",
+  "name": "copc-cesium",
+  "version": "0.1.0",
+  "description": "Stream COPC point clouds directly in CesiumJS — no conversion to 3D Tiles.",
   "type": "module",
+  "license": "Apache-2.0",
+  "keywords": [
+    "cesium",
+    "cesiumjs",
+    "copc",
+    "point-cloud",
+    "lidar",
+    "3d-tiles",
+    "laz"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./copc-sw.js": "./dist/copc-sw.js"
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:lib": "tsup",
     "preview": "vite preview",
     "verify": "tsx scripts/verify.ts",
     "sweep": "tsx scripts/sweep.ts"
   },
+  "peerDependencies": {
+    "cesium": ">=1.120.0"
+  },
   "dependencies": {
-    "cesium": "^1.142.0",
     "comlink": "^4.4.2",
     "copc": "^0.0.8",
+    "laz-perf": "^0.0.7",
     "p-retry": "^8.0.0",
     "proj4": "^2.20.9"
   },
   "devDependencies": {
     "@types/proj4": "^2.5.6",
+    "cesium": "^1.142.0",
+    "tsup": "^8.5.1",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
     "vite": "^8.0.16",
