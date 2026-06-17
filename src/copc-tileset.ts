@@ -32,11 +32,23 @@ export interface CopcTilesetOptions {
    * `[]` 를 주면 전부 표시(원본 그대로).
    */
   hideClassifications?: number[];
+  /**
+   * COPC 콘텐츠를 가로채는 서비스워커 URL. 기본 `/copc-sw.js`.
+   * SW 는 콘텐츠 요청(`/__copc-real/...`)을 덮는 scope 에 서빙돼야 한다(기본 root).
+   * 소비자는 패키지의 `copc-sw.js` 를 자기 origin 에 복사해 서빙한다. (README)
+   */
+  serviceWorkerUrl?: string;
+  /**
+   * 서비스워커 scope. 기본 `/`.
+   * 현재 페이지를 제어할 수 있는 scope 여야 Cesium 의 `/__copc-real/...` 요청을 가로챌 수 있다.
+   */
+  serviceWorkerScope?: string;
 }
 
 let sidCounter = 0;
 const activeSids = new Set<string>(); // 살아있는 tileset 세션 (생명주기 추적)
 const pageSessions = new Map<string, CopcSession>(); // sid → 페이지 지오메트리 세션 (서브페이지 lazy 로드)
+const CONTENT_BASE_PATH = '/__copc-real/';
 
 let worker: Worker | undefined;
 let workerApi: Comlink.Remote<DecodeApi> | undefined;
@@ -61,7 +73,7 @@ async function buildPageTileset(sid: string, key: string): Promise<string> {
   const [loaded] = await Promise.all([loadSubPage(session, key), getWorkerApi().loadPage(sid, key)]);
   // 로드도 안 됐고 이미 노드도 없으면 잘못된/만료된 page 키 → 지연된 .pnts 500 대신 즉시 표면화
   if (!loaded && !session.nodes[key]) throw new Error(`page ${key}: 로드 후에도 노드 없음 (잘못된 키)`);
-  const contentBase = `${location.origin}/__copc-real/${sid}/`;
+  const contentBase = `${location.origin}${CONTENT_BASE_PATH}${sid}/`;
   return JSON.stringify(buildSubtree(session, key, contentBase));
 }
 
@@ -116,14 +128,46 @@ function releaseSession(sid: string) {
   } else cleanupIfIdle();
 }
 
-async function ensureServiceWorker(): Promise<void> {
+function waitForController(timeoutMs: number): Promise<void> {
+  if (navigator.serviceWorker.controller) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+      reject(new Error(`Service Worker controllerchange timeout (${timeoutMs}ms)`));
+    }, timeoutMs);
+    const onControllerChange = () => {
+      window.clearTimeout(timeout);
+      resolve();
+    };
+    navigator.serviceWorker.addEventListener('controllerchange', onControllerChange, { once: true });
+  });
+}
+
+async function ensureServiceWorker(swUrl: string, scope: string): Promise<void> {
   if (!('serviceWorker' in navigator)) throw new Error('Service Worker 미지원 (COPC 스트리밍 필요)');
-  const reg = await navigator.serviceWorker.register('/copc-sw.js');
+  const reg = await navigator.serviceWorker.register(swUrl, { scope });
   await reg.update();
   await navigator.serviceWorker.ready;
-  if (!navigator.serviceWorker.controller) {
-    await new Promise<void>((res) =>
-      navigator.serviceWorker.addEventListener('controllerchange', () => res(), { once: true }),
+  const pageUrl = location.href;
+  if (!pageUrl.startsWith(reg.scope)) {
+    throw new Error(
+      `Service Worker scope가 현재 페이지를 덮지 않습니다. scope=${reg.scope}, page=${pageUrl}. ` +
+        'copc-sw.js를 현재 앱 경로를 제어할 수 있는 scope(기본 root)에 서빙하세요.',
+    );
+  }
+  const contentUrl = new URL(CONTENT_BASE_PATH, location.origin).href;
+  if (!contentUrl.startsWith(reg.scope)) {
+    throw new Error(
+      `Service Worker scope가 COPC content 경로를 덮지 않습니다. scope=${reg.scope}, content=${contentUrl}. ` +
+        `기본 ${CONTENT_BASE_PATH} 경로를 쓰려면 copc-sw.js를 root scope('/')로 서빙하세요.`,
+    );
+  }
+  try {
+    await waitForController(8000);
+  } catch (err) {
+    throw new Error(
+      `Service Worker가 현재 페이지를 제어하지 못했습니다: ${(err as Error).message}. ` +
+        `url=${swUrl}, scope=${scope}. copc-sw.js의 scope가 현재 페이지를 덮는지 확인하세요.`,
     );
   }
 }
@@ -131,7 +175,7 @@ async function ensureServiceWorker(): Promise<void> {
 export const CopcTileset = {
   /** COPC URL → LOD 스트리밍 Cesium3DTileset. viewer.scene.primitives.add(tileset) 로 사용. */
   async fromUrl(url: string, options: CopcTilesetOptions = {}): Promise<Cesium3DTileset> {
-    await ensureServiceWorker();
+    await ensureServiceWorker(options.serviceWorkerUrl ?? '/copc-sw.js', options.serviceWorkerScope ?? '/');
     installHandler();
 
     const sid = `s${++sidCounter}`;
@@ -149,7 +193,7 @@ export const CopcTileset = {
       ]);
       pageSessions.set(sid, session); // 서브페이지 lazy 로드용으로 보관
 
-      const contentBase = `${location.origin}/__copc-real/${sid}/`;
+      const contentBase = `${location.origin}${CONTENT_BASE_PATH}${sid}/`;
       const tilesetJson = buildTileset(session, contentBase);
       const tileset = await Cesium3DTileset.fromUrl(
         'data:application/json;base64,' + btoa(JSON.stringify(tilesetJson)),

@@ -691,6 +691,7 @@ async function runPerf() {
   const res = Number(params.get('res')) || 0; // resolutionScale — Retina 2x fill-rate 격리 (예: res=0.5)
   if (res > 0) viewer.resolutionScale = res;
   log(`perf: ${ds.label} 측정 …`);
+  let lto: PerformanceObserver | undefined;
   try {
     const t0 = performance.now();
     const tileset = await CopcTileset.fromUrl(ds.url, { eyeDomeLighting: edl, attenuation: atten });
@@ -705,9 +706,12 @@ async function runPerf() {
     let loaded = 0;
     let addedAt = 0;
     let ttfpMs = 0; // 첫 점 화면 도달 (add → first tileLoad)
+    const loadTimes: number[] = []; // tileLoad 타임스탬프 → 16ms 창 버스트(②, 하드웨어 무관)
+    const longTasks: number[] = []; // longtask 지속(ms) → 메인스레드 freeze(①, 하드웨어 무관)
     tileset.tileUnload.addEventListener(() => unloads++);
     tileset.tileLoad.addEventListener(() => {
       loaded++;
+      loadTimes.push(performance.now());
       if (!ttfpMs && addedAt) ttfpMs = performance.now() - addedAt;
     });
     const readyCount = () =>
@@ -717,6 +721,19 @@ async function runPerf() {
       const m = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory;
       return m ? m.usedJSHeapSize / 1048576 : 0;
     };
+
+    // ① 메인스레드 freeze 계측 — longtask(50ms+ 블로킹). GPU 무관 데이터(JS+동기 버퍼업로드 호출).
+    try {
+      lto = new PerformanceObserver((l) => {
+        for (const e of l.getEntries()) {
+          if (addedAt && e.startTime < addedAt) continue;
+          longTasks.push(+e.duration.toFixed(0));
+        }
+      });
+      lto.observe({ type: 'longtask' } as PerformanceObserverInit);
+    } catch {
+      /* longtask API 미지원 환경 → 빈 배열, 다른 신호로 판정 */
+    }
 
     addedAt = performance.now();
     viewer.scene.primitives.add(tileset);
@@ -778,6 +795,18 @@ async function runPerf() {
     const ttdMs = performance.now() - ttdStart - stableMs;
     viewer.camera.lookAtTransform(Matrix4.IDENTITY);
 
+    // ② 16ms(60fps 한 프레임) 창 안 최대 타일 도착 수 — 한 프레임이 흡수해야 할 버스트(하드웨어 무관).
+    const maxTilesPer16ms = (() => {
+      const s = [...loadTimes].sort((a, b) => a - b);
+      let mx = 0;
+      for (let i = 0; i < s.length; i++) {
+        let j = i;
+        while (j < s.length && s[j] - s[i] <= 16) j++;
+        mx = Math.max(mx, j - i);
+      }
+      return mx;
+    })();
+
     const pct = (arr: number[], p: number) => {
       if (!arr.length) return 0;
       const s = [...arr].sort((a, b) => a - b);
@@ -795,6 +824,14 @@ async function runPerf() {
       frames: frametimes.length,
       frametimeMs: { p50: pct(frametimes, 50), p95: pct(frametimes, 95), p99: pct(frametimes, 99) },
       hitches_gt50ms: frametimes.filter((d) => d > 50).length,
+      // ① 메인스레드 freeze (하드웨어 무관 데이터): 사람이 "끊겼다"고 느끼는 멈춤을 ms 로 직접 측정
+      longTaskMs: {
+        max: longTasks.length ? Math.max(...longTasks) : 0,
+        total: +longTasks.reduce((a, b) => a + b, 0).toFixed(0),
+        count: longTasks.length,
+      },
+      // ② 프레임당 타일 버스트 (하드웨어 무관): 한 프레임에 몰리는 업로드 = jank 원인
+      maxTilesPer16ms,
       openMs: +openMs.toFixed(0),
       ttfpMs: +ttfpMs.toFixed(0),
       ttdMs: +ttdMs.toFixed(0),
@@ -813,6 +850,8 @@ async function runPerf() {
     log('PERF ERROR: ' + ((e as Error)?.message ?? e));
     console.error(e);
     console.log('PERF RESULT ' + JSON.stringify({ error: (e as Error)?.message }));
+  } finally {
+    lto?.disconnect();
   }
 }
 
