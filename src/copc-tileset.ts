@@ -52,7 +52,9 @@ function decodeTile(sid: string, key: string): Promise<ArrayBuffer | null> {
 async function buildPageTileset(sid: string, key: string): Promise<string> {
   const session = pageSessions.get(sid);
   if (!session) throw new Error(`세션 없음: ${sid}`);
-  await Promise.all([loadSubPage(session, key), getWorkerApi().loadPage(sid, key)]);
+  const [loaded] = await Promise.all([loadSubPage(session, key), getWorkerApi().loadPage(sid, key)]);
+  // 로드도 안 됐고 이미 노드도 없으면 잘못된/만료된 page 키 → 지연된 .pnts 500 대신 즉시 표면화
+  if (!loaded && !session.nodes[key]) throw new Error(`page ${key}: 로드 후에도 노드 없음 (잘못된 키)`);
   const contentBase = `${location.origin}/__copc-real/${sid}/`;
   return JSON.stringify(buildSubtree(session, key, contentBase));
 }
@@ -98,6 +100,16 @@ function cleanupIfIdle() {
   }
 }
 
+// 한 세션(sid) 정리 — destroy 와 fromUrl 초기화 실패 양쪽에서 공유(누수 방지).
+function releaseSession(sid: string) {
+  if (!activeSids.delete(sid)) return;
+  pageSessions.delete(sid);
+  if (activeSids.size > 0) {
+    // fire-and-forget 이지만 rejection 을 삼키지 않는다(조용한 실패 방지)
+    workerApi?.close(sid).catch((e) => console.warn(`[copc] worker close 실패 (${sid}):`, e));
+  } else cleanupIfIdle();
+}
+
 async function ensureServiceWorker(): Promise<void> {
   if (!('serviceWorker' in navigator)) throw new Error('Service Worker 미지원 (COPC 스트리밍 필요)');
   const reg = await navigator.serviceWorker.register('/copc-sw.js');
@@ -118,45 +130,44 @@ export const CopcTileset = {
 
     const sid = `s${++sidCounter}`;
     activeSids.add(sid);
-    // 디코드 세션(laz-perf 포함)은 워커가 보관, 지오메트리(tileset.json)용 세션은 페이지에서.
-    // 페이지 openCopc 는 헤더+옥트리만(점 디코드·WASM 불필요) → 경량. 둘은 병렬로 연다.
-    const api = getWorkerApi();
-    const [session] = await Promise.all([
-      openCopc(url),
-      api.open(sid, url, { colorBy: options.colorBy ?? 'height' }),
-    ]);
-    pageSessions.set(sid, session); // 서브페이지 lazy 로드용으로 보관
+    try {
+      // 디코드 세션(laz-perf 포함)은 워커가 보관, 지오메트리(tileset.json)용 세션은 페이지에서.
+      // 페이지 openCopc 는 헤더+옥트리만(점 디코드·WASM 불필요) → 경량. 둘은 병렬로 연다.
+      const api = getWorkerApi();
+      const [session] = await Promise.all([
+        openCopc(url),
+        api.open(sid, url, { colorBy: options.colorBy ?? 'height' }),
+      ]);
+      pageSessions.set(sid, session); // 서브페이지 lazy 로드용으로 보관
 
-    const contentBase = `${location.origin}/__copc-real/${sid}/`;
-    const tilesetJson = buildTileset(session, contentBase);
-    const tileset = await Cesium3DTileset.fromUrl(
-      'data:application/json;base64,' + btoa(JSON.stringify(tilesetJson)),
-    );
-    tileset.maximumScreenSpaceError = options.maximumScreenSpaceError ?? 8;
-    if (options.pointSize !== undefined) {
-      tileset.style = new Cesium3DTileStyle({ pointSize: options.pointSize });
-    }
-    // EDL 은 attenuation 위에서 그려지므로 EDL 켜면 attenuation 도 켠다.
-    const edl = options.eyeDomeLighting ?? false;
-    const atten = (options.attenuation ?? false) || edl;
-    if (atten) {
-      tileset.pointCloudShading.attenuation = true;
-      tileset.pointCloudShading.eyeDomeLighting = edl;
-    }
-
-    // 생명주기: tileset.destroy() 시 워커 세션 정리. 마지막 세션이면 워커 종료 + SW 리스너 제거.
-    // (wrapper 없이 Cesium 인스턴스의 destroy 만 확장 — ADR-001 의 copc.destroy() 그대로 동작)
-    const tilesetDestroy = tileset.destroy.bind(tileset);
-    (tileset as unknown as { destroy: () => void }).destroy = () => {
-      if (activeSids.delete(sid)) {
-        pageSessions.delete(sid); // 페이지 세션 + 캐시된 서브페이지 해제
-        if (activeSids.size > 0) {
-          // fire-and-forget 이지만 rejection 을 삼키지 않는다(조용한 실패 방지)
-          getWorkerApi().close(sid).catch((e) => console.warn(`[copc] worker close 실패 (${sid}):`, e));
-        } else cleanupIfIdle();
+      const contentBase = `${location.origin}/__copc-real/${sid}/`;
+      const tilesetJson = buildTileset(session, contentBase);
+      const tileset = await Cesium3DTileset.fromUrl(
+        'data:application/json;base64,' + btoa(JSON.stringify(tilesetJson)),
+      );
+      tileset.maximumScreenSpaceError = options.maximumScreenSpaceError ?? 8;
+      if (options.pointSize !== undefined) {
+        tileset.style = new Cesium3DTileStyle({ pointSize: options.pointSize });
       }
-      tilesetDestroy();
-    };
-    return tileset;
+      // EDL 은 attenuation 위에서 그려지므로 EDL 켜면 attenuation 도 켠다.
+      const edl = options.eyeDomeLighting ?? false;
+      const atten = (options.attenuation ?? false) || edl;
+      if (atten) {
+        tileset.pointCloudShading.attenuation = true;
+        tileset.pointCloudShading.eyeDomeLighting = edl;
+      }
+
+      // 생명주기: tileset.destroy() 시 워커 세션 정리. 마지막 세션이면 워커 종료 + SW 리스너 제거.
+      // (wrapper 없이 Cesium 인스턴스의 destroy 만 확장 — ADR-001 의 copc.destroy() 그대로 동작)
+      const tilesetDestroy = tileset.destroy.bind(tileset);
+      (tileset as unknown as { destroy: () => void }).destroy = () => {
+        releaseSession(sid);
+        tilesetDestroy();
+      };
+      return tileset;
+    } catch (err) {
+      releaseSession(sid); // 초기화 실패 시 누적 상태 정리 후 표면화(누수·조용한 실패 방지)
+      throw err;
+    }
   },
 };

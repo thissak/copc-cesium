@@ -200,6 +200,9 @@ export async function openCopc(url: string): Promise<CopcSession> {
 /**
  * 미로드 서브페이지(pages[key])를 로드해 세션 nodes/pages 에 병합 (lazy 하이어라키 페이징).
  * 동일 시그니처(루트 페이지와 같은 호출)로 자식 페이지를 가져온다. 이미 로드/페이지 아님이면 no-op false.
+ *
+ * ⚠️ 알려진 한계: 방문한 노드는 세션 destroy 까지 누적되며 축출되지 않는다(페이지+워커 양쪽).
+ * 깊은/장시간 항해 시 nodes 단조 증가 → 메모리 상한(LRU)은 측정 후 도입 예정(handoff Step1+ ③).
  */
 export async function loadSubPage(s: CopcSession, key: string): Promise<boolean> {
   const ptr = s.pages[key];
@@ -245,9 +248,12 @@ export async function decodeNode(
     lonLatH.push(lon, lat, z);
     zVals.push(z);
   }
-  const colors = colorBy ? colorize(view, n, colorBy, zVals) : undefined;
+  const colors = colorBy ? colorize(s, view, n, colorBy, zVals) : undefined;
   return { lonLatH, zVals, count: n, colors };
 }
+
+// colorBy 차원이 없어 height 로 폴백할 때, 세션당 한 번만 경고(타일마다 스팸 방지·표면화는 유지).
+const warnedFallback = new WeakSet<CopcSession>();
 
 type PointView = Awaited<ReturnType<typeof Copc.loadPointDataView>>;
 
@@ -258,8 +264,8 @@ function readArr(g: (i: number) => number, n: number): number[] {
   return a;
 }
 
-/** colorBy 모드 → 점당 RGB. 차원이 없으면 height 폴백(조용한 실패 없이 warn). 색 매핑은 colors.ts. */
-function colorize(view: PointView, n: number, colorBy: ColorBy, zVals: number[]): Uint8Array {
+/** colorBy 모드 → 점당 RGB. 차원이 없으면 height 폴백(조용한 실패 없이 세션당 1회 warn). 색 매핑은 colors.ts. */
+function colorize(s: CopcSession, view: PointView, n: number, colorBy: ColorBy, zVals: number[]): Uint8Array {
   const has = (d: string) => d in view.dimensions;
   switch (colorBy) {
     case 'height':
@@ -278,6 +284,9 @@ function colorize(view: PointView, n: number, colorBy: ColorBy, zVals: number[])
       if (has('ReturnNumber')) return returnColors(readArr(view.getter('ReturnNumber'), n), n);
       break;
   }
-  console.warn(`[copc] colorBy '${colorBy}' 차원 없음 → height 폴백`);
+  if (!warnedFallback.has(s)) {
+    console.warn(`[copc] colorBy '${colorBy}' 차원 없음 → height 폴백 (이후 동일 경고 생략)`);
+    warnedFallback.add(s);
+  }
   return heightColors(zVals, n);
 }

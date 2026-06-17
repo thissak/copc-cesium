@@ -57,9 +57,10 @@ self.addEventListener('fetch', (e) => {
                 ev.data && ev.data.error ? reject(new Error(ev.data.error)) : resolve(ev.data);
               client.postMessage({ type: 'copc-tile', key: rest.split('/').pop(), path: rest }, [ch.port2]);
             }),
-            // 페이지 핸들러가 영영 응답 안 하면 무한 대기 → 백스톱 타임아웃(아래 catch→500, 조용한 hang 방지)
+            // 페이지 핸들러가 영영 응답 안 하면 무한 대기 → 백스톱 타임아웃(아래 catch→500, 조용한 hang 방지).
+            // 워커 재시도 예산(fetch 8s × 4시도 + 백오프 ≈ 34s)보다 길어야 느린-회복 읽기를 죽이지 않음.
             new Promise((_, reject) =>
-              setTimeout(() => reject(new Error('page handler timeout (15s)')), 15000),
+              setTimeout(() => reject(new Error('page handler timeout (40s)')), 40000),
             ),
           ]);
           // 페이지 요청(page/{key}.json) → child tileset JSON, 그 외 → pnts 바이너리
