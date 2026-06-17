@@ -22,23 +22,37 @@ function hslToRgb(h: number, s: number, l: number, out: Uint8Array, o: number): 
   out[o + 2] = Math.round(hue2rgb(m1, m2, h - 1 / 3) * 255);
 }
 
-/** 값 배열 → 저=파랑 고=빨강 HSL 램프 (고도·강도 공용). 노드 내 min/max 정규화. */
-function rampColors(values: ArrayLike<number>, n: number): Uint8Array {
-  let min = Infinity;
-  let max = -Infinity;
-  for (let i = 0; i < n; i++) {
-    const v = values[i];
-    if (v < min) min = v;
-    if (v > max) max = v;
+/**
+ * 값 배열 → 저=파랑 고=빨강 HSL 램프 (고도·강도 공용).
+ * range=[min,max] 를 주면 그 전역 범위로 정규화(Potree elevationRange 방식 — 노드 간 색 일관),
+ * 안 주면 노드 내 min/max 로 폴백. 범위 밖 값은 [0,1] 로 클램프.
+ */
+function rampColors(values: ArrayLike<number>, n: number, range?: [number, number]): Uint8Array {
+  let min: number;
+  let max: number;
+  if (range) {
+    [min, max] = range;
+  } else {
+    min = Infinity;
+    max = -Infinity;
+    for (let i = 0; i < n; i++) {
+      const v = values[i];
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
   }
   const span = max - min || 1;
   const out = new Uint8Array(n * 3);
-  for (let i = 0; i < n; i++) hslToRgb((1 - (values[i] - min) / span) * 0.66, 1, 0.5, out, i * 3);
+  for (let i = 0; i < n; i++) {
+    const t = Math.min(1, Math.max(0, (values[i] - min) / span));
+    hslToRgb((1 - t) * 0.66, 1, 0.5, out, i * 3);
+  }
   return out;
 }
 
-export function heightColors(zVals: ArrayLike<number>, n: number): Uint8Array {
-  return rampColors(zVals, n);
+/** 고도 색. range=[minZ,maxZ] 전역 범위(COPC 헤더)로 정규화하면 노드 간 색이 일관(Potree elevationRange). */
+export function heightColors(zVals: ArrayLike<number>, n: number, range?: [number, number]): Uint8Array {
+  return rampColors(zVals, n, range);
 }
 
 export function intensityColors(intensity: ArrayLike<number>, n: number): Uint8Array {

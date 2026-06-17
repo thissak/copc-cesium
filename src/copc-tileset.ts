@@ -26,6 +26,12 @@ export interface CopcTilesetOptions {
   eyeDomeLighting?: boolean;
   /** 색칠: 'rgb'(기본, 해당 차원 없으면 height 폴백) | 'height' | 'classification' | 'intensity' | 'returns'. */
   colorBy?: ColorBy;
+  /**
+   * 디코드 시 제외할 classification(점이 렌더·메모리·카운트에서 빠짐).
+   * 기본 ASPRS 노이즈 [7(low), 18(high)] — 측량 표준(PDAL·Potree·LAStools)대로 노이즈 제거.
+   * `[]` 를 주면 전부 표시(원본 그대로).
+   */
+  hideClassifications?: number[];
 }
 
 let sidCounter = 0;
@@ -136,7 +142,10 @@ export const CopcTileset = {
       const api = getWorkerApi();
       const [session] = await Promise.all([
         openCopc(url),
-        api.open(sid, url, { colorBy: options.colorBy ?? 'rgb' }),
+        api.open(sid, url, {
+          colorBy: options.colorBy ?? 'rgb',
+          hideClassifications: options.hideClassifications ?? [7, 18],
+        }),
       ]);
       pageSessions.set(sid, session); // 서브페이지 lazy 로드용으로 보관
 

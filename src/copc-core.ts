@@ -217,12 +217,14 @@ export async function loadSubPage(s: CopcSession, key: string): Promise<boolean>
 /**
  * 한 노드(key='D-X-Y-Z')의 모든 점을 디코드해 경위도+높이로 반환. 없으면 null.
  * colorBy 를 주면 그 모드의 점당 RGB(colors)도 만든다. 해당 차원이 없으면 height 로 폴백(console.warn).
+ * hideClass 의 classification(예: ASPRS 노이즈 7·18)은 디코드 시 제외 → 렌더·메모리·카운트에서 빠진다.
  */
 export async function decodeNode(
   s: CopcSession,
   key: string,
   lazPerf?: LazPerf,
   colorBy?: ColorBy,
+  hideClass?: ReadonlySet<number>,
 ): Promise<{ lonLatH: number[]; zVals: number[]; count: number; colors?: Uint8Array } | null> {
   const node = s.nodes[key];
   if (!node) return null;
@@ -231,10 +233,13 @@ export async function decodeNode(
   const gx = view.getter('X');
   const gy = view.getter('Y');
   const gz = view.getter('Z');
+  const gc = hideClass?.size && 'Classification' in view.dimensions ? view.getter('Classification') : null;
 
   const lonLatH: number[] = [];
   const zVals: number[] = [];
+  const keep: number[] = []; // 제외 안 된 원본 인덱스 — colorize 가 다른 차원을 같은 점에서 읽도록
   for (let i = 0; i < n; i++) {
+    if (gc && hideClass!.has(gc(i) | 0)) continue;
     const x = gx(i);
     const y = gy(i);
     const z = gz(i) * s.zUnit;
@@ -247,9 +252,10 @@ export async function decodeNode(
     }
     lonLatH.push(lon, lat, z);
     zVals.push(z);
+    keep.push(i);
   }
-  const colors = colorBy ? colorize(s, view, n, colorBy, zVals) : undefined;
-  return { lonLatH, zVals, count: n, colors };
+  const colors = colorBy ? colorize(s, view, keep, colorBy, zVals) : undefined;
+  return { lonLatH, zVals, count: keep.length, colors };
 }
 
 // colorBy 차원이 없어 height 로 폴백할 때, 세션당 한 번만 경고(타일마다 스팸 방지·표면화는 유지).
@@ -257,36 +263,39 @@ const warnedFallback = new WeakSet<CopcSession>();
 
 type PointView = Awaited<ReturnType<typeof Copc.loadPointDataView>>;
 
-/** getter 로 한 차원을 number[] 로 읽는다. */
-function readArr(g: (i: number) => number, n: number): number[] {
-  const a = new Array<number>(n);
-  for (let i = 0; i < n; i++) a[i] = g(i);
+/** getter 로 한 차원을 keep 인덱스에서만 number[] 로 읽는다(제외된 점은 건너뜀). */
+function readArr(g: (i: number) => number, keep: number[]): number[] {
+  const a = new Array<number>(keep.length);
+  for (let j = 0; j < keep.length; j++) a[j] = g(keep[j]);
   return a;
 }
 
 /** colorBy 모드 → 점당 RGB. 차원이 없으면 height 폴백(조용한 실패 없이 세션당 1회 warn). 색 매핑은 colors.ts. */
-function colorize(s: CopcSession, view: PointView, n: number, colorBy: ColorBy, zVals: number[]): Uint8Array {
+function colorize(s: CopcSession, view: PointView, keep: number[], colorBy: ColorBy, zVals: number[]): Uint8Array {
+  const n = keep.length;
   const has = (d: string) => d in view.dimensions;
+  // 고도 색은 노드별이 아니라 데이터셋 전역 Z 범위(COPC 헤더)로 정규화 → 노드 간 색 일관(Potree elevationRange).
+  const zRange: [number, number] = [s.copc.header.min[2] * s.zUnit, s.copc.header.max[2] * s.zUnit];
   switch (colorBy) {
     case 'height':
-      return heightColors(zVals, n);
+      return heightColors(zVals, n, zRange);
     case 'rgb':
       if (has('Red') && has('Green') && has('Blue'))
-        return rgbColors(readArr(view.getter('Red'), n), readArr(view.getter('Green'), n), readArr(view.getter('Blue'), n), n);
+        return rgbColors(readArr(view.getter('Red'), keep), readArr(view.getter('Green'), keep), readArr(view.getter('Blue'), keep), n);
       break;
     case 'classification':
-      if (has('Classification')) return classificationColors(readArr(view.getter('Classification'), n), n);
+      if (has('Classification')) return classificationColors(readArr(view.getter('Classification'), keep), n);
       break;
     case 'intensity':
-      if (has('Intensity')) return intensityColors(readArr(view.getter('Intensity'), n), n);
+      if (has('Intensity')) return intensityColors(readArr(view.getter('Intensity'), keep), n);
       break;
     case 'returns':
-      if (has('ReturnNumber')) return returnColors(readArr(view.getter('ReturnNumber'), n), n);
+      if (has('ReturnNumber')) return returnColors(readArr(view.getter('ReturnNumber'), keep), n);
       break;
   }
   if (!warnedFallback.has(s)) {
     console.warn(`[copc] colorBy '${colorBy}' 차원 없음 → height 폴백 (이후 동일 경고 생략)`);
     warnedFallback.add(s);
   }
-  return heightColors(zVals, n);
+  return heightColors(zVals, n, zRange);
 }

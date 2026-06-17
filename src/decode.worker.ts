@@ -15,20 +15,28 @@ function getLazPerf() {
   return lazPerfPromise;
 }
 
-type Entry = { session: CopcSession; colorBy: ColorBy };
+type Entry = { session: CopcSession; colorBy: ColorBy; hideClass: Set<number> };
 const sessions = new Map<string, Entry>(); // sid → 디코드 세션 (다중 tileset)
 
 const api = {
-  /** COPC 를 열어 디코드용 세션을 워커에 보관 (sid 로 키). colorBy 는 색칠 모드. */
-  async open(sid: string, url: string, opts?: { colorBy?: ColorBy }): Promise<void> {
-    sessions.set(sid, { session: await openCopc(url), colorBy: opts?.colorBy ?? 'height' });
+  /** COPC 를 열어 디코드용 세션을 워커에 보관 (sid 로 키). colorBy 는 색칠 모드, hideClassifications 는 제외할 classification. */
+  async open(
+    sid: string,
+    url: string,
+    opts?: { colorBy?: ColorBy; hideClassifications?: number[] },
+  ): Promise<void> {
+    sessions.set(sid, {
+      session: await openCopc(url),
+      colorBy: opts?.colorBy ?? 'height',
+      hideClass: new Set(opts?.hideClassifications ?? []),
+    });
   },
   /** 노드(key='D-X-Y-Z') 디코드 → 양자화 pnts (zero-copy transfer). 없는 노드면 null. */
   async decode(sid: string, key: string): Promise<ArrayBuffer | null> {
     const e = sessions.get(sid);
     if (!e) throw new Error(`세션 없음: ${sid}`);
     const lazPerf = await getLazPerf();
-    const nd = await decodeNode(e.session, key, lazPerf, e.colorBy);
+    const nd = await decodeNode(e.session, key, lazPerf, e.colorBy, e.hideClass);
     if (!nd) return null;
     const pnts = buildQuantizedPnts(nd.lonLatH, nd.colors!);
     return Comlink.transfer(pnts, [pnts]);
