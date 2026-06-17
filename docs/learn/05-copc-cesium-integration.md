@@ -97,4 +97,4 @@ flowchart LR
 
 ---
 
-← 처음으로: [학습 커리큘럼](index.md) · 작업 문서: [PROFILING](../PROFILING.md) · [REFERENCES](../REFERENCES.md) · [PROGRESS](../PROGRESS.md)
+다음 →: [06. 실제로 만든 것 — 스트리밍 엔진과 상용 코어](06-streaming-engine-and-production-core.md) · 처음으로: [학습 커리큘럼](index.md) · 작업 문서: [PROFILING](../PROFILING.md) · [REFERENCES](../REFERENCES.md) · [PROGRESS](../PROGRESS.md)

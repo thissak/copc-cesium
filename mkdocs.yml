@@ -51,9 +51,11 @@ nav:
           - learn/03-cesiumjs.md
           - learn/04-coordinate-systems.md
           - learn/05-copc-cesium-integration.md
+          - learn/06-streaming-engine-and-production-core.md
       - 위키:
           - wiki/index.md
           - wiki/decode-in-worker.md
+          - wiki/hierarchy-subpage-paging.md
   - "참고 (원본 문서)":
       - 문제정의: PROBLEM.md
       - 전략: STRATEGY.md
@@ -65,6 +67,7 @@ nav:
       - "설계결정 (ADR)":
           - adr/001-provider-plugin-architecture-A.md
           - adr/002-service-worker-tile-interception.md
+          - adr/003-hierarchy-subpage-paging.md
       - 핸드오프:
           - handoff/phase2-streaming-handoff.md
 
