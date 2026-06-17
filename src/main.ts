@@ -625,6 +625,142 @@ async function runSoak() {
   }
 }
 
+// ── 스트리밍 성능·부드러움 측정 — 결정적 카메라 경로 동안 frametime 분포·hitch·TTFP·TTD·메모리 ──
+// 개선 전/후를 같은 경로로 비교하는 게 목적. 공정성: Cesium 은 지구본+terrain+imagery 까지 그리므로
+// Potree 와 직접 fps 비교는 무효(우리 시간축·hitch·TTD·메모리가 유효 신호). Playwright fps=swiftshader 무효 —
+// 실 fps headline 은 실 GPU. 단 hitch·TTFP·TTD·throughput·메모리는 헤드리스(소프트 렌더)에서도 파이프라인 신호로 유의.
+//   ?perf            millsite, 30s 경로
+//   ?perf=autzen     데이터셋 id
+//   &secs=30 &maxReq=6 &cache=MB
+async function runPerf() {
+  const params = new URLSearchParams(location.search);
+  const ds = DATASETS.find((d) => d.id === params.get('perf')) ?? DATASETS[1];
+  const secs = Number(params.get('secs')) || 30;
+  const maxReq = Number(params.get('maxReq')) || 0;
+  if (maxReq > 0) RequestScheduler.maximumRequestsPerServer = maxReq;
+  const cacheMB = Number(params.get('cache')) || 0;
+  log(`perf: ${ds.label} 측정 …`);
+  try {
+    const t0 = performance.now();
+    const tileset = await CopcTileset.fromUrl(ds.url);
+    const openMs = performance.now() - t0;
+    if (cacheMB > 0) {
+      tileset.cacheBytes = cacheMB * 1048576;
+      tileset.maximumCacheOverflowBytes = cacheMB * 1048576;
+    }
+    const msse = Number(params.get('msse')) || 0; // 낮을수록 깊은 LOD 강제(스트리밍 부하↑). 미지정=기본 8
+    if (msse > 0) tileset.maximumScreenSpaceError = msse;
+    let unloads = 0;
+    let loaded = 0;
+    let addedAt = 0;
+    let ttfpMs = 0; // 첫 점 화면 도달 (add → first tileLoad)
+    tileset.tileUnload.addEventListener(() => unloads++);
+    tileset.tileLoad.addEventListener(() => {
+      loaded++;
+      if (!ttfpMs && addedAt) ttfpMs = performance.now() - addedAt;
+    });
+    const readyCount = () =>
+      (tileset as unknown as { statistics?: { numberOfTilesWithContentReady?: number } }).statistics
+        ?.numberOfTilesWithContentReady ?? 0;
+    const heapMB = () => {
+      const m = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory;
+      return m ? m.usedJSHeapSize / 1048576 : 0;
+    };
+
+    addedAt = performance.now();
+    viewer.scene.primitives.add(tileset);
+    await viewer.zoomTo(tileset);
+    const bs = tileset.boundingSphere;
+
+    // frametime 수집기 (rAF 간격) — 경로 도는 동안 백그라운드로 누적
+    const frametimes: number[] = [];
+    let peakHeap = 0;
+    let peakCesium = 0;
+    let sumReady = 0;
+    let samples = 0;
+    let collecting = true;
+    let last = performance.now();
+    const collect = () => {
+      const now = performance.now();
+      frametimes.push(now - last);
+      last = now;
+      viewer.scene.requestRender();
+      peakHeap = Math.max(peakHeap, heapMB());
+      peakCesium = Math.max(peakCesium, tileset.totalMemoryUsageInBytes / 1048576);
+      sumReady += readyCount();
+      samples++;
+      if (collecting) requestAnimationFrame(collect);
+    };
+    requestAnimationFrame(collect);
+
+    // 결정적 경로: heading 한 바퀴 + range 가 가까이↔멀리 오실레이션(깊은 LOD load + 화면밖 unload churn).
+    const pathStart = performance.now();
+    const dur = secs * 1000;
+    while (performance.now() - pathStart < dur) {
+      const u = (performance.now() - pathStart) / dur; // 0..1
+      const heading = u * Math.PI * 2; // 한 바퀴(매 dive 마다 새 섹터 → fresh 깊은 노드 churn)
+      // range: 0.5→0.05 near↔far 3주기. 깊이 파고들어 deep LOD 스트리밍을 실제로 압박.
+      const range = bs.radius * (0.05 + 0.45 * (0.5 - 0.5 * Math.cos(u * Math.PI * 6)));
+      viewer.camera.lookAt(bs.center, new HeadingPitchRange(heading, -0.6, range));
+      await sleep(100); // rAF 가 그 사이 frametime 수집
+    }
+    collecting = false;
+    await sleep(50);
+
+    // TTD: 고정 깊은 뷰에서 디테일 채우기 완료까지(tilesReady 증가가 멎을 때까지)
+    viewer.camera.lookAt(bs.center, new HeadingPitchRange(0, -0.6, bs.radius * 0.15));
+    const ttdStart = performance.now();
+    let prevReady = -1;
+    let stableMs = 0;
+    while (performance.now() - ttdStart < 10000) {
+      viewer.scene.requestRender();
+      await sleep(200);
+      const r = readyCount();
+      if (r === prevReady && r > 0) {
+        stableMs += 200;
+        if (stableMs >= 1200) break; // 1.2s 안정 → 채우기 완료로 간주
+      } else {
+        stableMs = 0;
+        prevReady = r;
+      }
+    }
+    const ttdMs = performance.now() - ttdStart - stableMs;
+    viewer.camera.lookAtTransform(Matrix4.IDENTITY);
+
+    const pct = (arr: number[], p: number) => {
+      if (!arr.length) return 0;
+      const s = [...arr].sort((a, b) => a - b);
+      return +s[Math.min(s.length - 1, Math.floor((p / 100) * s.length))].toFixed(1);
+    };
+    const result = {
+      ds: ds.id,
+      secs,
+      msse: tileset.maximumScreenSpaceError,
+      maxReq: maxReq || 'default(18)',
+      cacheMB: +(tileset.cacheBytes / 1048576).toFixed(0),
+      frames: frametimes.length,
+      frametimeMs: { p50: pct(frametimes, 50), p95: pct(frametimes, 95), p99: pct(frametimes, 99) },
+      hitches_gt50ms: frametimes.filter((d) => d > 50).length,
+      openMs: +openMs.toFixed(0),
+      ttfpMs: +ttfpMs.toFixed(0),
+      ttdMs: +ttdMs.toFixed(0),
+      peakHeapMB: +peakHeap.toFixed(0),
+      peakCesiumMB: +peakCesium.toFixed(0),
+      tileUnloads: unloads,
+      tilesLoaded: loaded,
+      avgTilesReady: +(sumReady / Math.max(1, samples)).toFixed(0),
+      note: 'frametime=rAF간격. Cesium=globe+terrain+imagery 포함→Potree 직접 fps비교 무효. Playwright=swiftshader(fps 무효, hitch/TTD/메모리는 유의)',
+    };
+    (window as unknown as { __perf: unknown }).__perf = result;
+    log('PERF\n' + JSON.stringify(result, null, 2));
+    console.log('PERF RESULT ' + JSON.stringify(result));
+  } catch (e) {
+    log('PERF ERROR: ' + ((e as Error)?.message ?? e));
+    console.error(e);
+    console.log('PERF RESULT ' + JSON.stringify({ error: (e as Error)?.message }));
+  }
+}
+
 // 기본 페이지 = 공개 API 데모: CopcTileset.fromUrl 로 변환 없이 LOD 스트리밍
 async function runDemo() {
   log('CopcTileset.fromUrl 데모 …');
@@ -668,6 +804,8 @@ if (params.has('bench')) {
   runBench(budgets);
 } else if (params.has('soak')) {
   runSoak();
+} else if (params.has('perf')) {
+  runPerf();
 } else if (params.has('spike5')) {
   runSpike5();
 } else if (params.has('spike4')) {
