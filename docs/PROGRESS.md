@@ -56,10 +56,11 @@
 - [x] **상용 코어 Step 2 복원력** — range 재시도(`p-retry`)+타임아웃 + 조용한 실패 제거(copc getter `response.ok` 미검사로 5xx→점데이터 둔갑 버그 수정). (`copc-core` httpGetterWithRetry, `scripts/check-retry.ts`)
 - [x] **상용 코어 Step 3 속성 견고성** — `colorBy` 5모드(height/rgb/classification/intensity/returns) + 색 로직 `src/colors.ts` 통합. 차원 없으면 height 폴백+warn.
 - [x] **Step 0~3 종합 적대적 리뷰**(Codex) — MUST-FIX 3건 수정(SW 백스톱 40s·`fromUrl` 초기화 실패 정리·잘못된 page 키 즉시 throw). build·verify·paging·retry·브라우저 PASS.
-- [~] **본편 ③-B 측정 — 손코딩 primitive 기각([ADR-004](adr/004-delegate-memory-concurrency-to-cesium.md)).** ②예산·④eviction = Cesium `cacheBytes` 위임(실측: `tileUnload`로 SW-pnts evict·메모리 plateau), ③동시성 = 큐 타임아웃 → config 튜닝(워커풀 아님). **남음**: 노브값(maxReq·timeout·기본 cacheBytes) 실 GPU 측정. (서브페이지 노드 메타 누적은 별개·미측정·`session.nodes`)
+- [~] **본편 ③-B 측정 — 손코딩 primitive 기각([ADR-004](adr/004-delegate-memory-concurrency-to-cesium.md)).** ②예산·④eviction = Cesium `cacheBytes` 위임(실측: `tileUnload`로 SW-pnts evict·메모리 plateau), ③동시성 = 큐 타임아웃 → config 튜닝(워커풀 아님). **남음**: 노브값(maxReq·timeout·기본 cacheBytes) 실 GPU 측정. (서브페이지 노드 메타 누적은 별개 — `copcNodeCount()` 계측 훅 추가, cahokia 8.9GB 스트레스 예정)
 - [~] 본편 ④(마감) **options 완료**(`pointSize`/`attenuation`/`eyeDomeLighting`/`colorBy` 5모드; `projFunc` 드롭) + **"부드럽게" ① 기본값 격파**(EDL·attenuation·colorBy 'rgb' 기본 on → 데모 product-grade). **남음**: README/라이선스 + 데모 페이지 다듬기
 - [x] **깊은 옥트리(millsite) 렌더 정확성 — Potree 레퍼런스 대조로 2종 수정.** ① height 색 전역 Z 정규화(노드별 무지개 얼룩 제거, Potree `elevationRange` 방식) ② 노이즈 classification 필터(`hideClassifications` 기본 7·18 — 떠다니는 high-noise 13% 제거, sofi처럼 노이즈 없으면 무필터). 데모 훅 `?ds=`/`?maxReq=`. 검증: 헤드리스 44% 드롭·정합, sofi 교차확인, verify C1 PASS. (로컬 Potree `examples/copc.html` 대조)
-- [ ] 실 GPU 대용량 검증 (사용자 머신) — `?soak`/`?bench` 하네스 준비됨; `?soak=millsite&secs=120`로 fps·메모리 천장·③빈도 확정 → ③-B 노브값 판정 게이트
+- [ ] 실 GPU 대용량 검증 (사용자 머신) — `?soak`/`?bench`/`?perf` 하네스 준비됨; `?soak=millsite&secs=120`로 fps·메모리 천장·③빈도 확정 → ③-B 노브값 판정 게이트
+  - [x] **렌더 파이프라인 병목 아님 확정** — `?perf` 3중 격리 + rAF 카운터로 30fps=환경 throttle(저전원·swiftshader) 판명, 추측 최적화 0. **남음**: 비-스로틀 환경 fps headline 1회 + cahokia 8.9GB 노드-메타 누적 측정(`copcNodeCount()`)
 
 ## Phase 3 — 평가 / 입상 판정 🔒
 대용량 실데이터에서 60fps / 메모리 / UX 측정 → 입상 가능성 데이터로 판정.

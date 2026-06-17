@@ -585,9 +585,11 @@ async function runSoak() {
       const m = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory;
       return m ? (m.usedJSHeapSize / 1048576).toFixed(0) : '?';
     };
+    const nodeCount = () =>
+      (tileset as unknown as { copcNodeCount?: () => number }).copcNodeCount?.() ?? '?';
     const rows: string[] = [
       `soak ${ds.label}  cacheBytes=${(tileset.cacheBytes / 1048576).toFixed(0)}MB  near=${nearF} far=${farF} maxReq=${maxReq || 'default(18)'}`,
-      't(s)\theapMB\tcesiumMB\ttilesReady\tunloads',
+      't(s)\theapMB\tcesiumMB\ttilesReady\tunloads\tnodes',
     ];
     const t0 = performance.now();
     let cycle = 0;
@@ -603,7 +605,7 @@ async function runSoak() {
       }).statistics;
       const cesiumMB = (tileset.totalMemoryUsageInBytes / 1048576).toFixed(0);
       const t = ((performance.now() - t0) / 1000).toFixed(0);
-      rows.push(`${t}\t${heapMB()}\t${cesiumMB}\t${stats?.numberOfTilesWithContentReady ?? '?'}\t${unloads}`);
+      rows.push(`${t}\t${heapMB()}\t${cesiumMB}\t${stats?.numberOfTilesWithContentReady ?? '?'}\t${unloads}\t${nodeCount()}`);
       log('SOAK (메모리 항해)\n' + rows.join('\n'));
       console.log('SOAK ROW ' + rows[rows.length - 1]);
     }
@@ -616,13 +618,57 @@ async function runSoak() {
     log('SOAK DONE\n' + rows.join('\n'));
     console.log(
       'SOAK DONE ' +
-        JSON.stringify({ cycles: cycle, unloads, finalCesiumMB: +(tileset.totalMemoryUsageInBytes / 1048576).toFixed(0) }),
+        JSON.stringify({ cycles: cycle, unloads, finalCesiumMB: +(tileset.totalMemoryUsageInBytes / 1048576).toFixed(0), finalNodes: nodeCount() }),
     );
   } catch (e) {
     log('SOAK ERROR: ' + ((e as Error)?.message ?? e));
     console.error(e);
     console.log('SOAK RESULT ' + JSON.stringify({ error: (e as Error)?.message }));
   }
+}
+
+// 지구본만(점군 없이) 같은 경로로 frametime 측정 — 30fps 가 우리 코드냐 환경/globe냐 격리(?perf=globe).
+async function runGlobePerf() {
+  const secs = Number(new URLSearchParams(location.search).get('secs')) || 15;
+  log('perf: 지구본만(점 없음) 측정 …');
+  const center = Cartesian3.fromDegrees(-123.07, 44.06, 0); // autzen 부근 지표
+  const frametimes: number[] = [];
+  let collecting = true;
+  let last = performance.now();
+  const collect = () => {
+    const now = performance.now();
+    frametimes.push(now - last);
+    last = now;
+    viewer.scene.requestRender();
+    if (collecting) requestAnimationFrame(collect);
+  };
+  requestAnimationFrame(collect);
+  const t0 = performance.now();
+  const dur = secs * 1000;
+  while (performance.now() - t0 < dur) {
+    const u = (performance.now() - t0) / dur;
+    const range = 800 + 4000 * (0.5 - 0.5 * Math.cos(u * Math.PI * 6)); // 800m↔4.8km dive
+    viewer.camera.lookAt(center, new HeadingPitchRange(u * Math.PI * 2, -0.6, range));
+    await sleep(100);
+  }
+  collecting = false;
+  viewer.camera.lookAtTransform(Matrix4.IDENTITY);
+  const pct = (arr: number[], p: number) => {
+    if (!arr.length) return 0;
+    const s = [...arr].sort((a, b) => a - b);
+    return +s[Math.min(s.length - 1, Math.floor((p / 100) * s.length))].toFixed(1);
+  };
+  const result = {
+    mode: 'globe-only (점 없음)',
+    secs,
+    frames: frametimes.length,
+    frametimeMs: { p50: pct(frametimes, 50), p95: pct(frametimes, 95), p99: pct(frametimes, 99) },
+    hitches_gt50ms: frametimes.filter((d) => d > 50).length,
+    note: '지구본+terrain+imagery 만. 이것도 30fps면 환경(vsync/전원/디스플레이) 또는 Cesium globe 비용 — 우리 코드 무관.',
+  };
+  (window as unknown as { __perf: unknown }).__perf = result;
+  log('PERF (globe-only)\n' + JSON.stringify(result, null, 2));
+  console.log('PERF RESULT ' + JSON.stringify(result));
 }
 
 // ── 스트리밍 성능·부드러움 측정 — 결정적 카메라 경로 동안 frametime 분포·hitch·TTFP·TTD·메모리 ──
@@ -634,15 +680,20 @@ async function runSoak() {
 //   &secs=30 &maxReq=6 &cache=MB
 async function runPerf() {
   const params = new URLSearchParams(location.search);
+  if (params.get('perf') === 'globe') return runGlobePerf();
   const ds = DATASETS.find((d) => d.id === params.get('perf')) ?? DATASETS[1];
   const secs = Number(params.get('secs')) || 30;
   const maxReq = Number(params.get('maxReq')) || 0;
   if (maxReq > 0) RequestScheduler.maximumRequestsPerServer = maxReq;
   const cacheMB = Number(params.get('cache')) || 0;
+  const edl = params.get('edl') !== '0'; // 기본 on(출하값). edl=0 으로 끄고 풀스크린 후처리 비용 격리
+  const atten = params.get('atten') !== '0';
+  const res = Number(params.get('res')) || 0; // resolutionScale — Retina 2x fill-rate 격리 (예: res=0.5)
+  if (res > 0) viewer.resolutionScale = res;
   log(`perf: ${ds.label} 측정 …`);
   try {
     const t0 = performance.now();
-    const tileset = await CopcTileset.fromUrl(ds.url);
+    const tileset = await CopcTileset.fromUrl(ds.url, { eyeDomeLighting: edl, attenuation: atten });
     const openMs = performance.now() - t0;
     if (cacheMB > 0) {
       tileset.cacheBytes = cacheMB * 1048576;
@@ -736,6 +787,9 @@ async function runPerf() {
       ds: ds.id,
       secs,
       msse: tileset.maximumScreenSpaceError,
+      edl,
+      atten,
+      resolutionScale: viewer.resolutionScale,
       maxReq: maxReq || 'default(18)',
       cacheMB: +(tileset.cacheBytes / 1048576).toFixed(0),
       frames: frametimes.length,
@@ -749,6 +803,7 @@ async function runPerf() {
       tileUnloads: unloads,
       tilesLoaded: loaded,
       avgTilesReady: +(sumReady / Math.max(1, samples)).toFixed(0),
+      copcNodes: (tileset as unknown as { copcNodeCount?: () => number }).copcNodeCount?.() ?? null,
       note: 'frametime=rAF간격. Cesium=globe+terrain+imagery 포함→Potree 직접 fps비교 무효. Playwright=swiftshader(fps 무효, hitch/TTD/메모리는 유의)',
     };
     (window as unknown as { __perf: unknown }).__perf = result;
