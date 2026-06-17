@@ -21,8 +21,9 @@ type Entry = {
   session: CopcSession;
   colorBy: ColorBy;
   hideClass: Set<number>;
-  attrReq: AttributeRequest;
+  attrReq?: AttributeRequest;
   attrSpecs?: AttributeSpec[]; // 첫 decode 때 view.dimensions 로 확정·캐시
+  attrSpecsPromise?: Promise<AttributeSpec[]>; // 동시 첫-decode 가 공유하는 in-flight 프로브(중복 디코드 방지)
 };
 const sessions = new Map<string, Entry>(); // sid → 디코드 세션 (다중 tileset)
 
@@ -45,12 +46,18 @@ const api = {
     const e = sessions.get(sid);
     if (!e) throw new Error(`세션 없음: ${sid}`);
     const lazPerf = await getLazPerf();
-    // 속성 스펙은 차원 목록이 필요 → 첫 디코드의 view 로 확정·캐시
-    if (e.attrSpecs === undefined) {
+    // 속성 스펙은 차원 목록이 필요 → 첫 디코드의 view 로 확정·캐시.
+    // 동시 첫-decode 들이 in-flight 프로브 하나를 공유(중복 디코드 방지), 유효 노드일 때만 프로브.
+    if (!e.attrSpecs) {
       const node = e.session.nodes[key];
       if (node) {
-        const v = await Copc.loadPointDataView(e.session.getter, e.session.copc, node, { lazPerf });
-        e.attrSpecs = resolveAttributes(Object.keys(v.dimensions), e.attrReq);
+        if (!e.attrSpecsPromise) {
+          e.attrSpecsPromise = (async () => {
+            const v = await Copc.loadPointDataView(e.session.getter, e.session.copc, node, { lazPerf });
+            return resolveAttributes(Object.keys(v.dimensions), e.attrReq);
+          })();
+        }
+        e.attrSpecs = await e.attrSpecsPromise;
       }
     }
     const nd = await decodeNode(e.session, key, lazPerf, e.colorBy, e.hideClass, e.attrSpecs);
