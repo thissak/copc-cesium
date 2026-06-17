@@ -20,7 +20,8 @@ import { DATASETS } from './datasets';
 import { buildPnts, toBase64 } from './pnts';
 import { CopcTileset } from './copc-tileset';
 
-// 자체 ion 토큰이 있으면 .env 의 VITE_CESIUM_ION_TOKEN 로 주입 (없으면 Cesium 기본 dev 토큰).
+// 자체 ion 토큰이 있으면 .env 의 VITE_CESIUM_ION_TOKEN 로 주입. 없으면 베이스맵을 끈다
+// (Cesium 기본 ion imagery 는 토큰 없으면 401 — 점군은 토큰 불필요).
 const ionToken = import.meta.env.VITE_CESIUM_ION_TOKEN;
 if (ionToken) Ion.defaultAccessToken = ionToken;
 
@@ -29,6 +30,7 @@ const viewer = new Viewer('app', {
   animation: false,
   geocoder: false,
   baseLayerPicker: false,
+  baseLayer: ionToken ? undefined : false,
 });
 viewer.scene.debugShowFramesPerSecond = true; // ④ 렌더 (좌상단)
 (window as unknown as { viewer: Viewer }).viewer = viewer; // 디버깅용 핸들

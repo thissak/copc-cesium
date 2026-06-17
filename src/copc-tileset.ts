@@ -146,7 +146,9 @@ function waitForController(timeoutMs: number): Promise<void> {
 async function ensureServiceWorker(swUrl: string, scope: string): Promise<void> {
   if (!('serviceWorker' in navigator)) throw new Error('Service Worker 미지원 (COPC 스트리밍 필요)');
   const reg = await navigator.serviceWorker.register(swUrl, { scope });
-  await reg.update();
+  // freshness check 는 비차단 — register 가 이미 변경 시 update 를 트리거하고, 활성/제어 게이트는
+  // 아래 ready / waitForController 가 담당한다. timeout 없는 await 로 fromUrl 을 막지 않는다.
+  void reg.update().catch(() => {});
   await navigator.serviceWorker.ready;
   const pageUrl = location.href;
   if (!pageUrl.startsWith(reg.scope)) {

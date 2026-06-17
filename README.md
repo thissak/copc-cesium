@@ -8,7 +8,9 @@ Stream COPC point clouds directly in CesiumJS — no conversion to 3D Tiles.
 import { Viewer } from 'cesium';
 import { CopcTileset } from 'copc-cesium';
 
-const viewer = new Viewer('app');
+// The point cloud needs no Cesium ion token. The default Viewer base imagery does —
+// pass `baseLayer: false` (below) or set `Ion.defaultAccessToken` if you want a basemap.
+const viewer = new Viewer('app', { baseLayer: false });
 const tileset = await CopcTileset.fromUrl('https://example.com/cloud.copc.laz');
 viewer.scene.primitives.add(tileset);
 ```
