@@ -38,5 +38,12 @@ assert(cls[0] === 2 && cls[1] === 6, 'Classification values [2,6], got ' + cls);
 const intRaw = new Uint16Array(buf.slice(btBinStart + btJSON.Intensity.byteOffset, btBinStart + btJSON.Intensity.byteOffset + 4));
 assert(intRaw[0] === 1000 && intRaw[1] === 40000, 'Intensity values [1000,40000], got ' + intRaw);
 
+// no-batch 회귀: 3번째 인자 없이 부르면 변경 전과 byte-identical 이어야 한다.
+const bufNB = buildQuantizedPnts(lonLatH, colors);
+const dvNB = new DataView(bufNB);
+assert(dvNB.getUint32(20, true) === 0, 'no-batch batchTableJSONByteLength === 0');
+assert(dvNB.getUint32(24, true) === 0, 'no-batch batchTableBinaryByteLength === 0');
+assert(dvNB.getUint32(16, true) === (2 * 3 * 2 + 2 * 3), 'no-batch featureTableBinaryByteLength === 18, got ' + dvNB.getUint32(16, true));
+
 console.log('PASS pnts-batch');
 process.exit(0);

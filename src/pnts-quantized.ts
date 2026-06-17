@@ -89,7 +89,8 @@ export function buildQuantizedPnts(lonLatH: number[], colors: Uint8Array, batch?
   const bidBytes = useBatch ? n * CT_BYTES[bidType] : 0;
   // BATCH_ID 는 컴포넌트 크기 정렬: posBytes(짝수)+rgbBytes 뒤를 정렬.
   const bidOffset = align(posBytes + rgbBytes, CT_BYTES[bidType]);
-  const ftBinLen = align(bidOffset + bidBytes, 8); // FT binary 끝 8B 정렬
+  // no-batch 출력은 변경 전과 byte-identical: ftBinLen = posBytes + rgbBytes 그대로.
+  const ftBinLen = useBatch ? align(bidOffset + bidBytes, 8) : posBytes + rgbBytes;
   const ftBin = new ArrayBuffer(ftBinLen);
   const q = new Uint16Array(ftBin, 0, n * 3);
   const col = new Uint8Array(ftBin, posBytes, rgbBytes);
