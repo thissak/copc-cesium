@@ -914,6 +914,10 @@ if (params.has('bench')) {
   runSpike();
 } else if (params.has('naive')) {
   run(); // Phase 1 naive baseline (참고용)
+} else if (params.has('spikeReal')) {
+  import('./spike-batch').then((m) => m.runSpikeReal(viewer)); // 실 파이프라인: fromUrl + 동적 스타일/피킹
+} else if (params.has('spikeBatch')) {
+  import('./spike-batch').then((m) => m.runSpikeBatch(viewer)); // PoC: pnts batch-table 스타일/피킹
 } else {
   runDemo(); // 기본 = 공개 API 데모
 }

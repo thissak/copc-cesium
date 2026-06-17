@@ -51,11 +51,46 @@ await CopcTileset.fromUrl(url, options);
 | `attenuation` | `true` | Distance-based point-size attenuation |
 | `pointSize` | — | Fixed pixel size (applied when attenuation is off) |
 | `hideClassifications` | `[7, 18]` | ASPRS classes dropped at decode (default = low/high noise); `[]` keeps all |
+| `attributes` | `Classification, Intensity, ReturnNumber, NumberOfReturns` | Per-point LAS attributes exposed to Cesium as a batch table for **dynamic styling and picking**. `undefined` = the curated default; `'all'` = every dimension incl. extra bytes; `string[]` = explicit names (unknown names are skipped with a warning). Exposing attributes adds a `BATCH_ID` (~2–4 B/point). See *Style & pick by attribute* below. |
 | `maxRequestsPerServer` | `6` | Max concurrent Cesium requests to the content host. Cesium's default (18) assumes HTTP/2; for HTTP/1.1 range sources (e.g. S3) it over-subscribes one host and causes timeout/retry storms. `6` matches the browser's HTTP/1.1 per-host connection limit. Raise it behind an HTTP/2 CDN; `0` leaves Cesium's default untouched. Applied per-host via `RequestScheduler.requestsByServer` (does not mutate the global). |
 | `serviceWorkerUrl` | `'/copc-sw.js'` | Service worker URL |
 | `serviceWorkerScope` | `'/'` | Service worker scope (must cover the content path) |
 
 The returned object is a normal `Cesium3DTileset`. Call `tileset.destroy()` to release the worker session.
+
+### Style & pick by attribute
+
+Exposed attributes (see `attributes`) reach Cesium's styling language and picking — no conversion, full per-point values straight from the COPC:
+
+```ts
+import { Cesium3DTileStyle } from 'cesium';
+
+// Color by classification: ground = brown, building = orange, else cyan.
+tileset.style = new Cesium3DTileStyle({
+  color: {
+    conditions: [
+      ['${Classification} === 2', 'color("saddlebrown")'],
+      ['${Classification} === 6', 'color("orange")'],
+      ['true', 'color("cyan")'],
+    ],
+  },
+  pointSize: '(${Intensity} > 30000) ? 3.0 : 1.0',
+});
+
+// Pick a point and read its attributes.
+const feature = viewer.scene.pick(windowPosition);
+feature?.getProperty('Classification'); // → e.g. 5
+feature?.getProperty('Intensity');      // → e.g. 5120
+```
+
+`rampStyle(name, range)` builds a normalized color-ramp style for any attribute, and `await tileset.attributeRange(name)` samples the root node for `[min, max]`:
+
+```ts
+import { rampStyle } from 'copc-cesium';
+tileset.style = rampStyle('Intensity', await tileset.attributeRange('Intensity'));
+```
+
+> Use a concrete color in the catch-all (`color("cyan")`), not `${COLOR}` — the original RGB is not re-exposed as a style variable for batch-table point clouds.
 
 ## How it works
 
