@@ -28,7 +28,7 @@
 2. **워커 풀**: 단일 → 바운드 풀(`navigator.hardwareConcurrency`, `workerpool`). **디코드 큐잉 실측 후.**
 3. **LRU + 메모리 상한**: 디코드 타일 캐시(`lru-cache`). **재디코드 빈도 실측 후.** Cesium `cacheBytes` 중복 주의.
 4. **속성 견고성**: intensity/classification/returns + pluggable colorBy. 색 결정이 3파일 분산(`decodeNode`·worker·`pnts-quantized`) → 속성 추가 시 **worker-local 1함수로 통합**. (Codex #4)
-5. **복원력**: range 재시도·부분실패 격리(현재 디코드 실패=타일 실패).
+5. ~~**복원력**~~ ✅ **완료(2026-06-17)** — `httpGetterWithRetry`(copc-core): status 검사(copc 의 5xx→점데이터 둔갑 조용한실패 수정)+ `p-retry` 지수백오프(네트워크·429·5xx 재시도, 4xx·416 즉시중단)+ fetch `AbortSignal.timeout(8s)` + SW 왕복 `race(15s)`. `scripts/check-retry.ts` 8케이스 PASS. 조용한 실패 제거(`void close`→`.catch(log)` 등). 제외: 서킷브레이커·코얼레싱.
 
 ### 부수 (후순위)
 - README/라이선스 · 데모 다듬기(옵션 토글) · 실 GPU 대용량 fps 측정(병행 가능 — ③-A 끊김↓·단차 정량 확인 겸).

@@ -149,8 +149,10 @@ export const CopcTileset = {
     (tileset as unknown as { destroy: () => void }).destroy = () => {
       if (activeSids.delete(sid)) {
         pageSessions.delete(sid); // 페이지 세션 + 캐시된 서브페이지 해제
-        if (activeSids.size > 0) void getWorkerApi().close(sid);
-        else cleanupIfIdle();
+        if (activeSids.size > 0) {
+          // fire-and-forget 이지만 rejection 을 삼키지 않는다(조용한 실패 방지)
+          getWorkerApi().close(sid).catch((e) => console.warn(`[copc] worker close 실패 (${sid}):`, e));
+        } else cleanupIfIdle();
       }
       tilesetDestroy();
     };

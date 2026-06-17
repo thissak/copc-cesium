@@ -1,9 +1,50 @@
 import { Copc, Getter, Hierarchy } from 'copc';
 import proj4 from 'proj4';
+import pRetry, { AbortError } from 'p-retry';
 import type { LazPerf } from 'laz-perf/lib/web';
 
 // 순수 데이터 파이프라인 — Cesium/브라우저 무관. Node 에서도 그대로 돈다.
 // (Giro3D 의 source/entity 분리와 동일: 여기는 source = fetch + decode + reproject)
+
+// ── 네트워크 복원력: COPC range 읽기 재시도 + 타임아웃 ──
+// copc 기본 Getter.http 는 response.ok 검사도 retry 도 없어 5xx/416 에러 바디를 점 데이터로
+// 둔갑시키는 조용한 실패가 있다. 이 getter 는 status 를 검사해 명확히 실패시키고, 일시적 실패는
+// 지수백오프+지터로 재시도하며 시도마다 타임아웃을 건다. copc.js 의 3경로(header/hierarchy/point)가
+// 모두 이 함수를 사용하므로 한 곳에서 전부 커버된다. (Node·브라우저·워커 공통 — fetch/AbortSignal.timeout)
+type RangeGetter = (begin: number, end: number) => Promise<Uint8Array>;
+const RETRYABLE_HTTP = new Set([429, 500, 502, 503, 504]); // 그 외 4xx·416 은 결정적 → 재시도 X
+const FETCH_TIMEOUT_MS = 8000;
+
+export function httpGetterWithRetry(
+  url: string,
+  fetchImpl: typeof fetch = fetch,
+  timeoutMs = FETCH_TIMEOUT_MS,
+): RangeGetter {
+  return (begin, end) =>
+    pRetry(
+      async () => {
+        const res = await fetchImpl(url, {
+          headers: { Range: `bytes=${begin}-${end - 1}` },
+          signal: AbortSignal.timeout(timeoutMs), // 시도마다 새 one-shot signal
+        });
+        if (!res.ok) {
+          const msg = `COPC range ${begin}-${end}: HTTP ${res.status} (${url})`;
+          if (!RETRYABLE_HTTP.has(res.status)) throw new AbortError(msg); // 결정적 → 즉시 중단
+          throw new Error(msg); // 429/5xx → 재시도
+        }
+        return new Uint8Array(await res.arrayBuffer());
+      },
+      {
+        retries: 3,
+        factor: 2,
+        minTimeout: 300,
+        maxTimeout: 3000,
+        randomize: true, // 풀 지터 — 동시 타일 다수의 thundering-herd 완화
+        onFailedAttempt: ({ error, attemptNumber, retriesLeft }) =>
+          console.warn(`[copc] range 재시도 (시도 ${attemptNumber}, 남은 ${retriesLeft}): ${error.message}`),
+      },
+    );
+}
 
 export interface CorePoints {
   /** [lon, lat, height(m), ...] 평탄 배열 */
@@ -27,7 +68,7 @@ export async function loadCopcPoints(
   pointBudget: number,
   lazPerf?: LazPerf,
 ): Promise<CorePoints> {
-  const getter = Getter.http(url);
+  const getter = httpGetterWithRetry(url);
 
   let t = performance.now();
   const copc = await Copc.create(getter);
@@ -131,7 +172,7 @@ export interface CopcSession {
 
 /** COPC 를 열어 헤더 + 옥트리(루트 페이지) + 좌표변환을 준비 (스트리밍 세션). */
 export async function openCopc(url: string): Promise<CopcSession> {
-  const getter = Getter.http(url);
+  const getter = httpGetterWithRetry(url);
   const copc = await Copc.create(getter);
   const { nodes, pages } = await Copc.loadHierarchyPage(getter, copc.info.rootHierarchyPage);
   const horiz = copc.wkt ? extractHorizontalCrs(copc.wkt) : undefined;

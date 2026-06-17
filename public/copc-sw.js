@@ -50,12 +50,18 @@ self.addEventListener('fetch', (e) => {
         const prefix = '/__copc-real/';
         const rest = url.pathname.slice(url.pathname.indexOf(prefix) + prefix.length); // "{sid}/{key}.pnts" 또는 "{key}.pnts"
         try {
-          const data = await new Promise((resolve, reject) => {
-            const ch = new MessageChannel();
-            ch.port1.onmessage = (ev) =>
-              ev.data && ev.data.error ? reject(new Error(ev.data.error)) : resolve(ev.data);
-            client.postMessage({ type: 'copc-tile', key: rest.split('/').pop(), path: rest }, [ch.port2]);
-          });
+          const data = await Promise.race([
+            new Promise((resolve, reject) => {
+              const ch = new MessageChannel();
+              ch.port1.onmessage = (ev) =>
+                ev.data && ev.data.error ? reject(new Error(ev.data.error)) : resolve(ev.data);
+              client.postMessage({ type: 'copc-tile', key: rest.split('/').pop(), path: rest }, [ch.port2]);
+            }),
+            // 페이지 핸들러가 영영 응답 안 하면 무한 대기 → 백스톱 타임아웃(아래 catch→500, 조용한 hang 방지)
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('page handler timeout (15s)')), 15000),
+            ),
+          ]);
           // 페이지 요청(page/{key}.json) → child tileset JSON, 그 외 → pnts 바이너리
           if (data && data.json) {
             return new Response(data.json, { status: 200, headers: { 'Content-Type': 'application/json' } });
