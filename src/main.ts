@@ -46,7 +46,8 @@ const log = (s: string) => {
 
 // Phase 1 baseline 범위: naive 직접 로드, LOD 없음. (docs/PROBLEM.md)
 const POINT_BUDGET = 100_000;
-const ds = DATASETS[0]; // autzen — 소형, 정확성(C1) 먼저
+// ?ds=autzen|millsite|sofi 로 데이터셋 선택 (기본 autzen — 소형, 정확성 C1; millsite/sofi = 깊은 옥트리).
+const ds = DATASETS.find((d) => d.id === new URLSearchParams(location.search).get('ds')) ?? DATASETS[0];
 
 async function run() {
   log(`로딩: ${ds.label}\n${ds.url}\nbudget ${POINT_BUDGET.toLocaleString()} pts …`);
@@ -627,6 +628,8 @@ async function runSoak() {
 // 기본 페이지 = 공개 API 데모: CopcTileset.fromUrl 로 변환 없이 LOD 스트리밍
 async function runDemo() {
   log('CopcTileset.fromUrl 데모 …');
+  const maxReq = Number(new URLSearchParams(location.search).get('maxReq')) || 0; // ③ 동시성 throttle (S3 host당 ~6)
+  if (maxReq > 0) RequestScheduler.maximumRequestsPerServer = maxReq;
   try {
     const t0 = performance.now();
     const tileset = await CopcTileset.fromUrl(ds.url); // API 기본값(MSSE 8, 듬성/작은 점 — 진단용)
