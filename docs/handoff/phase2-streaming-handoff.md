@@ -24,7 +24,7 @@
   - **주의(사용법)**: 정리는 `viewer.scene.primitives.remove(tileset)` 또는 `removeAll()` 경유가 정석. `tileset.destroy()`를 씬에서 빼지 않고 직접 부르면 Cesium이 파괴된 객체를 렌더하다 크래시(Cesium 표준 동작).
 
 ### Step 1+ — 상용 갭 (STOP 영역 → 갭 감사: 실측 + BP → 계획·검증기준 승인 후 착수)
-1. **하이어라키 페이징 (정확성·치명·TOP)**: `openCopc`가 **루트 페이지만** 로드(`{nodes}`만, `pages` 무시) → 깊은/대용량 옥트리는 일정 깊이 이상 미스트리밍. Autzen이 "되는" 건 옥트리 전체가 루트 페이지에 우연히 들어가서일 뿐. Cesium refine 시 **서브페이지 온디맨드 로드 + lazy 서브트리**. core에 단일 `getNode/childKeys` seam 도입. (Codex #2)
+1. ~~**하이어라키 페이징 (정확성·치명·TOP)**~~ ✅ **완료(2026-06-17)** — `openCopc`가 `pages` 보관, `pages[key]` 노드에 외부 tileset proxy 자식(`page/{key}.json`); SW→페이지 `loadSubPage`+`buildSubtree` 온디맨드, 워커 `loadPage`. 외부 tileset 방식(implicit tiling 미사용). 측정: millsite 141·sofi 111 서브페이지가 더 이상 안 잘림. 검증: Node(88노드·23k점) + 브라우저 millsite(`.pnts` 500→200). `scripts/check-paging.ts`. C1~C6 PASS.
 2. **워커 풀**: 단일 → 바운드 풀(`navigator.hardwareConcurrency`, `workerpool`). **디코드 큐잉 실측 후.**
 3. **LRU + 메모리 상한**: 디코드 타일 캐시(`lru-cache`). **재디코드 빈도 실측 후.** Cesium `cacheBytes` 중복 주의.
 4. **속성 견고성**: intensity/classification/returns + pluggable colorBy. 색 결정이 3파일 분산(`decodeNode`·worker·`pnts-quantized`) → 속성 추가 시 **worker-local 1함수로 통합**. (Codex #4)

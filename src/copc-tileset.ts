@@ -1,7 +1,7 @@
 import { Cesium3DTileset, Cesium3DTileStyle } from 'cesium';
 import * as Comlink from 'comlink';
-import { openCopc } from './copc-core';
-import { buildTileset } from './tileset';
+import { openCopc, loadSubPage, type CopcSession } from './copc-core';
+import { buildTileset, buildSubtree } from './tileset';
 import type { DecodeApi, ColorBy } from './decode.worker';
 
 // 공개 API: COPC URL → 변환 없이 LOD 스트리밍되는 Cesium3DTileset.
@@ -29,6 +29,7 @@ export interface CopcTilesetOptions {
 
 let sidCounter = 0;
 const activeSids = new Set<string>(); // 살아있는 tileset 세션 (생명주기 추적)
+const pageSessions = new Map<string, CopcSession>(); // sid → 페이지 지오메트리 세션 (서브페이지 lazy 로드)
 
 let worker: Worker | undefined;
 let workerApi: Comlink.Remote<DecodeApi> | undefined;
@@ -45,6 +46,16 @@ function decodeTile(sid: string, key: string): Promise<ArrayBuffer | null> {
   return getWorkerApi().decode(sid, key);
 }
 
+// 서브페이지 온디맨드: 페이지(지오메트리)·워커(디코드) 세션 둘 다에 서브페이지를 로드한 뒤
+// 그 서브트리의 child tileset.json 을 반환. (페이징 — 깊은 옥트리 lazy 확장)
+async function buildPageTileset(sid: string, key: string): Promise<string> {
+  const session = pageSessions.get(sid);
+  if (!session) throw new Error(`세션 없음: ${sid}`);
+  await Promise.all([loadSubPage(session, key), getWorkerApi().loadPage(sid, key)]);
+  const contentBase = `${location.origin}/__copc-real/${sid}/`;
+  return JSON.stringify(buildSubtree(session, key, contentBase));
+}
+
 let messageHandler: ((ev: MessageEvent) => void) | undefined;
 function installHandler() {
   if (messageHandler) return;
@@ -53,12 +64,18 @@ function installHandler() {
     if (d?.type !== 'copc-tile' || !d.path) return;
     const port = ev.ports[0];
     try {
-      const slash = d.path.indexOf('/'); // path = "{sid}/{D-X-Y-Z}.pnts"
+      const slash = d.path.indexOf('/'); // "{sid}/{key}.pnts" 또는 "{sid}/page/{key}.json"
       const sid = d.path.slice(0, slash);
-      const key = d.path.slice(slash + 1).replace('.pnts', '');
-      const pnts = await decodeTile(sid, key); // 워커에서 디코드(메인스레드 밖)
-      if (!pnts) return void port?.postMessage({ error: `no node ${key}` });
-      port?.postMessage(pnts, [pnts]); // zero-copy 로 SW 에 전달
+      const rest = d.path.slice(slash + 1);
+      if (rest.startsWith('page/')) {
+        const key = rest.slice('page/'.length).replace('.json', '');
+        port?.postMessage({ json: await buildPageTileset(sid, key) }); // 서브페이지 → child tileset
+      } else {
+        const key = rest.replace('.pnts', '');
+        const pnts = await decodeTile(sid, key); // 워커에서 디코드(메인스레드 밖)
+        if (!pnts) return void port?.postMessage({ error: `no node ${key}` });
+        port?.postMessage(pnts, [pnts]); // zero-copy 로 SW 에 전달
+      }
     } catch (err) {
       port?.postMessage({ error: (err as Error)?.message ?? String(err) });
     }
@@ -107,6 +124,7 @@ export const CopcTileset = {
       openCopc(url),
       api.open(sid, url, { colorBy: options.colorBy ?? 'height' }),
     ]);
+    pageSessions.set(sid, session); // 서브페이지 lazy 로드용으로 보관
 
     const contentBase = `${location.origin}/__copc-real/${sid}/`;
     const tilesetJson = buildTileset(session, contentBase);
@@ -130,6 +148,7 @@ export const CopcTileset = {
     const tilesetDestroy = tileset.destroy.bind(tileset);
     (tileset as unknown as { destroy: () => void }).destroy = () => {
       if (activeSids.delete(sid)) {
+        pageSessions.delete(sid); // 페이지 세션 + 캐시된 서브페이지 해제
         if (activeSids.size > 0) void getWorkerApi().close(sid);
         else cleanupIfIdle();
       }

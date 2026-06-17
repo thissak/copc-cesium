@@ -121,6 +121,8 @@ export interface CopcSession {
   copc: Copc;
   getter: Getter;
   nodes: Hierarchy.Node.Map;
+  /** 미로드 자식 하이어라키 페이지 포인터(key→{pageOffset,pageLength}). lazy 페이징용. */
+  pages: Hierarchy.Page.Map;
   toWgs?: Reproj;
   zUnit: number;
   cube: number[]; // [minx,miny,minz,maxx,maxy,maxz] (root, 큐브)
@@ -131,18 +133,33 @@ export interface CopcSession {
 export async function openCopc(url: string): Promise<CopcSession> {
   const getter = Getter.http(url);
   const copc = await Copc.create(getter);
-  const { nodes } = await Copc.loadHierarchyPage(getter, copc.info.rootHierarchyPage);
+  const { nodes, pages } = await Copc.loadHierarchyPage(getter, copc.info.rootHierarchyPage);
   const horiz = copc.wkt ? extractHorizontalCrs(copc.wkt) : undefined;
   const toWgs = horiz ? (proj4(horiz.proj, proj4.WGS84) as unknown as Reproj) : undefined;
   return {
     copc,
     getter,
     nodes,
+    pages,
     toWgs,
     zUnit: horiz ? horiz.linearUnit : 1,
     cube: copc.info.cube,
     spacing: copc.info.spacing,
   };
+}
+
+/**
+ * 미로드 서브페이지(pages[key])를 로드해 세션 nodes/pages 에 병합 (lazy 하이어라키 페이징).
+ * 동일 시그니처(루트 페이지와 같은 호출)로 자식 페이지를 가져온다. 이미 로드/페이지 아님이면 no-op false.
+ */
+export async function loadSubPage(s: CopcSession, key: string): Promise<boolean> {
+  const ptr = s.pages[key];
+  if (!ptr) return false;
+  const sub = await Copc.loadHierarchyPage(s.getter, ptr);
+  Object.assign(s.nodes, sub.nodes); // K 와 그 하위 실노드
+  Object.assign(s.pages, sub.pages); // 더 깊은 미로드 페이지 포인터
+  delete s.pages[key]; // 로드 완료 → 더는 미로드 포인터 아님
+  return true;
 }
 
 /**

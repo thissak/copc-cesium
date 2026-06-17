@@ -39,28 +39,53 @@ function childKeys(s: CopcSession, key: string): string[] {
   const out: string[] = [];
   for (let i = 0; i < 8; i++) {
     const ck = `${d + 1}-${x * 2 + (i & 1)}-${y * 2 + ((i >> 1) & 1)}-${z * 2 + ((i >> 2) & 1)}`;
-    if (s.nodes[ck]) out.push(ck);
+    if (s.nodes[ck] || s.pages[ck]) out.push(ck); // 로드된 노드 OR 미로드 서브페이지
   }
   return out;
 }
 
-function buildNode(s: CopcSession, key: string, contentBase: string): object {
+// 미로드 서브페이지 K → 외부 tileset(page/K.json)을 가리키는 proxy 자식 타일(점 없음).
+// Cesium 이 refine 시 그 JSON 을 요청 → SW→페이지가 서브페이지 로드해 K 의 실제 서브트리를 공급.
+function pageProxy(s: CopcSession, key: string, contentBase: string): object {
   const { region, geomError } = nodeRegionAndError(s, key);
   return {
     boundingVolume: { region },
     geometricError: geomError,
     refine: 'ADD',
-    content: { uri: contentBase + key + '.pnts' },
-    children: childKeys(s, key).map((ck) => buildNode(s, ck, contentBase)),
+    content: { uri: contentBase + 'page/' + key + '.json' },
   };
 }
 
-/** 옥트리 → tileset.json. content 는 contentBase + 'D-X-Y-Z.pnts'. */
+function buildNode(s: CopcSession, key: string, contentBase: string): object {
+  const { region, geomError } = nodeRegionAndError(s, key);
+  const children = childKeys(s, key).map((ck) =>
+    s.pages[ck] ? pageProxy(s, ck, contentBase) : buildNode(s, ck, contentBase),
+  );
+  return {
+    boundingVolume: { region },
+    geometricError: geomError,
+    refine: 'ADD',
+    content: { uri: contentBase + key + '.pnts' },
+    children,
+  };
+}
+
+/** 옥트리(루트 페이지) → tileset.json. content 는 contentBase + 'D-X-Y-Z.pnts'. */
 export function buildTileset(s: CopcSession, contentBase: string): object {
   const spacingM = s.spacing * s.zUnit;
   return {
     asset: { version: '1.0' },
     geometricError: spacingM * 2,
     root: buildNode(s, '0-0-0-0', contentBase),
+  };
+}
+
+/** 서브페이지 root(rootKey)부터의 child tileset.json (page-proxy 요청 시 온디맨드 공급). */
+export function buildSubtree(s: CopcSession, rootKey: string, contentBase: string): object {
+  const { geomError } = nodeRegionAndError(s, rootKey);
+  return {
+    asset: { version: '1.0' },
+    geometricError: geomError, // 부모 proxy 의 GE 와 연속 (Cesium merged-parent 규칙)
+    root: buildNode(s, rootKey, contentBase),
   };
 }
