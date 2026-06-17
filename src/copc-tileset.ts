@@ -2,7 +2,8 @@ import { Cesium3DTileset, Cesium3DTileStyle } from 'cesium';
 import * as Comlink from 'comlink';
 import { openCopc, loadSubPage, type CopcSession } from './copc-core';
 import { buildTileset, buildSubtree } from './tileset';
-import type { DecodeApi, ColorBy } from './decode.worker';
+import type { DecodeApi } from './decode.worker';
+import type { ColorBy } from './colors';
 
 // 공개 API: COPC URL → 변환 없이 LOD 스트리밍되는 Cesium3DTileset.
 // (TIFFImageryProvider 의 fromUrl 패턴. ADR-001)
@@ -23,7 +24,7 @@ export interface CopcTilesetOptions {
   attenuation?: boolean;
   /** Eye Dome Lighting — 깊이 윤곽 강조(LOD 단차 가림). attenuation 을 동반한다. */
   eyeDomeLighting?: boolean;
-  /** 색칠: 'height'(기본, 고도 램프) | 'rgb'(COPC RGB, 없으면 height 폴백). */
+  /** 색칠: 'height'(기본) | 'rgb' | 'classification' | 'intensity' | 'returns'. 해당 차원이 없으면 height 폴백. */
   colorBy?: ColorBy;
 }
 

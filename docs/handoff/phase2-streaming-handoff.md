@@ -27,7 +27,7 @@
 1. ~~**하이어라키 페이징 (정확성·치명·TOP)**~~ ✅ **완료(2026-06-17)** — `openCopc`가 `pages` 보관, `pages[key]` 노드에 외부 tileset proxy 자식(`page/{key}.json`); SW→페이지 `loadSubPage`+`buildSubtree` 온디맨드, 워커 `loadPage`. 외부 tileset 방식(implicit tiling 미사용). 측정: millsite 141·sofi 111 서브페이지가 더 이상 안 잘림. 검증: Node(88노드·23k점) + 브라우저 millsite(`.pnts` 500→200). `scripts/check-paging.ts`. C1~C6 PASS.
 2. **워커 풀**: 단일 → 바운드 풀(`navigator.hardwareConcurrency`, `workerpool`). **디코드 큐잉 실측 후.**
 3. **LRU + 메모리 상한**: 디코드 타일 캐시(`lru-cache`). **재디코드 빈도 실측 후.** Cesium `cacheBytes` 중복 주의.
-4. **속성 견고성**: intensity/classification/returns + pluggable colorBy. 색 결정이 3파일 분산(`decodeNode`·worker·`pnts-quantized`) → 속성 추가 시 **worker-local 1함수로 통합**. (Codex #4)
+4. ~~**속성 견고성**~~ ✅ **완료(2026-06-17)** — `colorBy`: height/rgb/classification(ASPRS)/intensity/returns. 색 로직 `src/colors.ts` 단일 통합(Codex #4, `pnts-quantized` 는 양자화+패킹만). 차원 없으면 height 폴백+warn. 검증: Autzen 5/5 distinct, millsite rgb→폴백. C1~C6 PASS.
 5. ~~**복원력**~~ ✅ **완료(2026-06-17)** — `httpGetterWithRetry`(copc-core): status 검사(copc 의 5xx→점데이터 둔갑 조용한실패 수정)+ `p-retry` 지수백오프(네트워크·429·5xx 재시도, 4xx·416 즉시중단)+ fetch `AbortSignal.timeout(8s)` + SW 왕복 `race(15s)`. `scripts/check-retry.ts` 8케이스 PASS. 조용한 실패 제거(`void close`→`.catch(log)` 등). 제외: 서킷브레이커·코얼레싱.
 
 ### 부수 (후순위)

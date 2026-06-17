@@ -1,5 +1,5 @@
 // Cesium-free pnts 빌더 — Web Worker 전용 (Cesium import 금지).
-// lonLatH(평탄 [lon,lat,h,...]) + zVals(높이m) → 3D Tiles 1.0 .pnts (POSITION_QUANTIZED).
+// lonLatH(평탄 [lon,lat,h,...]) + colors(점당 RGB) → 3D Tiles 1.0 .pnts (POSITION_QUANTIZED).
 // 위치를 uint16×3 으로 양자화해 float32 대비 바이트 절반. 정밀도는 per-tile QUANTIZED_VOLUME
 // (타일 ECEF extent)에 상대 → 도시 스케일 cm~mm. RTC_CENTER 로 행성 스케일 jitter 해결.
 // 스펙: github.com/CesiumGS/3d-tiles PointCloud (POSITION_QUANTIZED + QUANTIZED_VOLUME_*).
@@ -23,36 +23,17 @@ function geodeticToEcef(lonDeg: number, latDeg: number, h: number, out: Float64A
   out[o + 2] = (n * (1 - E2) + h) * sinLat;
 }
 
-function hue2rgb(m1: number, m2: number, h: number): number {
-  if (h < 0) h += 1;
-  if (h > 1) h -= 1;
-  if (h * 6 < 1) return m1 + (m2 - m1) * 6 * h;
-  if (h * 2 < 1) return m2;
-  if (h * 3 < 2) return m1 + (m2 - m1) * (2 / 3 - h) * 6;
-  return m1;
-}
-
-/** Cesium Color.fromHsl 과 동일 (RGB 0-255). 고도 램프 색칠용. */
-function hslToRgb(h: number, s: number, l: number, out: Uint8Array, o: number): void {
-  h = h % 1;
-  const m2 = l <= 0.5 ? l * (s + 1) : l + s - l * s;
-  const m1 = 2 * l - m2;
-  out[o] = Math.round(hue2rgb(m1, m2, h + 1 / 3) * 255);
-  out[o + 1] = Math.round(hue2rgb(m1, m2, h) * 255);
-  out[o + 2] = Math.round(hue2rgb(m1, m2, h - 1 / 3) * 255);
-}
-
 function quant(t: number): number {
   const v = Math.round(t * 65535);
   return v < 0 ? 0 : v > 65535 ? 65535 : v;
 }
 
 /**
- * 노드 점(lonLatH+zVals) → POSITION_QUANTIZED pnts ArrayBuffer.
- * rgb 가 주어지면 그 색을 그대로 사용(colorBy:'rgb'), 없으면 높이 HSL 램프(colorBy:'height').
+ * 노드 점(lonLatH) + 점당 colors(평탄 RGB) → POSITION_QUANTIZED pnts ArrayBuffer.
+ * 색 결정은 호출부(colors.ts/decodeNode)에서 끝나 있고, 여기선 위치 양자화 + 패킹만 한다.
  */
-export function buildQuantizedPnts(lonLatH: number[], zVals: number[], rgb?: Uint8Array): ArrayBuffer {
-  const n = zVals.length;
+export function buildQuantizedPnts(lonLatH: number[], colors: Uint8Array): ArrayBuffer {
+  const n = lonLatH.length / 3;
 
   // 1) ECEF 변환 + bbox
   const ecef = new Float64Array(n * 3);
@@ -90,20 +71,8 @@ export function buildQuantizedPnts(lonLatH: number[], zVals: number[], rgb?: Uin
     q[i * 3 + 2] = quant((ecef[i * 3 + 2] - minZ) / sz);
   }
 
-  // 색: rgb 가 있으면 그대로(colorBy:'rgb'), 없으면 높이 HSL 램프(colorBy:'height')
-  if (rgb) {
-    col.set(rgb.subarray(0, n * 3));
-  } else {
-    let zmin = Infinity, zmax = -Infinity;
-    for (let i = 0; i < n; i++) {
-      if (zVals[i] < zmin) zmin = zVals[i];
-      if (zVals[i] > zmax) zmax = zVals[i];
-    }
-    const zspan = (zmax - zmin) || 1;
-    for (let i = 0; i < n; i++) {
-      hslToRgb((1 - (zVals[i] - zmin) / zspan) * 0.66, 1, 0.5, col, i * 3);
-    }
-  }
+  // 색: 이미 계산된 점당 RGB 를 그대로 패킹 (색 매핑은 colors.ts/decodeNode 담당)
+  col.set(colors.subarray(0, n * 3));
 
   // 3) pnts 직렬화 (헤더 28B + Feature Table JSON + Feature Table Binary)
   const ft = {

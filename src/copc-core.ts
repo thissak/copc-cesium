@@ -2,6 +2,14 @@ import { Copc, Getter, Hierarchy } from 'copc';
 import proj4 from 'proj4';
 import pRetry, { AbortError } from 'p-retry';
 import type { LazPerf } from 'laz-perf/lib/web';
+import {
+  type ColorBy,
+  heightColors,
+  intensityColors,
+  classificationColors,
+  returnColors,
+  rgbColors,
+} from './colors';
 
 // 순수 데이터 파이프라인 — Cesium/브라우저 무관. Node 에서도 그대로 돈다.
 // (Giro3D 의 source/entity 분리와 동일: 여기는 source = fetch + decode + reproject)
@@ -205,14 +213,14 @@ export async function loadSubPage(s: CopcSession, key: string): Promise<boolean>
 
 /**
  * 한 노드(key='D-X-Y-Z')의 모든 점을 디코드해 경위도+높이로 반환. 없으면 null.
- * wantRgb=true 이고 Red/Green/Blue 디멘션이 있으면 점당 RGB(0-255)도 반환(colorBy:'rgb' 용).
+ * colorBy 를 주면 그 모드의 점당 RGB(colors)도 만든다. 해당 차원이 없으면 height 로 폴백(console.warn).
  */
 export async function decodeNode(
   s: CopcSession,
   key: string,
   lazPerf?: LazPerf,
-  wantRgb = false,
-): Promise<{ lonLatH: number[]; zVals: number[]; count: number; rgb?: Uint8Array } | null> {
+  colorBy?: ColorBy,
+): Promise<{ lonLatH: number[]; zVals: number[]; count: number; colors?: Uint8Array } | null> {
   const node = s.nodes[key];
   if (!node) return null;
   const view = await Copc.loadPointDataView(s.getter, s.copc, node, lazPerf ? { lazPerf } : undefined);
@@ -220,26 +228,6 @@ export async function decodeNode(
   const gx = view.getter('X');
   const gy = view.getter('Y');
   const gz = view.getter('Z');
-
-  // RGB(옵션): Red/Green/Blue 디멘션이 모두 있을 때만. LAS RGB 는 보통 uint16 →
-  // 노드 최댓값이 255 초과면 16-bit 로 보고 >>8 로 8-bit 스케일.
-  const hasRgb =
-    wantRgb && 'Red' in view.dimensions && 'Green' in view.dimensions && 'Blue' in view.dimensions;
-  const gr = hasRgb ? view.getter('Red') : undefined;
-  const gg = hasRgb ? view.getter('Green') : undefined;
-  const gb = hasRgb ? view.getter('Blue') : undefined;
-  const rgb = hasRgb ? new Uint8Array(n * 3) : undefined;
-  let shift = 0;
-  if (hasRgb) {
-    let max = 0;
-    for (let i = 0; i < n; i++) {
-      const r = gr!(i), g = gg!(i), b = gb!(i);
-      if (r > max) max = r;
-      if (g > max) max = g;
-      if (b > max) max = b;
-    }
-    shift = max > 255 ? 8 : 0;
-  }
 
   const lonLatH: number[] = [];
   const zVals: number[] = [];
@@ -256,11 +244,40 @@ export async function decodeNode(
     }
     lonLatH.push(lon, lat, z);
     zVals.push(z);
-    if (rgb) {
-      rgb[i * 3] = gr!(i) >> shift;
-      rgb[i * 3 + 1] = gg!(i) >> shift;
-      rgb[i * 3 + 2] = gb!(i) >> shift;
-    }
   }
-  return { lonLatH, zVals, count: n, rgb };
+  const colors = colorBy ? colorize(view, n, colorBy, zVals) : undefined;
+  return { lonLatH, zVals, count: n, colors };
+}
+
+type PointView = Awaited<ReturnType<typeof Copc.loadPointDataView>>;
+
+/** getter 로 한 차원을 number[] 로 읽는다. */
+function readArr(g: (i: number) => number, n: number): number[] {
+  const a = new Array<number>(n);
+  for (let i = 0; i < n; i++) a[i] = g(i);
+  return a;
+}
+
+/** colorBy 모드 → 점당 RGB. 차원이 없으면 height 폴백(조용한 실패 없이 warn). 색 매핑은 colors.ts. */
+function colorize(view: PointView, n: number, colorBy: ColorBy, zVals: number[]): Uint8Array {
+  const has = (d: string) => d in view.dimensions;
+  switch (colorBy) {
+    case 'height':
+      return heightColors(zVals, n);
+    case 'rgb':
+      if (has('Red') && has('Green') && has('Blue'))
+        return rgbColors(readArr(view.getter('Red'), n), readArr(view.getter('Green'), n), readArr(view.getter('Blue'), n), n);
+      break;
+    case 'classification':
+      if (has('Classification')) return classificationColors(readArr(view.getter('Classification'), n), n);
+      break;
+    case 'intensity':
+      if (has('Intensity')) return intensityColors(readArr(view.getter('Intensity'), n), n);
+      break;
+    case 'returns':
+      if (has('ReturnNumber')) return returnColors(readArr(view.getter('ReturnNumber'), n), n);
+      break;
+  }
+  console.warn(`[copc] colorBy '${colorBy}' 차원 없음 → height 폴백`);
+  return heightColors(zVals, n);
 }
