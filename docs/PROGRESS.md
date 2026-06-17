@@ -56,9 +56,9 @@
 - [x] **상용 코어 Step 2 복원력** — range 재시도(`p-retry`)+타임아웃 + 조용한 실패 제거(copc getter `response.ok` 미검사로 5xx→점데이터 둔갑 버그 수정). (`copc-core` httpGetterWithRetry, `scripts/check-retry.ts`)
 - [x] **상용 코어 Step 3 속성 견고성** — `colorBy` 5모드(height/rgb/classification/intensity/returns) + 색 로직 `src/colors.ts` 통합. 차원 없으면 height 폴백+warn.
 - [x] **Step 0~3 종합 적대적 리뷰**(Codex) — MUST-FIX 3건 수정(SW 백스톱 40s·`fromUrl` 초기화 실패 정리·잘못된 page 키 즉시 throw). build·verify·paging·retry·브라우저 PASS.
-- [ ] 본편 ③-B (측정 후 판단) LRU·워커풀 — 실 GPU 측정 게이트. (깊은 항해 시 `session.nodes` 무한 누적은 문서화됨)
-- [~] 본편 ④(마감) **options 완료**(`pointSize`/`attenuation`/`eyeDomeLighting`/`colorBy` 5모드; `projFunc` 드롭). **남음**: README/라이선스 + 데모 페이지 다듬기
-- [ ] 실 GPU 대용량 fps·메모리·페이징·복원력 검증 (사용자 머신) — ③-B 판정 게이트
+- [~] **본편 ③-B 측정 — 손코딩 primitive 기각([ADR-004](adr/004-delegate-memory-concurrency-to-cesium.md)).** ②예산·④eviction = Cesium `cacheBytes` 위임(실측: `tileUnload`로 SW-pnts evict·메모리 plateau), ③동시성 = 큐 타임아웃 → config 튜닝(워커풀 아님). **남음**: 노브값(maxReq·timeout·기본 cacheBytes) 실 GPU 측정. (서브페이지 노드 메타 누적은 별개·미측정·`session.nodes`)
+- [~] 본편 ④(마감) **options 완료**(`pointSize`/`attenuation`/`eyeDomeLighting`/`colorBy` 5모드; `projFunc` 드롭) + **"부드럽게" ① 기본값 격파**(EDL·attenuation·colorBy 'rgb' 기본 on → 데모 product-grade). **남음**: README/라이선스 + 데모 페이지 다듬기
+- [ ] 실 GPU 대용량 검증 (사용자 머신) — `?soak`/`?bench` 하네스 준비됨; `?soak=millsite&secs=120`로 fps·메모리 천장·③빈도 확정 → ③-B 노브값 판정 게이트
 
 ## Phase 3 — 평가 / 입상 판정 🔒
 대용량 실데이터에서 60fps / 메모리 / UX 측정 → 입상 가능성 데이터로 판정.

@@ -20,11 +20,11 @@ export interface CopcTilesetOptions {
   maximumScreenSpaceError?: number;
   /** 점 픽셀 크기 (Cesium3DTileStyle.pointSize). attenuation off 일 때 적용. */
   pointSize?: number;
-  /** 거리 기반 점 크기 감쇠 (pointCloudShading). 거친 LOD 끊김 완화. */
+  /** 거리 기반 점 크기 감쇠 (pointCloudShading). 거친 LOD 끊김 완화. 기본 on. */
   attenuation?: boolean;
-  /** Eye Dome Lighting — 깊이 윤곽 강조(LOD 단차 가림). attenuation 을 동반한다. */
+  /** Eye Dome Lighting — 깊이 윤곽 강조(LOD 단차 가림). attenuation 을 동반한다. 기본 on. */
   eyeDomeLighting?: boolean;
-  /** 색칠: 'height'(기본) | 'rgb' | 'classification' | 'intensity' | 'returns'. 해당 차원이 없으면 height 폴백. */
+  /** 색칠: 'rgb'(기본, 해당 차원 없으면 height 폴백) | 'height' | 'classification' | 'intensity' | 'returns'. */
   colorBy?: ColorBy;
 }
 
@@ -136,7 +136,7 @@ export const CopcTileset = {
       const api = getWorkerApi();
       const [session] = await Promise.all([
         openCopc(url),
-        api.open(sid, url, { colorBy: options.colorBy ?? 'height' }),
+        api.open(sid, url, { colorBy: options.colorBy ?? 'rgb' }),
       ]);
       pageSessions.set(sid, session); // 서브페이지 lazy 로드용으로 보관
 
@@ -150,8 +150,8 @@ export const CopcTileset = {
         tileset.style = new Cesium3DTileStyle({ pointSize: options.pointSize });
       }
       // EDL 은 attenuation 위에서 그려지므로 EDL 켜면 attenuation 도 켠다.
-      const edl = options.eyeDomeLighting ?? false;
-      const atten = (options.attenuation ?? false) || edl;
+      const edl = options.eyeDomeLighting ?? true;
+      const atten = (options.attenuation ?? true) || edl;
       if (atten) {
         tileset.pointCloudShading.attenuation = true;
         tileset.pointCloudShading.eyeDomeLighting = edl;

@@ -8,6 +8,9 @@ import {
   Color,
   Math as CesiumMath,
   Cesium3DTileset,
+  HeadingPitchRange,
+  Matrix4,
+  RequestScheduler,
 } from 'cesium';
 import 'cesium/Build/Cesium/Widgets/widgets.css';
 import { loadCopcNaive, getLazPerf } from './copc';
@@ -546,6 +549,81 @@ async function runSpike5() {
   }
 }
 
+// ── 메모리/항해 soak — step1 가설 검증: Cesium 내장 eviction(cacheBytes)이 우리 SW-pnts 에도 engage 하나? ──
+// 가설: cacheBytes 한도로 화면 밖 타일 자동 unload → 메모리 plateau. 무한 climb 이면 우리 쪽 누수.
+// fps 는 실 GPU 에서만 유의 — 여기선 Cesium 메모리 회계 + JS heap + tileUnload 가 핵심 신호(헤드리스도 유의).
+//   ?soak            millsite 90s, 기본 cacheBytes(512MB) — 실 GPU 소크
+//   ?soak=autzen     데이터셋 id 지정
+//   &cache=8         cacheBytes·overflow 를 8MB 로 (eviction 강제 — 메커니즘 증명용)
+//   &secs=60         지속 시간(초)
+async function runSoak() {
+  const params = new URLSearchParams(location.search);
+  const dsId = params.get('soak');
+  const ds = DATASETS.find((d) => d.id === dsId) ?? DATASETS[1]; // 기본 millsite(대형)
+  const seconds = Number(params.get('secs')) || 90;
+  const cacheMB = Number(params.get('cache')) || 0;
+  const nearF = Number(params.get('near')) || 0.08; // 근접 줌 강도(작을수록 깊은 LOD·동시성↑)
+  const farF = Number(params.get('far')) || 1.2;
+  const maxReq = Number(params.get('maxReq')) || 0; // Cesium RequestScheduler server당 동시 요청 상한(③ throttle)
+  if (maxReq > 0) RequestScheduler.maximumRequestsPerServer = maxReq;
+  log(`soak: ${ds.label} 항해 중 …`);
+  try {
+    const tileset = await CopcTileset.fromUrl(ds.url);
+    if (cacheMB > 0) {
+      tileset.cacheBytes = cacheMB * 1048576;
+      tileset.maximumCacheOverflowBytes = cacheMB * 1048576; // overflow 도 좁혀 eviction 가시화
+    }
+    let unloads = 0;
+    tileset.tileUnload.addEventListener(() => {
+      unloads++;
+    });
+    viewer.scene.primitives.add(tileset);
+    await viewer.zoomTo(tileset);
+    const bs = tileset.boundingSphere;
+    const heapMB = () => {
+      const m = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory;
+      return m ? (m.usedJSHeapSize / 1048576).toFixed(0) : '?';
+    };
+    const rows: string[] = [
+      `soak ${ds.label}  cacheBytes=${(tileset.cacheBytes / 1048576).toFixed(0)}MB  near=${nearF} far=${farF} maxReq=${maxReq || 'default(18)'}`,
+      't(s)\theapMB\tcesiumMB\ttilesReady\tunloads',
+    ];
+    const t0 = performance.now();
+    let cycle = 0;
+    while ((performance.now() - t0) / 1000 < seconds) {
+      // 카메라 오실레이션: 깊게 가까이 ↔ 멀리 (깊은 LOD 강제 + 화면밖 churn → load + unload)
+      const range = bs.radius * (cycle % 2 === 0 ? nearF : farF);
+      viewer.camera.lookAt(bs.center, new HeadingPitchRange(cycle * 0.6, -0.5, range));
+      cycle++;
+      await sleep(2500); // 스트리밍 settle
+      viewer.scene.requestRender();
+      const stats = (tileset as unknown as {
+        statistics?: { numberOfTilesWithContentReady?: number };
+      }).statistics;
+      const cesiumMB = (tileset.totalMemoryUsageInBytes / 1048576).toFixed(0);
+      const t = ((performance.now() - t0) / 1000).toFixed(0);
+      rows.push(`${t}\t${heapMB()}\t${cesiumMB}\t${stats?.numberOfTilesWithContentReady ?? '?'}\t${unloads}`);
+      log('SOAK (메모리 항해)\n' + rows.join('\n'));
+      console.log('SOAK ROW ' + rows[rows.length - 1]);
+    }
+    viewer.camera.lookAtTransform(Matrix4.IDENTITY); // lookAt 참조프레임 잠금 해제
+    const verdict =
+      unloads > 0
+        ? 'eviction engage ✅ (tileUnload 발생 → Cesium 이 우리 pnts 도 evict)'
+        : 'unload 0 — 메모리 한도 미도달(데이터/캐시) or 미engage. cache↓ 또는 대형 ds 로 재시도';
+    rows.push(`판정: ${verdict}`);
+    log('SOAK DONE\n' + rows.join('\n'));
+    console.log(
+      'SOAK DONE ' +
+        JSON.stringify({ cycles: cycle, unloads, finalCesiumMB: +(tileset.totalMemoryUsageInBytes / 1048576).toFixed(0) }),
+    );
+  } catch (e) {
+    log('SOAK ERROR: ' + ((e as Error)?.message ?? e));
+    console.error(e);
+    console.log('SOAK RESULT ' + JSON.stringify({ error: (e as Error)?.message }));
+  }
+}
+
 // 기본 페이지 = 공개 API 데모: CopcTileset.fromUrl 로 변환 없이 LOD 스트리밍
 async function runDemo() {
   log('CopcTileset.fromUrl 데모 …');
@@ -585,6 +663,8 @@ if (params.has('bench')) {
       ? custom.split(',').map((s) => Number(s.trim())).filter((n) => n > 0)
       : [100_000, 250_000, 500_000, 1_000_000, 2_000_000, 4_000_000];
   runBench(budgets);
+} else if (params.has('soak')) {
+  runSoak();
 } else if (params.has('spike5')) {
   runSpike5();
 } else if (params.has('spike4')) {
