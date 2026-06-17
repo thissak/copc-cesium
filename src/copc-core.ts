@@ -10,6 +10,7 @@ import {
   returnColors,
   rgbColors,
 } from './colors';
+import type { AttributeSpec } from './attributes';
 
 // 순수 데이터 파이프라인 — Cesium/브라우저 무관. Node 에서도 그대로 돈다.
 // (Giro3D 의 source/entity 분리와 동일: 여기는 source = fetch + decode + reproject)
@@ -227,7 +228,8 @@ export async function decodeNode(
   lazPerf?: LazPerf,
   colorBy?: ColorBy,
   hideClass?: ReadonlySet<number>,
-): Promise<{ lonLatH: number[]; zVals: number[]; count: number; colors?: Uint8Array } | null> {
+  attrs?: AttributeSpec[],
+): Promise<{ lonLatH: number[]; zVals: number[]; count: number; colors?: Uint8Array; attrValues?: number[][] } | null> {
   const node = s.nodes[key];
   if (!node) return null;
   const view = await Copc.loadPointDataView(s.getter, s.copc, node, lazPerf ? { lazPerf } : undefined);
@@ -257,7 +259,10 @@ export async function decodeNode(
     keep.push(i);
   }
   const colors = colorBy ? colorize(s, view, keep, colorBy, zVals) : undefined;
-  return { lonLatH, zVals, count: keep.length, colors };
+  const attrValues = attrs?.length
+    ? attrs.map((spec) => readArr(view.getter(spec.lasName), keep))
+    : undefined;
+  return { lonLatH, zVals, count: keep.length, colors, attrValues };
 }
 
 // colorBy 차원이 없어 height 로 폴백할 때, 세션당 한 번만 경고(타일마다 스팸 방지·표면화는 유지).
