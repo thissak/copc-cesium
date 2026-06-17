@@ -262,7 +262,9 @@ export const CopcTileset = {
 
       (tileset as unknown as { attributeRange: (name: string) => Promise<[number, number]> }).attributeRange = async (name) => {
         const session = pageSessions.get(sid)!;
-        const view = await Copc.loadPointDataView(session.getter, session.copc, session.nodes['0-0-0-0']!);
+        const rootNode = session.nodes['0-0-0-0'];
+        if (!rootNode) throw new Error('attributeRange: root node not yet loaded');
+        const view = await Copc.loadPointDataView(session.getter, session.copc, rootNode);
         const g = view.getter(name);
         let lo = Infinity, hi = -Infinity;
         for (let i = 0; i < view.pointCount; i++) { const v = g(i); if (v < lo) lo = v; if (v > hi) hi = v; }

@@ -6,6 +6,7 @@ const DEFAULT_RAMP = ['rgb(43,131,186)', 'rgb(171,221,164)', 'rgb(255,255,191)',
 
 /** ${attrName} 를 [min,max] 정규화해 palette 색 구간으로 매핑하는 Cesium3DTileStyle. */
 export function rampStyle(attrName: string, range: [number, number], palette: string[] = DEFAULT_RAMP): Cesium3DTileStyle {
+  if (!palette.length) throw new Error('rampStyle: palette must not be empty');
   const [min, max] = range;
   const span = max - min || 1;
   const conditions: [string, string][] = [];
