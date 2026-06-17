@@ -10,6 +10,7 @@
 | slug | 한 줄 | status |
 |------|-------|--------|
 | [[decode-in-worker]] | 디코드는 SW도 메인스레드도 아닌 Web Worker에서 돈다 | active |
+| [[hierarchy-subpage-paging]] | 깊은 옥트리를 외부 tileset proxy로 본 만큼만 lazy 확장 | active |
 
 ## 작성 예정 (stub — 의도된 미작성)
 
