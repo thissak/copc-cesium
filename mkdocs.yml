@@ -20,6 +20,9 @@ theme:
     - search.highlight
     - content.code.copy
 
+extra_css:
+  - stylesheets/extra.css
+
 plugins:
   - search:
       separator: '[\s\-_,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
@@ -31,6 +34,12 @@ markdown_extensions:
   - tables
   - toc:
       permalink: true
+      # 한글 헤딩 앵커 보존 (기본 slugify 는 비ASCII 를 버려 #_1,#_2 가 됨).
+      # github 방식(파이썬 생성기 github_slugify)과 정렬 → 렌더러 교체에도 앵커 안정.
+      slugify:
+        !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.superfences:
@@ -53,6 +62,15 @@ nav:
           - learn/05-copc-cesium-integration.md
           - learn/06-streaming-engine-and-production-core.md
           - learn/07-packaging-and-verification.md
+      - 아키텍처:
+          - arch/index.md
+          - arch/00-big-picture.md
+          - arch/01-public-api-and-isomorphism.md
+          - arch/02-service-worker.md
+          - arch/03-worker-decode.md
+          - arch/04-lod-delegation.md
+          - arch/05-hierarchy-paging.md
+          - arch/06-production-core.md
       - 위키:
           - wiki/index.md
           - wiki/decode-in-worker.md
