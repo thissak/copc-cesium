@@ -1,49 +1,90 @@
-# CopcCesiumLab
+# copc-cesium
 
-> COPC 점군을 **사전 변환 없이** 브라우저에서 CesiumJS 위에 직접 띄우는 기술 프로토타입.
+Stream COPC point clouds directly in CesiumJS — no conversion to 3D Tiles.
 
-2026 오픈소스 개발자대회(KOSSA OSSP) 가이아쓰리디 지정과제 — *"COPC 데이터의 CesiumJS 가시화"* — 입상 가능성을 타진하기 위한 실험 랩.
+`copc-cesium` exposes a [COPC](https://copc.io/) file as a native `Cesium3DTileset`. There is **no offline tiling step**: the original `.copc.laz` is read with HTTP range requests, decoded on demand in a Web Worker, and streamed into Cesium's own LOD / culling machine. One line, like `TIFFImageryProvider` for COG.
 
-## 이 랩의 진짜 목적
+```ts
+import { Viewer } from 'cesium';
+import { CopcTileset } from 'copc-cesium';
 
-대회 우승작을 바로 만드는 게 아니라, **다음 4가지를 검증**하는 것:
+const viewer = new Viewer('app');
+const tileset = await CopcTileset.fromUrl('https://example.com/cloud.copc.laz');
+viewer.scene.primitives.add(tileset);
+```
 
-1. **문제 인식** — 대용량 점군 웹 렌더에서 *뭐가* 어려운지 내 눈으로 확인한다.
-2. **병목 추적** — "지금 뭐에 바운드됐나"를 4축(Network / Decode / CPU / GPU)으로 가른다.
-3. **AI 협업** — 이 난이도의 문제를 AI와 함께 실제로 풀 수 있는가.
-4. **정확한 디버깅** — 저피드백 도메인(WebGL·바이너리·좌표계)에서 추측 아닌 측정이 되는가.
+## Why
 
-→ 결론은 "할 만하다 / 못 하겠다 / 여기가 핵심이다"를 **데이터로** 내리는 것.
+Showing a large point cloud in CesiumJS normally means **pre-converting** the data to 3D Tiles (offline tiling, duplicated storage, re-runs on every update). COPC is already a cloud-optimized octree with HTTP range access — so the conversion step is avoidable. `copc-cesium` consumes that structure directly and lets Cesium do the LOD streaming.
 
-## 스택
+## Install
 
-| 요소 | 역할 |
-|------|------|
-| **CesiumJS** | 웹 3D 지구본 렌더 엔진 (LOD/컬링/SSE 머신 재사용 대상) |
-| **copc.js** (`copc`) | COPC 옥트리/포인트 파싱 (TypeScript) |
-| **laz-perf** | LAZ 청크 압축 해제 (WASM) |
-| **Vite + TypeScript** | 번들/개발 서버 |
+```bash
+npm install copc-cesium cesium
+```
 
-## 빠른 시작
+`cesium` is a peer dependency (bring your own version, `>=1.120`).
+
+## Service worker setup (required)
+
+Cesium fetches tile content over the network, so `copc-cesium` supplies that content through a **service worker**. Copy the bundled worker to a path your server serves at the site root:
+
+```bash
+cp node_modules/copc-cesium/dist/copc-sw.js public/copc-sw.js
+```
+
+The service worker must be served at a scope that covers the content path (`/__copc-real/…`) — the default root scope (`/copc-sw.js`) does. If it cannot intercept, `fromUrl()` throws a clear error rather than failing silently. Override the location with `serviceWorkerUrl` / `serviceWorkerScope` if needed.
+
+## Options
+
+```ts
+await CopcTileset.fromUrl(url, options);
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `maximumScreenSpaceError` | `8` | Cesium LOD knob — lower = more detail, more load |
+| `colorBy` | `'rgb'` | `'rgb'` \| `'height'` \| `'classification'` \| `'intensity'` \| `'returns'` (falls back to height if the dimension is absent) |
+| `eyeDomeLighting` | `true` | Eye-dome lighting — depth contours that hide LOD seams (implies `attenuation`) |
+| `attenuation` | `true` | Distance-based point-size attenuation |
+| `pointSize` | — | Fixed pixel size (applied when attenuation is off) |
+| `hideClassifications` | `[7, 18]` | ASPRS classes dropped at decode (default = low/high noise); `[]` keeps all |
+| `serviceWorkerUrl` | `'/copc-sw.js'` | Service worker URL |
+| `serviceWorkerScope` | `'/'` | Service worker scope (must cover the content path) |
+
+The returned object is a normal `Cesium3DTileset`. Call `tileset.destroy()` to release the worker session.
+
+## How it works
+
+- The COPC octree is exposed as a **dynamic `Cesium3DTileset`** (geometricError per node). Cesium's screen-space-error traversal decides which nodes to load — **LOD, culling and memory eviction (`cacheBytes`) are delegated to Cesium.**
+- When Cesium requests a node, the **service worker** intercepts the request and routes it to the page, which delegates decode to a **Web Worker** (laz-perf WASM). The node is returned as `.pnts`.
+- Deep octrees page their hierarchy sub-pages on demand, so arbitrarily large files stream without reading the whole tree up front.
+
+## Development
+
+This repository started as a competition lab (KOSSA OSSP / Gaia3D task — *"COPC visualization for CesiumJS"*). Internal docs:
+
+- [`docs/DIRECTION.md`](docs/DIRECTION.md) — project direction & roadmap
+- [`docs/PROGRESS.md`](docs/PROGRESS.md) — phase checklist
+- [`docs/adr/`](docs/adr/) — architecture decisions
+- [`docs/PROFILING.md`](docs/PROFILING.md) — 4-axis bottleneck profiling
 
 ```bash
 npm install
-npm run dev      # http://localhost:5173
+npm run dev        # demo at http://localhost:5173
+npm run build:lib  # build the library to dist/
+npm run verify     # headless correctness check
 ```
 
-## 4축 병목 프로파일링 (이 랩의 핵심 방법론)
+## License
 
-언리얼 `stat unit`의 "뭐에 바운드됐나" 사고를 웹 4축으로 옮긴 것. 자세한 도구 매핑과 진단 프로토콜은 [`docs/PROFILING.md`](docs/PROFILING.md) 참조.
+[Apache-2.0](LICENSE). Runtime dependencies are all permissive:
 
-| 축 | 무엇 | 측정 도구 |
-|----|------|-----------|
-| ① Network/IO | COPC 노드 HTTP range fetch | DevTools Network 워터폴 |
-| ② Decode | LAZ 압축 해제(WASM) | DevTools Performance 워커 트랙 |
-| ③ CPU Main | 옥트리 순회·SSE·버퍼 업로드 | Performance 메인 스레드 |
-| ④ GPU | 수백만 점 vertex/fill | Spector.js, timer query |
-
-## 문서
-
-- [`CLAUDE.md`](CLAUDE.md) — 운영 규칙 (빌드/스타일/금지)
-- [`docs/PROGRESS.md`](docs/PROGRESS.md) — 페이즈 체크리스트
-- [`docs/PROFILING.md`](docs/PROFILING.md) — 병목 진단 프로토콜
+| Package | Role | License |
+|---------|------|---------|
+| `cesium` (peer) | render engine | Apache-2.0 |
+| `copc` | COPC parsing | MIT |
+| `laz-perf` | LAZ decode (WASM) | Apache-2.0 |
+| `comlink` | worker RPC | Apache-2.0 |
+| `p-retry` | range retry | MIT |
+| `proj4` | CRS reprojection | MIT |
