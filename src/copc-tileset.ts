@@ -173,6 +173,12 @@ export const CopcTileset = {
         releaseSession(sid);
         tilesetDestroy();
       };
+
+      // 진단: 누적된 옥트리 노드 메타 수. 서브페이지 lazy 로드(loadSubPage)로 단조 증가하며
+      // 상한(LRU)이 없다 → 장시간/광역 항해 시 메모리 갭 측정용. 페이지·워커 세션이 같은 키를
+      // lockstep 로드하므로 페이지 측 카운트가 양쪽 heap 의 프록시(워커 heap 은 performance.memory 밖).
+      (tileset as unknown as { copcNodeCount: () => number }).copcNodeCount = () =>
+        Object.keys(pageSessions.get(sid)?.nodes ?? {}).length;
       return tileset;
     } catch (err) {
       releaseSession(sid); // 초기화 실패 시 누적 상태 정리 후 표면화(누수·조용한 실패 방지)

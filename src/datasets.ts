@@ -32,4 +32,18 @@ export const DATASETS: CopcDataset[] = [
     bytes: 2_029_696_615,
     note: '~1.9GB. 성능 벽 찾기용',
   },
+  {
+    id: 'fema_pr',
+    label: 'FEMA Puerto Rico (광역·항공)',
+    url: 'https://s3.amazonaws.com/hobu-lidar/2018_FEMA_PR_new_untwine.copc.laz',
+    bytes: 980_741_036,
+    note: '~980MB. 항공 라이다 광역 footprint → 수평 광역 LOD 스트리밍 검증',
+  },
+  {
+    id: 'cahokia',
+    label: 'Cahokia MLS (8.9GB·최대)',
+    url: 'https://s3.amazonaws.com/hobu-lidar/Cahokia-20231016-MLS-NGA.copc.laz',
+    bytes: 8_878_777_180,
+    note: '~8.9GB. 최대 단일 COPC. 절대 스케일·메타 누적 갭 스트레스',
+  },
 ];
