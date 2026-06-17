@@ -40,7 +40,7 @@
 > **디버깅 로그 (딸깍 아님의 증거):** AI 생성 georef가 실제 데이터에서 2회 무너짐 → 측정으로 근본원인 짚어 수정.
 > ① `proj4`가 COMPD_CS(복합좌표계) 미지원 → 내부 PROJCS 추출 + 피트→미터 Z 보정. ② laz-perf WASM이 Vite에서 미서빙(HTML 반환) → web 빌드 + `?url` 주입.
 
-## Phase 2 — COPC Provider 플러그인 (LOD 스트리밍) ⏳ 스파이크 PASS
+## Phase 2 — COPC Provider 플러그인 (LOD 스트리밍) ⏳ 본편 + 상용 코어 hardening 작동 (Step 0~3 ✅·리뷰됨, 측정·마감 남음)
 **아키텍처 확정([ADR-001](adr/001-provider-plugin-architecture-A.md)): A안 = `CopcTileset.fromUrl()` 플러그인, COPC 옥트리를 동적 Cesium3DTileset으로 노출, LOD는 Cesium 위임.**
 
 - [x] BP 조사: pnts 바이너리 스펙 + Cesium 동적 content
@@ -51,9 +51,14 @@
 - [x] **본편 ② 옥트리 LOD 스트리밍** — 옥트리(278노드)→동적 tileset 트리, Cesium SSE가 **24노드만** 선택 요청→온디맨드 디코드 `tileLoad:24/fail:0` (`?spike5`, `src/tileset.ts`+`copc-core` openCopc/decodeNode). **핵심 동작 작동.**
 - [x] **본편 ④(코어) `CopcTileset.fromUrl()` 공개 API + 기본 데모** — spike5 로직을 라이브러리로 추출(`src/copc-tileset.ts`). 기본 페이지가 변환 없이 LOD 스트리밍 (`tileLoad:5/fail:0`)
 - [x] **본편 ③-A 성능** — 디코드를 **Web Worker(comlink)로 이동** + **POSITION_QUANTIZED**(uint16×3, 위치 바이트 절반) 컴팩트 버퍼. 기본 데모 `tileLoad:10/fail:0`, ECEF는 Cesium 대비 1.4e-9m 일치. (`src/decode.worker.ts`, `src/pnts-quantized.ts`, C1~C6 PASS)
-- [ ] 본편 ③-B (측정 후 판단) LRU 캐시(`lru-cache`)·워커풀(`workerpool`) — BP상 Cesium `cacheBytes`와 중복 가능성 → 재디코드/큐잉 관측 시 착수
-- [~] 본편 ④(마감) **options 완료** — `pointSize`/`attenuation`/`eyeDomeLighting`/`colorBy('height'|'rgb')` (`projFunc`는 per-point IPC 마비로 드롭). C1~C6 PASS. **남음**: README/라이선스 + 데모 페이지 다듬기
-- [ ] 실 GPU 대용량 fps 확인 (사용자 머신)
+- [x] **상용 코어 Step 0 생명주기/destroy** — 워커 `close` + per-session `destroy` + idle 시 worker terminate·SW 리스너 제거(누수 차단). (`copc-tileset.ts`)
+- [x] **상용 코어 Step 1 하이어라키 페이징** — 서브페이지 온디맨드 로드(외부 tileset proxy) → GB 옥트리 임의 깊이 스트리밍(정확성 TOP 갭; millsite 141·sofi 111 서브페이지 더 이상 안 잘림). ([ADR-003](adr/003-hierarchy-subpage-paging.md))
+- [x] **상용 코어 Step 2 복원력** — range 재시도(`p-retry`)+타임아웃 + 조용한 실패 제거(copc getter `response.ok` 미검사로 5xx→점데이터 둔갑 버그 수정). (`copc-core` httpGetterWithRetry, `scripts/check-retry.ts`)
+- [x] **상용 코어 Step 3 속성 견고성** — `colorBy` 5모드(height/rgb/classification/intensity/returns) + 색 로직 `src/colors.ts` 통합. 차원 없으면 height 폴백+warn.
+- [x] **Step 0~3 종합 적대적 리뷰**(Codex) — MUST-FIX 3건 수정(SW 백스톱 40s·`fromUrl` 초기화 실패 정리·잘못된 page 키 즉시 throw). build·verify·paging·retry·브라우저 PASS.
+- [ ] 본편 ③-B (측정 후 판단) LRU·워커풀 — 실 GPU 측정 게이트. (깊은 항해 시 `session.nodes` 무한 누적은 문서화됨)
+- [~] 본편 ④(마감) **options 완료**(`pointSize`/`attenuation`/`eyeDomeLighting`/`colorBy` 5모드; `projFunc` 드롭). **남음**: README/라이선스 + 데모 페이지 다듬기
+- [ ] 실 GPU 대용량 fps·메모리·페이징·복원력 검증 (사용자 머신) — ③-B 판정 게이트
 
 ## Phase 3 — 평가 / 입상 판정 🔒
 대용량 실데이터에서 60fps / 메모리 / UX 측정 → 입상 가능성 데이터로 판정.

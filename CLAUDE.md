@@ -20,6 +20,7 @@ npm run preview  # 빌드 결과 미리보기
 ## 스택
 
 - CesiumJS (렌더), copc.js(`copc`) + laz-perf(파싱/디코드), Vite + TypeScript.
+- 디코드는 Web Worker(`comlink`), range 읽기 복원력은 `p-retry`(재시도+타임아웃).
 - Cesium 정적 에셋은 `vite-plugin-cesium`가 처리.
 
 ## 코드 스타일
