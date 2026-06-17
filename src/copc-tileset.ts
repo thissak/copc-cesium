@@ -1,4 +1,4 @@
-import { Cesium3DTileset, Cesium3DTileStyle } from 'cesium';
+import { Cesium3DTileset, Cesium3DTileStyle, RequestScheduler } from 'cesium';
 import * as Comlink from 'comlink';
 import { openCopc, loadSubPage, type CopcSession } from './copc-core';
 import { buildTileset, buildSubtree } from './tileset';
@@ -32,6 +32,16 @@ export interface CopcTilesetOptions {
    * `[]` 를 주면 전부 표시(원본 그대로).
    */
   hideClassifications?: number[];
+  /**
+   * 콘텐츠 호스트(앱 origin)당 Cesium 동시 요청 상한. 기본 `6`.
+   * Cesium 의 호스트당 기본값은 18(HTTP/2 가정) — S3 등 HTTP/1.1 range 소스엔 과해
+   * 8s 타임아웃·재시도 폭풍을 부른다(측정). 콘텐츠(`/__copc-real/`)는 앱 origin 에서
+   * 서빙되므로 그 호스트에만 `RequestScheduler.requestsByServer` 로 상한을 둬, 동시
+   * 노드 디코드 → 다운스트림 range fetch 동시성을 게이트한다(전역 설정 미오염).
+   * 기본 6 = 브라우저 HTTP/1.1 호스트당 연결 한도·iTowns 출하값·Cesium 1.113 이전 기본값.
+   * HTTP/2 CDN(CloudFront 등) 뒤라면 더 높여도 된다. `0` 이하면 설정하지 않는다(Cesium 기본 유지).
+   */
+  maxRequestsPerServer?: number;
   /**
    * COPC 콘텐츠를 가로채는 서비스워커 URL. 기본 `/copc-sw.js`.
    * SW 는 콘텐츠 요청(`/__copc-real/...`)을 덮는 scope 에 서빙돼야 한다(기본 root).
@@ -174,11 +184,22 @@ async function ensureServiceWorker(swUrl: string, scope: string): Promise<void> 
   }
 }
 
+// 콘텐츠(/__copc-real/)는 앱 origin 에서 서빙된다. Cesium RequestScheduler 의 "호스트당 동시 요청"
+// 상한을 그 호스트에만 적용해(전역 maximumRequestsPerServer 미오염) 과동시성 range 폭풍을 막는다.
+// 서버키는 Cesium getServerKey 와 동일 형식(authority; 기본 포트면 :443/:80 부착) — 타입 미노출이라 직접 구성.
+function setContentServerThrottle(maxPerServer: number) {
+  if (maxPerServer <= 0) return;
+  const host = location.host; // hostname[:port]
+  const serverKey = /:/.test(host) ? host : `${host}:${location.protocol === 'https:' ? '443' : '80'}`;
+  RequestScheduler.requestsByServer[serverKey] = maxPerServer;
+}
+
 export const CopcTileset = {
   /** COPC URL → LOD 스트리밍 Cesium3DTileset. viewer.scene.primitives.add(tileset) 로 사용. */
   async fromUrl(url: string, options: CopcTilesetOptions = {}): Promise<Cesium3DTileset> {
     await ensureServiceWorker(options.serviceWorkerUrl ?? '/copc-sw.js', options.serviceWorkerScope ?? '/');
     installHandler();
+    setContentServerThrottle(options.maxRequestsPerServer ?? 6);
 
     const sid = `s${++sidCounter}`;
     activeSids.add(sid);

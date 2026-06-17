@@ -51,6 +51,7 @@ await CopcTileset.fromUrl(url, options);
 | `attenuation` | `true` | Distance-based point-size attenuation |
 | `pointSize` | — | Fixed pixel size (applied when attenuation is off) |
 | `hideClassifications` | `[7, 18]` | ASPRS classes dropped at decode (default = low/high noise); `[]` keeps all |
+| `maxRequestsPerServer` | `6` | Max concurrent Cesium requests to the content host. Cesium's default (18) assumes HTTP/2; for HTTP/1.1 range sources (e.g. S3) it over-subscribes one host and causes timeout/retry storms. `6` matches the browser's HTTP/1.1 per-host connection limit. Raise it behind an HTTP/2 CDN; `0` leaves Cesium's default untouched. Applied per-host via `RequestScheduler.requestsByServer` (does not mutate the global). |
 | `serviceWorkerUrl` | `'/copc-sw.js'` | Service worker URL |
 | `serviceWorkerScope` | `'/'` | Service worker scope (must cover the content path) |
 
