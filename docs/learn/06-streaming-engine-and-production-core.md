@@ -79,4 +79,4 @@ flowchart LR
 
 ---
 
-← 이전: [05. 통합과 LOD 스트리밍](05-copc-cesium-integration.md) · 처음: [학습 커리큘럼](index.md) · 깊은 내용: [학습 위키](../wiki/index.md) · 결정: [ADR-001](../adr/001-provider-plugin-architecture-A.md)
+← 이전: [05. 통합과 LOD 스트리밍](05-copc-cesium-integration.md) · 다음: [07. 패키징과 외부 환경 검증](07-packaging-and-verification.md) · 처음: [학습 커리큘럼](index.md) · 깊은 내용: [학습 위키](../wiki/index.md) · 결정: [ADR-001](../adr/001-provider-plugin-architecture-A.md)

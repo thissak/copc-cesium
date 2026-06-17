@@ -29,9 +29,10 @@ flowchart LR
 | 04 | [좌표계와 georeferencing](04-coordinate-systems.md) | 점을 지구 위 제 위치에 |
 | 05 | [통합과 LOD 스트리밍](05-copc-cesium-integration.md) | 둘을 잇는 진짜 문제 |
 | 06 | [실제로 만든 것](06-streaming-engine-and-production-core.md) | 스트리밍 엔진 + 상용 코어로 가는 길 |
+| 07 | [패키징과 외부 환경 검증](07-packaging-and-verification.md) | 남이 설치해 쓰게 + 측정으로 리뷰 반증 |
 
 ## 이 문서들과 작업 문서의 관계
 
 - 여기(`learn/`)는 **사람이 읽는 개념 학습용**입니다.
 - 실제 작업/측정은 [`../PROFILING.md`](../PROFILING.md)(4축 병목 진단)와 [`../REFERENCES.md`](../REFERENCES.md)(prior art 지도), [`../PROGRESS.md`](../PROGRESS.md)(진행)에 있습니다.
-- 05–06번 문서가 학습과 실제 구현(스트리밍 엔진·상용 코어)을 잇습니다.
+- 05–07번 문서가 학습과 실제 구현(스트리밍 엔진·상용 코어·라이브러리 패키징)을 잇습니다.
