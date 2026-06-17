@@ -207,10 +207,12 @@ export async function openCopc(url: string): Promise<CopcSession> {
 export async function loadSubPage(s: CopcSession, key: string): Promise<boolean> {
   const ptr = s.pages[key];
   if (!ptr) return false;
+  // --8<-- [start:loadSubPage]
   const sub = await Copc.loadHierarchyPage(s.getter, ptr);
   Object.assign(s.nodes, sub.nodes); // K 와 그 하위 실노드
   Object.assign(s.pages, sub.pages); // 더 깊은 미로드 페이지 포인터
   delete s.pages[key]; // 로드 완료 → 더는 미로드 포인터 아님
+  // --8<-- [end:loadSubPage]
   return true;
 }
 

@@ -211,7 +211,9 @@ export const CopcTileset = {
         openCopc(url),
         api.open(sid, url, {
           colorBy: options.colorBy ?? 'rgb',
+          // --8<-- [start:hideClass]
           hideClassifications: options.hideClassifications ?? [7, 18],
+          // --8<-- [end:hideClass]
         }),
       ]);
       pageSessions.set(sid, session); // 서브페이지 lazy 로드용으로 보관
@@ -221,7 +223,9 @@ export const CopcTileset = {
       const tileset = await Cesium3DTileset.fromUrl(
         'data:application/json;base64,' + btoa(JSON.stringify(tilesetJson)),
       );
+      // --8<-- [start:maxSSE]
       tileset.maximumScreenSpaceError = options.maximumScreenSpaceError ?? 8;
+      // --8<-- [end:maxSSE]
       if (options.pointSize !== undefined) {
         tileset.style = new Cesium3DTileStyle({ pointSize: options.pointSize });
       }

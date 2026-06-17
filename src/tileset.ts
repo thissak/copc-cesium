@@ -26,8 +26,10 @@ function nodeRegionAndError(s: CopcSession, key: string): { region: number[]; ge
   let minH = Math.max(cubeMinZ, s.copc.header.min[2]) * s.zUnit;
   let maxH = Math.min(cubeMinZ + side, s.copc.header.max[2]) * s.zUnit;
   if (maxH <= minH) maxH = minH + 1;
+  // --8<-- [start:geomError]
   const spacingM = s.spacing * s.zUnit;
   return { region: [west, south, east, north, minH, maxH], geomError: spacingM / 2 ** d };
+  // --8<-- [end:geomError]
 }
 
 function childKeys(s: CopcSession, key: string): string[] {
@@ -38,7 +40,9 @@ function childKeys(s: CopcSession, key: string): string[] {
   const z = parts[3];
   const out: string[] = [];
   for (let i = 0; i < 8; i++) {
+    // --8<-- [start:childKeys]
     const ck = `${d + 1}-${x * 2 + (i & 1)}-${y * 2 + ((i >> 1) & 1)}-${z * 2 + ((i >> 2) & 1)}`;
+    // --8<-- [end:childKeys]
     if (s.nodes[ck] || s.pages[ck]) out.push(ck); // 로드된 노드 OR 미로드 서브페이지
   }
   return out;
@@ -61,6 +65,7 @@ function buildNode(s: CopcSession, key: string, contentBase: string): object {
   const children = childKeys(s, key).map((ck) =>
     s.pages[ck] ? pageProxy(s, ck, contentBase) : buildNode(s, ck, contentBase),
   );
+  // --8<-- [start:buildNode]
   return {
     boundingVolume: { region },
     geometricError: geomError,
@@ -68,6 +73,7 @@ function buildNode(s: CopcSession, key: string, contentBase: string): object {
     content: { uri: contentBase + key + '.pnts' },
     children,
   };
+  // --8<-- [end:buildNode]
 }
 
 /** 옥트리(루트 페이지) → tileset.json. content 는 contentBase + 'D-X-Y-Z.pnts'. */

@@ -48,6 +48,11 @@ markdown_extensions:
           class: mermaid
           format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.details
+  # 코드 스니펫 drift 방지: src 의 실제 코드를 빌드 때 끌어와 인용(마커 region).
+  # check_paths → 인용 파일이 사라지면 빌드 실패(파일 rename drift 탐지).
+  - pymdownx.snippets:
+      base_path: ['.']
+      check_paths: true
 
 # 메뉴: 학습 콘텐츠(index/learn/wiki)를 앞, 원본 AI 작업문서를 "참고" 뒤로.
 nav:

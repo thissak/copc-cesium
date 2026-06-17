@@ -60,7 +60,7 @@ flowchart TD
 
 ```ts
 // src/tileset.ts — childKeys()
-const ck = `${d + 1}-${x * 2 + (i & 1)}-${y * 2 + ((i >> 1) & 1)}-${z * 2 + ((i >> 2) & 1)}`;
+--8<-- "src/tileset.ts:childKeys"
 ```
 
 ## 결정적 한 줄 — `geometricError = spacing / 2^깊이`
@@ -68,10 +68,11 @@ const ck = `${d + 1}-${x * 2 + (i & 1)}-${y * 2 + ((i >> 1) & 1)}-${z * 2 + ((i 
 표에서 마지막 줄이 이 시스템의 열쇠입니다. **geometricError**는 "이 타일까지만 그리면 화면에 이만큼
 오차가 남는다"를 Cesium에게 알려주는 숫자입니다.
 
+아래는 `src/tileset.ts`의 `nodeRegionAndError()`에서 빌드가 **실시간으로 인용**한 코드입니다(손으로
+붙여넣지 않음 → 코드가 바뀌면 이 블록도 자동으로 바뀐다):
+
 ```ts
-// src/tileset.ts — nodeRegionAndError()
-const spacingM = s.spacing * s.zUnit;          // 점 간격(미터)
-return { region: [...], geomError: spacingM / 2 ** d };   // 깊이 d 1↑ → 오차 1/2
+--8<-- "src/tileset.ts:geomError"
 ```
 
 옥트리는 깊이가 1 내려갈 때마다 점 간격이 절반으로 촘촘해집니다. 그래서 기하 오차도 깊이마다 절반.

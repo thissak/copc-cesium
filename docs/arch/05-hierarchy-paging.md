@@ -66,10 +66,7 @@ return JSON.stringify(buildSubtree(session, key, contentBase));
 
 ```ts
 // src/copc-core.ts — loadSubPage()
-const sub = await Copc.loadHierarchyPage(s.getter, ptr);
-Object.assign(s.nodes, sub.nodes);   // K와 그 하위 실노드
-Object.assign(s.pages, sub.pages);   // 더 깊은 미로드 페이지 포인터
-delete s.pages[key];                  // 로드 완료 → 더는 미로드 아님
+--8<-- "src/copc-core.ts:loadSubPage"
 ```
 
 이렇게 깊이는 **본 만큼만** 펼쳐집니다. 한 번도 줌인하지 않은 영역의 깊은 계층은 영영 네트워크를 타지 않습니다.

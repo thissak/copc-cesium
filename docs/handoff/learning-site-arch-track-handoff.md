@@ -10,6 +10,8 @@
 - 한글 헤딩 앵커 깨짐 fix — `toc.slugify` 를 유니코드(pymdownx)로 교체.
 - 검증: `mkdocs build --strict` 무경고 · arch 앵커·링크 불일치 0 · 8페이지 mermaid 렌더.
 - 설계 스펙: `docs/superpowers/specs/2026-06-17-architecture-track-design.md`.
+- **drift 방지**: 핵심 6개 스니펫을 `pymdownx.snippets` 마커(`// --8<--`)로 src 실코드 transclude
+  (geometricError·childKeys·buildNode·maxSSE·loadSubPage·hideClass) + CI `docs` 잡(`mkdocs build --strict`).
 
 ## 다음 작업
 - 사용자 **내용 검토** (페이지별 톤·깊이·코드 분량). 검토 cadence = 페이지별.
@@ -23,6 +25,8 @@
   달라, CSS 오버라이드로는 **근사치까지만** 가능 (uncanny valley).
 - 00 의 `①③` 동그라미 숫자 헤딩은 슬러그가 렌더러마다 다르다(파이썬 `github_slugify` 는 `①` 제거,
   pymdownx 는 보존). 해당 3개 교차링크는 섹션 앵커 대신 **페이지 링크**로 두어 양쪽에서 안정.
+- transclude 의 잔여 갭: 인용 파일 rename 은 CI(`check_paths`)가 잡지만, 마커 region 만 삭제하면
+  빈 블록이 될 수 있다(하드 실패 아님). src 의 `// --8<--` 마커는 학습 사이트가 인용 — 지우지 말 것.
 
 ## 핵심 결정 사항
 - 트랙 배치 = **learn(개념)·arch(설계)·wiki(깊은 메커니즘) 공존**, 새 트랙 *추가*(기존 재편 아님).

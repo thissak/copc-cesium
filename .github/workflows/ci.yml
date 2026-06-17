@@ -18,3 +18,14 @@ jobs:
       - run: npm run build # tsc --noEmit + vite (데모 → demo-dist)
       - run: npm run build:lib # tsup 라이브러리 빌드 (dist)
       - run: npm run verify # 헤드리스 정확성(C1) — autzen S3
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install mkdocs-material # pymdown-extensions(snippets·slugs) 포함
+      # 학습 사이트 drift 가드: 깨진 링크·앵커·nav + transclude 한 src 경로(check_paths)까지 검출
+      - run: mkdocs build --strict

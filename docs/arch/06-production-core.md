@@ -81,7 +81,7 @@ LAStools)과 같은 기본값이고, `[]`를 주면 원본 그대로 봅니다.
 
 ```ts
 // src/copc-tileset.ts — 기본값
-hideClassifications: options.hideClassifications ?? [7, 18],  // 디코드에서 빠짐 → 렌더·메모리·카운트 모두에서 제외
+--8<-- "src/copc-tileset.ts:hideClass"
 ```
 
 ## 4. 속성

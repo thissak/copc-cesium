@@ -38,7 +38,7 @@ LOD 로직 대신 우리가 한 일은: ① 01장에서 `geometricError = spacin
 
 ```ts
 // src/copc-tileset.ts — fromUrl()
-tileset.maximumScreenSpaceError = options.maximumScreenSpaceError ?? 8;   // 낮을수록 디테일↑·부하↑
+--8<-- "src/copc-tileset.ts:maxSSE"
 ```
 
 `geometricError`가 정확해야 SSE 판정도 정확합니다. 그래서 타일의 높이 범위를 큐브가 아니라 **실제 데이터 Z
@@ -57,8 +57,7 @@ let maxH = Math.min(cubeMinZ + side, s.copc.header.max[2]) * s.zUnit;
 
 ```ts
 // src/tileset.ts — buildNode()
-return { boundingVolume: { region }, geometricError: geomError, refine: 'ADD',
-         content: { uri: contentBase + key + '.pnts' }, children };
+--8<-- "src/tileset.ts:buildNode"
 ```
 
 ## 거친 LOD 단차를 부드럽게
