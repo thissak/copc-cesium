@@ -1,5 +1,6 @@
 import { Cesium3DTileset, Cesium3DTileStyle, RequestScheduler } from 'cesium';
 import * as Comlink from 'comlink';
+import { Copc } from 'copc';
 import { openCopc, loadSubPage, type CopcSession } from './copc-core';
 import { buildTileset, buildSubtree } from './tileset';
 import type { DecodeApi } from './decode.worker';
@@ -258,6 +259,16 @@ export const CopcTileset = {
       // lockstep 로드하므로 페이지 측 카운트가 양쪽 heap 의 프록시(워커 heap 은 performance.memory 밖).
       (tileset as unknown as { copcNodeCount: () => number }).copcNodeCount = () =>
         Object.keys(pageSessions.get(sid)?.nodes ?? {}).length;
+
+      (tileset as unknown as { attributeRange: (name: string) => Promise<[number, number]> }).attributeRange = async (name) => {
+        const session = pageSessions.get(sid)!;
+        const view = await Copc.loadPointDataView(session.getter, session.copc, session.nodes['0-0-0-0']!);
+        const g = view.getter(name);
+        let lo = Infinity, hi = -Infinity;
+        for (let i = 0; i < view.pointCount; i++) { const v = g(i); if (v < lo) lo = v; if (v > hi) hi = v; }
+        return [lo, hi];
+      };
+
       return tileset;
     } catch (err) {
       releaseSession(sid); // 초기화 실패 시 누적 상태 정리 후 표면화(누수·조용한 실패 방지)
