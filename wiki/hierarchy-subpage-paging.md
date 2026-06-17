@@ -41,7 +41,7 @@ flowchart LR
 ## 비용·주의 (약점)
 
 - **proxy는 한 칸 더**: 서브페이지를 소유한 노드는 부모 트리에선 점 없는 proxy로, 자기 점은 펼쳐진 외부 tileset의 루트에서 그려진다 → 점 중복은 없으나 LOD 단계가 미세하게 한 칸 늘어난다.
-- **노드 누적(미해결)**: 펼친 서브페이지 노드는 세션이 사는 동안 쌓이고 축출되지 않는다(페이지·워커 양쪽). 깊은/장시간 항해 시 메모리 단조 증가 → 상한(LRU)은 측정 후 과제.
+- **노드 메타 누적(경량·미해결)**: 펼친 서브페이지의 노드 *메타데이터*(page·워커 `session.nodes`)는 세션이 사는 동안 쌓이고 축출되지 않는다. 단 **렌더된 점 타일 자체는 Cesium `cacheBytes`로 자동 축출됨**(2026-06-17 실측 `?soak`: 한도 초과 시 `tileUnload` 발동·메모리 plateau, ADR-004) → 무거운 점 데이터는 Cesium 소관이고 남는 건 경량 메타 장부뿐. LRU가 아니라 *우리 장부 정리* 문제(필요 여부는 실 GPU 측정 후).
 - **이중 로드**: 같은 서브페이지를 지오메트리용(페이지)·디코드용(워커)이 각각 한 번 읽는다(경량 range 읽기라 허용).
 - **잘못된/만료 page 키**는 즉시 표면화(throw)하게 막아, 지연된 디코드 실패로 새지 않게 했다.
 
@@ -56,5 +56,6 @@ flowchart LR
 - 워커 서브페이지 병합: `src/decode.worker.ts` (`loadPage`)
 - SW JSON 라우팅: `public/copc-sw.js` (`/__copc-real/.../page/*.json`)
 - 측정(무시되던 서브페이지 규모): autzen 0 · millsite 141 · sofi 111 (`scripts/check-hierarchy.ts`); 깊이 확장 결정 검증 `scripts/check-paging.ts`
+- 메모리 eviction 실측(점 타일 = Cesium `cacheBytes` 축출 / 메타 = 누적): ADR-004(메모리·동시성 Cesium 위임) · `?soak`(`src/main.ts`)
 - copc.js API: `Copc.loadHierarchyPage` → `{nodes, pages}` (pages[key]=`{pageOffset,pageLength}`), 서브페이지 로드는 루트와 동일 호출
 - 커밋 `cef2bd9`(Step 1 페이징) · 리뷰 fix `f8a6094`(잘못된 키 throw)
