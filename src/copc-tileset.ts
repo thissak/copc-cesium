@@ -4,6 +4,7 @@ import { openCopc, loadSubPage, type CopcSession } from './copc-core';
 import { buildTileset, buildSubtree } from './tileset';
 import type { DecodeApi } from './decode.worker';
 import type { ColorBy } from './colors';
+import type { AttributeRequest } from './attributes';
 
 // 공개 API: COPC URL → 변환 없이 LOD 스트리밍되는 Cesium3DTileset.
 // (TIFFImageryProvider 의 fromUrl 패턴. ADR-001)
@@ -32,6 +33,12 @@ export interface CopcTilesetOptions {
    * `[]` 를 주면 전부 표시(원본 그대로).
    */
   hideClassifications?: number[];
+  /**
+   * Cesium 에 노출할 per-point 속성(동적 스타일링·피킹용 batch table).
+   * `undefined`=큐레이션 기본(Classification·Intensity·ReturnNumber·NumberOfReturns),
+   * `'all'`=extra-bytes 포함 전체, `string[]`=명시(없는 차원은 skip+warn). 노출하면 BATCH_ID 추가(+2~4B/점).
+   */
+  attributes?: AttributeRequest;
   /**
    * 콘텐츠 호스트(앱 origin)당 Cesium 동시 요청 상한. 기본 `6`.
    * Cesium 의 호스트당 기본값은 18(HTTP/2 가정) — S3 등 HTTP/1.1 range 소스엔 과해
@@ -214,6 +221,7 @@ export const CopcTileset = {
           // --8<-- [start:hideClass]
           hideClassifications: options.hideClassifications ?? [7, 18],
           // --8<-- [end:hideClass]
+          attributes: options.attributes,
         }),
       ]);
       pageSessions.set(sid, session); // 서브페이지 lazy 로드용으로 보관
