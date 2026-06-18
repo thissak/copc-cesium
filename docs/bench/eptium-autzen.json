@@ -1,0 +1,58 @@
+{
+  "meta": {
+    "dataset": "autzen",
+    "datasetUrl": "https://s3.amazonaws.com/hobu-lidar/autzen-classified.copc.laz",
+    "msse": 32,
+    "secs": 20,
+    "throttle": "none",
+    "timestamp": "2026-06-17T22:28:15.947Z"
+  },
+  "ours": {
+    "label": "ours",
+    "url": "http://localhost:5173/?ds=autzen",
+    "ok": true,
+    "glRenderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+    "msse": 8,
+    "pointsSelected": 61201,
+    "pointsLength": 0,
+    "tilesReady": 1,
+    "tilesTotal": 278,
+    "bsRadius": 1004.2,
+    "ttdMs": 1048,
+    "bytesTotal": 76317,
+    "reqCount": 3,
+    "peakHeapMB": 44.3,
+    "frametimeMs": {
+      "p50": 8.3,
+      "p95": 9.7,
+      "p99": 10.3
+    },
+    "hitchesGt50": 0,
+    "longTaskTotalMs": 0,
+    "fpsFromP50": 120.5
+  },
+  "eptium": {
+    "label": "eptium",
+    "url": "https://viewer.copc.io/?copc=https://s3.amazonaws.com/hobu-lidar/autzen-classified.copc.laz",
+    "ok": true,
+    "glRenderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+    "msse": 32,
+    "pointsSelected": 381256,
+    "pointsLength": 0,
+    "tilesReady": 11,
+    "tilesTotal": 280,
+    "bsRadius": 881.7,
+    "ttdMs": 2795,
+    "bytesTotal": 4345603,
+    "reqCount": 24,
+    "peakHeapMB": 125,
+    "frametimeMs": {
+      "p50": 8.3,
+      "p95": 9.4,
+      "p99": 10.1
+    },
+    "hitchesGt50": 0,
+    "longTaskTotalMs": 0,
+    "fpsFromP50": 120.5
+  }
+}

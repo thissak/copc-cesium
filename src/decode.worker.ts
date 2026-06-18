@@ -41,12 +41,16 @@ const api = {
       attrReq: opts?.attributes,
     });
   },
-  /** 노드(key='D-X-Y-Z') 디코드 → 양자화 pnts (zero-copy transfer). 없는 노드면 null. */
+  /**
+   * 노드(key='D-X-Y-Z') 디코드 → 양자화 pnts (zero-copy transfer).
+   * 빈 노드(0점 — 전부 노이즈로 필터됨)면 `null`(SW 가 404→Cesium 빈 타일, 이슈 #03).
+   * 진짜 누락 노드면 throw(버그 표면화 → 500). 빈 pnts 를 빌드하지 않는다(0점 Model 은 PROCESSING 고착).
+   */
   async decode(sid: string, key: string): Promise<ArrayBuffer | null> {
     const e = sessions.get(sid);
     if (!e) throw new Error(`세션 없음: ${sid}`);
     const lazPerf = await getLazPerf();
-    // 속성 스펙은 차원 목록이 필요 → 첫 디코드의 view 로 확정·캐시.
+    // 속성 스펙은 차원 목록이 필요 → 첫 디코드의 view 로 확정·캐시. (속성충실도 — origin/main)
     // 동시 첫-decode 들이 in-flight 프로브 하나를 공유(중복 디코드 방지), 유효 노드일 때만 프로브.
     if (!e.attrSpecs) {
       const node = e.session.nodes[key];
@@ -64,7 +68,10 @@ const api = {
       }
     }
     const nd = await decodeNode(e.session, key, lazPerf, e.colorBy, e.hideClass, e.attrSpecs);
-    if (!nd) return null;
+    // 이슈 #03: 진짜 누락 노드는 throw(버그 표면화→500), 빈 노드(0점·전부 노이즈)는 null(빈 신호→SW 404).
+    // 빈 pnts 를 빌드하지 않는다(0점 Model 은 PROCESSING 영구 고착).
+    if (!nd) throw new Error(`디코드 노드 없음: ${key}`);
+    if (nd.count === 0) return null;
     const batch = e.attrSpecs && e.attrSpecs.length && nd.attrValues
       ? { specs: e.attrSpecs, values: nd.attrValues }
       : undefined;

@@ -32,7 +32,10 @@
     "build:lib": "tsup",
     "preview": "vite preview",
     "verify": "tsx scripts/verify.ts",
-    "sweep": "tsx scripts/sweep.ts"
+    "sweep": "tsx scripts/sweep.ts",
+    "bench:probe-bundle": "esbuild scripts/bench/probe.ts --bundle --platform=browser --format=iife --global-name=BenchProbe --footer:js=\"window.BenchProbe=BenchProbe;\" --outfile=scripts/bench/probe-bundle.js",
+    "prebench:eptium": "npm run bench:probe-bundle",
+    "bench:eptium": "tsx scripts/compare-eptium.ts"
   },
   "peerDependencies": {
     "cesium": ">=1.120.0"
@@ -47,6 +50,7 @@
   "devDependencies": {
     "@types/proj4": "^2.5.6",
     "cesium": "^1.142.0",
+    "playwright": "^1.48.0",
     "tsup": "^8.5.1",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",

@@ -2,7 +2,7 @@ import type { CopcSession } from './copc-core';
 
 // COPC 옥트리 → 3D Tiles tileset.json. 노드 1개 = 타일 1개.
 // boundingVolume 은 region([W,S,E,N,minH,maxH] 라디안/미터) — ECEF 변환 불필요(proj4만).
-// geometricError = spacing / 2^깊이 (미터). content 는 contentBase/{key}.pnts → SW가 가로채 노드 디코드.
+// geometricError = cube_size/16 / 2^깊이 (미터, ept-tools 관례). content 는 contentBase/{key}.pnts → SW가 가로채 노드 디코드.
 
 const D2R = Math.PI / 180;
 
@@ -27,8 +27,8 @@ function nodeRegionAndError(s: CopcSession, key: string): { region: number[]; ge
   let maxH = Math.min(cubeMinZ + side, s.copc.header.max[2]) * s.zUnit;
   if (maxH <= minH) maxH = minH + 1;
   // --8<-- [start:geomError]
-  const spacingM = s.spacing * s.zUnit;
-  return { region: [west, south, east, north, minH, maxH], geomError: spacingM / 2 ** d };
+  const rootGE = ((s.cube[3] - s.cube[0]) * s.zUnit) / 16; // ept-tools 관례: cube_size/16 (spacing 아님 — spacing=cube/147이라 9.2× 과소refine)
+  return { region: [west, south, east, north, minH, maxH], geomError: rootGE / 2 ** d };
   // --8<-- [end:geomError]
 }
 
@@ -78,10 +78,10 @@ function buildNode(s: CopcSession, key: string, contentBase: string): object {
 
 /** 옥트리(루트 페이지) → tileset.json. content 는 contentBase + 'D-X-Y-Z.pnts'. */
 export function buildTileset(s: CopcSession, contentBase: string): object {
-  const spacingM = s.spacing * s.zUnit;
+  const rootGE = ((s.cube[3] - s.cube[0]) * s.zUnit) / 16;
   return {
     asset: { version: '1.0' },
-    geometricError: spacingM * 2,
+    geometricError: rootGE * 2,
     root: buildNode(s, '0-0-0-0', contentBase),
   };
 }

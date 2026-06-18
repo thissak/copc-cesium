@@ -112,7 +112,9 @@ function installHandler() {
       } else {
         const key = rest.replace('.pnts', '');
         const pnts = await decodeTile(sid, key); // 워커에서 디코드(메인스레드 밖)
-        if (!pnts) return void port?.postMessage({ error: `no node ${key}` });
+        // null = 빈 노드(0점·전부 노이즈) → SW 가 404 → Cesium missingTilePolicy 로 빈 타일(이슈 #03).
+        // 진짜 누락 노드는 worker 가 throw → 아래 catch → {error} → 500.
+        if (!pnts) return void port?.postMessage({ empty: true });
         port?.postMessage(pnts, [pnts]); // zero-copy 로 SW 에 전달
       }
     } catch (err) {
@@ -232,6 +234,13 @@ export const CopcTileset = {
       const tileset = await Cesium3DTileset.fromUrl(
         'data:application/json;base64,' + btoa(JSON.stringify(tilesetJson)),
       );
+      // 빈 노드(전부 노이즈 → 0점)는 SW 가 404 로 응답한다. Cesium 의 missingTilePolicy(빈 타일 정책)로
+      // 404 를 Empty3DTileContent(ready·에러 없음)로 처리 → 0점 pnts 가 Model 로 PROCESSING 에 영구
+      // 고착하던 결함(tilesLoaded/allTilesLoaded 가 영영 안 잡힘)을 막는다(이슈 #03). createContent 를
+      // 주지 않으므로 일반 pnts(200) 경로는 무영향. Cesium 내부(private) 메커니즘 — 버전 결합은 repro-03.ts 가 가드.
+      (tileset as unknown as { _runtimeContentCodec?: unknown })._runtimeContentCodec = {
+        missingTilePolicy: { statusCodes: [404] },
+      };
       // --8<-- [start:maxSSE]
       tileset.maximumScreenSpaceError = options.maximumScreenSpaceError ?? 8;
       // --8<-- [end:maxSSE]

@@ -1,0 +1,58 @@
+{
+  "meta": {
+    "dataset": "millsite",
+    "datasetUrl": "https://s3.amazonaws.com/hobu-lidar/millsite.copc.laz",
+    "msse": 8,
+    "secs": 5,
+    "throttle": "none",
+    "timestamp": "2026-06-17T23:12:15.271Z"
+  },
+  "ours": {
+    "label": "ours",
+    "url": "http://localhost:5173/?ds=millsite",
+    "ok": true,
+    "glRenderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+    "msse": 8,
+    "pointsSelected": 728448,
+    "pointsLength": 0,
+    "tilesReady": 79,
+    "tilesTotal": 4522,
+    "bsRadius": 4818.3,
+    "ttdMs": 25199,
+    "bytesTotal": 221429,
+    "reqCount": 18,
+    "peakHeapMB": 73.3,
+    "frametimeMs": {
+      "p50": 8.3,
+      "p95": 9.2,
+      "p99": 9.5
+    },
+    "hitchesGt50": 0,
+    "longTaskTotalMs": 0,
+    "fpsFromP50": 120.5
+  },
+  "eptium": {
+    "label": "eptium",
+    "url": "https://viewer.copc.io/?copc=https://s3.amazonaws.com/hobu-lidar/millsite.copc.laz",
+    "ok": true,
+    "glRenderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+    "msse": 8,
+    "pointsSelected": 1486522,
+    "pointsLength": 0,
+    "tilesReady": 109,
+    "tilesTotal": 3590,
+    "bsRadius": 4692,
+    "ttdMs": 7327,
+    "bytesTotal": 16688295,
+    "reqCount": 116,
+    "peakHeapMB": 120.4,
+    "frametimeMs": {
+      "p50": 8.3,
+      "p95": 10.1,
+      "p99": 14
+    },
+    "hitchesGt50": 0,
+    "longTaskTotalMs": 0,
+    "fpsFromP50": 120.5
+  }
+}

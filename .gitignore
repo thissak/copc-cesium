@@ -16,6 +16,9 @@ data/
 # docsite (mkdocs) 빌드 산출물
 site/
 
+# 벤치 프로브 빌드 산출물 (probe.ts → esbuild IIFE)
+scripts/bench/probe-bundle.js
+
 # Playwright MCP 테스트 산출물 + 탐색 스크린샷
 .playwright-mcp/
 copc-phaseA-demo.jpeg

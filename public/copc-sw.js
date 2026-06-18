@@ -63,6 +63,10 @@ self.addEventListener('fetch', (e) => {
               setTimeout(() => reject(new Error('page handler timeout (40s)')), 40000),
             ),
           ]);
+          // 빈 노드(0점·전부 노이즈) → 404. Cesium missingTilePolicy 가 Empty3DTileContent(ready)로 처리(이슈 #03).
+          if (data && data.empty) {
+            return new Response(null, { status: 404 });
+          }
           // 페이지 요청(page/{key}.json) → child tileset JSON, 그 외 → pnts 바이너리
           if (data && data.json) {
             return new Response(data.json, { status: 200, headers: { 'Content-Type': 'application/json' } });

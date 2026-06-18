@@ -2,7 +2,7 @@
 slug: decode-in-worker
 title: 디코드는 어디서 도는가 — Web Worker (메인스레드 밖)
 status: active
-last_verified: 2026-06-17
+last_verified: 2026-06-18
 owner: copc-cesium
 projects: [CopcCesiumLab]
 ---
@@ -55,7 +55,7 @@ flowchart LR
 
 - **메인스레드 부담 격감**: 이제 메인스레드는 디코드 루프가 아니라 **메시지 왕복 + zero-copy transfer**만. 렌더 프레임 경합이 크게 줄었다.
 - **워커는 Cesium을 import하지 않는다**(번들 경량 유지) → pnts 빌드는 Cesium 의존 없는 **양자화 빌더**로 대체됐다.
-- **워커 1개 = 내부 직렬**: 동시에 여러 노드가 들어오면 한 워커 안에서 차례로 처리. 워커 풀 확장은 별도 STOP 사안.
+- **워커 1개 = 내부 직렬, 그러나 풀 확장은 측정상 무효**: 동시에 여러 노드가 들어오면 한 워커 안에서 차례로 처리한다. 손수 라운드로빈 워커 풀을 만들어 A/B(풀 1 vs N, 동일 뷰) 측정해 보니 **동치** — 즉 deep-load 병목은 디코드 스레드가 아니라 **네트워크 IO**(HTTP/1.1 클라우드 호스트당 동시연결 한도 — ADR-004 `maxRequestsPerServer` throttle 영역)다. 풀은 기각·revert. (이슈 #02)
 - **laz-perf 빌드 주의**: 기본이 node 빌드라, 워커에선 web 빌드 + wasm URL 주입이 필요(번들러 문맥).
 
 연결: [[service-worker-tile-interception]] · [[copc-octree-lod-streaming]]
