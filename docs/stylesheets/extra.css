@@ -1,10 +1,27 @@
+/* Pretendard — 한글 본문 가독성(맥/윈 시스템 폰트보다 균일). dynamic-subset = 쓰는 글자만 로드 */
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css");
+
 /* ===================================================================
    글 형식: SimLab/mini-sim 공부사이트(GitHub 스타일) 타이포 매칭
-   - 본문 16px / line-height 1.65
+   + "문서(PDF)처럼 깔끔한 레이아웃" 레이어 (표·코드·콜아웃·구분선)
+   - 본문 16px / line-height 1.65 / Pretendard
    - 제목 위계: h1 1.9em(+하단보더) · h2 1.45em(+옅은 보더) · h3 1.2em, weight 600
-   - 코드 모노 0.85em
+   - 코드 모노 0.85em, 박스(하이라인 보더+라운드)
    MkDocs Material 위에 얹는 오버라이드 (.md-typeset = 본문 컨테이너)
    =================================================================== */
+
+/* 중립 회색 토큰 — 라이트는 명시값(PDF 톤), 다크는 Material 변수로 자동 적응 */
+:root {
+  --md-text-font: "Pretendard Variable", Pretendard;
+  --doc-surface: #f6f8fa;     /* 코드/콜아웃 박스 배경 */
+  --doc-border: #d0d7de;      /* 하이라인(표·박스·구분선) */
+  --doc-header-bg: #f6f8fa;   /* 표 헤더 배경 */
+}
+[data-md-color-scheme="slate"] {
+  --doc-surface: var(--md-code-bg-color);
+  --doc-border: var(--md-default-fg-color--lightest);
+  --doc-header-bg: rgba(255, 255, 255, 0.04);
+}
 
 /* 본문 가독성 */
 .md-typeset {
@@ -18,7 +35,7 @@
   margin-right: auto;
 }
 
-/* 제목 위계 — weight 600, 위 여백 넉넉히 */
+/* 제목 위계 — weight 600, 위 여백 넉넉히(섹션 호흡) */
 .md-typeset h1,
 .md-typeset h2,
 .md-typeset h3,
@@ -37,10 +54,12 @@
   padding-bottom: 0.3em;
 }
 
+/* h2 = 문서의 "절" — 위 여백 더 주고 전폭 하이라인으로 페이지처럼 끊어 읽기 */
 .md-typeset h2 {
   font-size: 1.45em;
-  border-bottom: 1px solid var(--md-default-fg-color--lightest);
-  padding-bottom: 0.25em;
+  margin-top: 2.4em;
+  border-bottom: 1px solid var(--doc-border);
+  padding-bottom: 0.3em;
 }
 
 .md-typeset h3 {
@@ -63,7 +82,49 @@
   font-size: 0.85em;
 }
 
-/* 리드 문단(첫 blockquote) — mini-sim 의 도입 한 줄 느낌 */
-.md-typeset > blockquote:first-of-type {
+/* 코드 블록 — 옅은 회색 박스 + 하이라인 보더 + 라운드 (PDF 코드 박스 톤) */
+.md-typeset pre > code {
+  border: 1px solid var(--doc-border);
+  border-radius: 6px;
+  background-color: var(--doc-surface);
+}
+
+/* 표 — 전체 그리드(셀마다 보더) + 회색 헤더 + 넉넉한 패딩 (PDF 표 톤) */
+.md-typeset table:not([class]) {
+  border: 1px solid var(--doc-border);
+  border-radius: 6px;
+  font-size: 0.85em;
+}
+.md-typeset table:not([class]) th,
+.md-typeset table:not([class]) td {
+  border: 1px solid var(--doc-border);
+  padding: 0.5em 0.9em;
+}
+.md-typeset table:not([class]) th {
+  background-color: var(--doc-header-bg);
+  font-weight: 600;
+  color: var(--md-default-fg-color);
+}
+
+/* 콜아웃(인용구) — 옅은 회색 박스 + 좌측 액센트 (PDF 안내 박스 톤) */
+.md-typeset blockquote {
+  border-left: 0.2rem solid var(--doc-border);
+  background-color: var(--doc-surface);
+  border-radius: 0 6px 6px 0;
+  padding: 0.7em 1em;
   color: var(--md-default-fg-color--light);
+}
+
+/* 리드 문단(첫 blockquote)은 박스 없이 도입 한 줄 느낌으로 환원 */
+.md-typeset > blockquote:first-of-type {
+  border-left: 0;
+  background-color: transparent;
+  padding-left: 0;
+  color: var(--md-default-fg-color--light);
+}
+
+/* 구분선(---) — 절 사이를 끊는 깨끗한 하이라인 + 넉넉한 여백 */
+.md-typeset hr {
+  border-bottom: 1px solid var(--doc-border);
+  margin: 2.4em 0;
 }

@@ -21,7 +21,8 @@ theme:
     - content.code.copy
 
 extra_css:
-  - stylesheets/extra.css
+  # ?v= 캐시버스터 — Cloudflare가 .css를 4h 캐시하므로 CSS 변경 시 이 값을 갱신해 즉시 반영
+  - stylesheets/extra.css?v=20260618
 
 plugins:
   - search:
@@ -93,6 +94,7 @@ nav:
           - adr/002-service-worker-tile-interception.md
           - adr/003-hierarchy-subpage-paging.md
           - adr/004-delegate-memory-concurrency-to-cesium.md
+          - adr/005-attribute-fidelity-via-pnts-batch-table.md
       - 핸드오프:
           - handoff/phase2-streaming-handoff.md
 
