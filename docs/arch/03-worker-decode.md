@@ -89,6 +89,9 @@ return Comlink.transfer(pnts, [pnts]);   // 복사 0 — 버퍼를 그대로 넘
 > "디코드는 SW도, 메인스레드도 아닌 Web Worker에서 돈다"는 이 분리는 위키에 더 깊게 정리돼 있습니다 →
 > [decode-in-worker](../wiki/decode-in-worker.md).
 
+위 그림의 `Range GET`은 노드마다 한 번이지만, 깊은 로드에선 인접 노드를 **한 번에** 묶어 왕복 수를
+줄입니다(디코드 경로는 그대로) → [07. range coalescing](07-range-coalescing.md).
+
 색을 어떻게 칠하는지(`colorBy`)는 [06장의 속성 기둥](06-production-core.md#4-속성)에서 다룹니다.
 
 ---

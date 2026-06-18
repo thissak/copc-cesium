@@ -77,10 +77,12 @@ nav:
           - arch/04-lod-delegation.md
           - arch/05-hierarchy-paging.md
           - arch/06-production-core.md
+          - arch/07-range-coalescing.md
       - 위키:
           - wiki/index.md
           - wiki/decode-in-worker.md
           - wiki/hierarchy-subpage-paging.md
+          - wiki/range-coalescing.md
   - "참고 (원본 문서)":
       - 문제정의: PROBLEM.md
       - 전략: STRATEGY.md
@@ -95,6 +97,7 @@ nav:
           - adr/003-hierarchy-subpage-paging.md
           - adr/004-delegate-memory-concurrency-to-cesium.md
           - adr/005-attribute-fidelity-via-pnts-batch-table.md
+          - adr/006-range-coalescing.md
       - 핸드오프:
           - handoff/phase2-streaming-handoff.md
 

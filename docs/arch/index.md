@@ -35,6 +35,7 @@ viewer.scene.primitives.add(tileset);             // 끝. 변환 없이 LOD 스�
 | 04 | [LOD 위임 — Cesium에게 맡긴다](04-lod-delegation.md) | "언제 어느 노드"를 손코딩하지 않는 법 |
 | 05 | [hierarchy 페이징 — 본 만큼만 깊이](05-hierarchy-paging.md) | 대용량 옥트리를 lazy 확장 |
 | 06 | [상용 코어 — 4기둥](06-production-core.md) | 생명주기·복원력·정확성·속성 |
+| 07 | [적게 요청하기 — range coalescing](07-range-coalescing.md) | 인접 노드를 한 번에 받아 deep-load를 상용 동급으로 |
 
 ## 큰 그림 한 장
 

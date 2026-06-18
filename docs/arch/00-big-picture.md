@@ -106,6 +106,9 @@ const res = await fetchImpl(url, {
 
 받아온 바이트를 laz-perf(WASM)로 압축 해제하고 좌표를 지구 좌표로 바꿉니다 → [03. 워커 디코드](03-worker-decode.md).
 
+> 화면을 깊게 채울 땐 이 per-node `Range GET`이 수십 번이 됩니다. 그 **요청 개수**를 줄이는 게
+> deep-load 속도의 레버입니다 → [07. range coalescing](07-range-coalescing.md).
+
 ### ⑤ pnts 를 zero-copy 로 돌려준다
 
 디코드 결과는 `.pnts`(3D Tiles 점군 포맷) 바이너리입니다. 점이 많으면 이 버퍼가 크기 때문에,
@@ -136,6 +139,7 @@ return new Response(data, { status: 200, headers: { 'Content-Type': 'application
 - `sid` 와 세션 생명주기(여러 tileset·정리) → [06. 상용 코어](06-production-core.md)
 - `page/{key}.json` 갈래(서브페이지) → [05. hierarchy 페이징](05-hierarchy-paging.md)
 - 옥트리 노드가 어떻게 3D Tiles 타일이 되나(`key`·geometricError) → [01. 공개 API와 동형성](01-public-api-and-isomorphism.md)
+- ④의 노드별 `Range GET`이 깊은 로드에서 수십 번이 되는 문제(요청 묶기) → [07. range coalescing](07-range-coalescing.md)
 
 ---
 
