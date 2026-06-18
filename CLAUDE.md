@@ -12,7 +12,10 @@ npm run build    # tsc + 프로덕션 번들
 npm run verify   # 헤드리스 정확성·timings 검증 (Node)
 npm run sweep    # 데이터축 성능 스윕 (Node)
 npm run preview  # 빌드 결과 미리보기
+npm run release  # .env(NPM_TOKEN) 로드 → build:lib → npm publish
 ```
+
+npm 인증 토큰은 `.env`의 `NPM_TOKEN`(gitignore)에만 두고 `.npmrc`가 `${NPM_TOKEN}`로 참조한다(시크릿 미커밋).
 
 브라우저: 기본 = `CopcTileset.fromUrl` 데모 · `?bench`(fps) · `?spike`~`?spike5`(스파이크) · `?naive`(Phase1 baseline).
 공개 API: `src/copc-tileset.ts` (`CopcTileset.fromUrl(url, opts)`).
