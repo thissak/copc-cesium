@@ -45,7 +45,7 @@ Cesium이 노드 N개를 요청하면 보통 range GET N번이 나간다. 하지
 - **S3는 멀티-range GET을 안 준다**: 한 요청에 여러 구간을 못 받는다(주면 200+전체 객체). 그래서 병합은 반드시 **클라이언트에서 연속 단일 구간**으로 만들어 보내야 한다 — 흩어진 구간을 한 요청에 담는 길은 없다.
 - **geometry 세션엔 미적용**: 페이지(서브페이지 메타) 읽기는 가볍고 패턴이 달라 coalesce를 안 건다. 워커 디코드 세션에만 적용. 노브를 끄면 기존 per-node 동작으로 폴백.
 
-연결: [[decode-in-worker]] · [[hierarchy-subpage-paging]] · [[service-worker-tile-interception]]
+연결: [[coalescing-inflight-race]] · [[decode-in-worker]] · [[hierarchy-subpage-paging]] · [[service-worker-tile-interception]]
 
 ## 참고 (RAW 인용)
 

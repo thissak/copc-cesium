@@ -98,6 +98,7 @@ point-data range 요청을 가로채 coalesced run에서 서빙:
 **(+)** `coalescing=false` 폴백 = per-node 동작 동일 (coalescing이 getter decorator라 분리 명확).  
 **(−)** region 캐시 메모리 일시 증가(+40MB 피크, 64MB 상한). 장시간 항해 soak 측정은 미완 — 기준 5(region 캐시 상한 준수) plateau 확인 필요.  
 **(−)** 비연속 깊은 노드(레벨>3)는 이득 작을 수 있음 (millsite에서는 비가시 레벨이라 미측정).
+**(−→fixed, 이슈 #04)** in-flight 공유에 잠복 레이스가 있었다 — `inflight` 가 `run.start` 로만 키잉돼, 서브페이지 lazy 로드로 run 경계가 커지면(같은 start, 더 큰 end) 진행 중인 옛(작은) region 을 새 run offset 으로 슬라이스 → 빈 바이트 → laz-perf 폭증. 무거운 부하(sofi msse=4)에서 발견·수정: in-flight 정체성을 fetch 한 실제 `{start,end,bytes}` 로 고정하고 그 기준 슬라이스 + 커버리지 미달 시 `base` 폴백(Arrow `ReadRangeCache` 패턴). 교훈: **mutable grouping(run)이 in-flight 결과의 슬라이스를 정하게 두지 말 것.** ([이슈 #04](../issues/04-lazperf-wasm-2gb-ceiling.md) · `coalescing-inflight-race` 위키)
 
 ## ADR-004 · 이슈 #03 와의 관계
 

@@ -64,13 +64,14 @@
   - [x] **렌더 파이프라인 병목 아님 확정** — `?perf` 3중 격리 + rAF 카운터로 30fps=환경 throttle(저전원·swiftshader) 판명, 추측 최적화 0.
   - [x] **지역단위 헤드리스 검증 (fema_pr 980MB 항공·cahokia 8.9GB MLS)** — georef 일치(푸에르토리코·일리노이), **노드 메타 누적 갭=누수 아님 확정**(Cahokia 90s soak `nodes` 2173→14352 **plateau**·heap~90MB/cesiumMB 12MB/tilesReady 58 plateau), eviction(cache=4MB→`unloads 0→7`), 회귀 0(verify·tsc). Cahokia 빈 영역=MLS 회랑 커버 본질(결함 아님). 기준 `.claude-criteria.md`. **남음(C4)**: 비-스로틀 실 GPU fps headline(`?perf=cahokia` 기본 캐시·전원연결)
 
-### Eptium 경쟁지형 벤치 + LOD 보정 + IO 최적화 (2026-06-18, #01·#03 머지(PR#1) · #02 PR#2)
+### Eptium 경쟁지형 벤치 + LOD 보정 + IO 최적화 (2026-06-18, #01·#03 머지(PR#1) · #02 PR#2 · #04 fix/04)
 - [x] **Eptium 벤치 오라클** — Playwright(실 GPU)+CDP로 우리 vs `viewer.copc.io` 대칭 측정(`npm run bench:eptium -- --ds millsite`). `docs/bench/FINDINGS.md`. handoff: `docs/handoff/eptium-bench-handoff.md`.
 - [x] **[#01] under-refine 수정 — geometricError `spacing`→`cube_size/16`(ept-tools).** 동일 msse=8에서 루트 1타일(40k)→79타일(728k), autzen 61k→1.46M. (`src/tileset.ts`)
 - [x] **[#03] 빈 노드(0점) Model PROCESSING 영구 고착 → `tilesLoaded` 무한대기 수정 — Cesium `missingTilePolicy`(404→`Empty3DTileContent`).** ([[no-silent-failures]] 정합) (`decode.worker.ts`+`copc-tileset.ts`+`copc-sw.js`, 이슈 #03)
 - [x] **벤치 settle 메트릭 수정** — `numberOfTilesProcessing===0` 게이트가 SW-backed 타일셋서 영구 고착(거짓 25s) → `pending===0 && tilesReady 안정`으로 교체(#03이 근본원인). (`scripts/compare-eptium.ts`)
 - [x] **매칭 점수 공정 비교 — 북극성 베이스라인(millsite, 실 GPU).** 렌더 점수 ±10% 매칭(ours msse=8 712k ↔ eptium msse=14 757k): 부드러움 동률(p50 8.3ms·120fps·hitch 0), 메모리 ours ~2× 우위(73.6 vs 144MB), 로드는 #02 해결로 Eptium 동급. (`docs/bench/FINDINGS.md` §v4)
 - [x] **[#02] deep-load 속도 — range coalescing 으로 round-trip 61→6·settle 13.9s→4.8s(Eptium 동급).** 진단: deep-load 시간 ~99%가 per-node range TTFB(HTTP/1.1 S3 ~6연결 천장, 디코드 아님). 레버=round-trip 수 → 인접 노드 point-data를 연속 1 range로 병합·캐시(`createCoalescingGetter` two-cap + region-LRU, decode 경로 무변경). 골든파일 byte-identical·pointsSelected 712,458 불변. ([ADR-006](adr/006-range-coalescing.md), `src/copc-core.ts`, 이슈 #02)
+- [x] **[#04] coalescing in-flight/rebuild 레이스 수정 — 잘린 슬라이스→laz-perf WASM 폭증(#02 잠복 회귀).** 무거운 sofi(1.9GB) msse=4서 발견: in-flight dedup이 `run.start`만 키잉 → 서브페이지 로드로 run 확장 시 옛 작은 region을 새 offset으로 슬라이스 → 빈 바이트→laz-perf 1.87GB alloc→abort. 수정(Arrow `ReadRangeCache` 패턴): in-flight를 fetch 정체성 `{start,end,bytes}`로 슬라이스 + 커버리지 미달 시 `base` 폴백. RED→GREEN(heap 1877MB→7MB 고정·완주), 이득 보존(round-trip 10 불변), 회귀 0(신규 Task7 레이스 단위·골든파일·build·verify·repro-03). ([이슈 #04](issues/04-lazperf-wasm-2gb-ceiling.md), `src/copc-core.ts` `createCoalescingGetter`, [[coalescing-inflight-race]] 위키)
 
 ## Phase 3 — 평가 / 입상 판정 🔒
 대용량 실데이터에서 60fps / 메모리 / UX 측정 → 입상 가능성 데이터로 판정.

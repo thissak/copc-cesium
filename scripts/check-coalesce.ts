@@ -157,6 +157,42 @@ assert(rangeTimeoutMs(0, 1 * MB, 8000) === 8000, 'timeout: 1MB → max(8000, 200
 assert(rangeTimeoutMs(0, 5 * MB, 8000) === 10000, 'timeout: 5MB → 10s');
 console.log('Task 4 passed');
 
+// --- Task 7 (#04): rebuild-중-inflight 레이스 — run 이 커져도 잘린/빈 바이트 안 줌 ---
+// 버그: inflight 가 run.start 로만 dedup → 서브페이지 로드로 run.end 가 커지면(같은 start) 옛(작은)
+// region 을 새 run offset 으로 슬라이스 → 범위초과 → 빈 바이트 → laz-perf garbage 디코드(WASM 폭증).
+// 수정(C+B): region 을 fetch 정체성([start,end])으로 슬라이스 + 커버리지 미달 시 base 직접 폴백.
+{
+  const file = new Uint8Array(1 * MB);
+  for (let i = 0; i < file.length; i++) file[i] = i & 0xff;
+  let baseCalls = 0;
+  let releaseFirst!: () => void;
+  const firstGate = new Promise<void>((r) => { releaseFirst = r; });
+  const base: RangeGetter = async (begin, end) => {
+    const callNo = ++baseCalls;
+    if (callNo === 1) await firstGate; // 첫 fetch 를 hang → rebuild 레이스 창 확보
+    return file.slice(begin, end);
+  };
+  // 처음 노드 1개 → run [0,1000). 이후 인접 노드 추가 → rebuild 시 run 이 [0,2000) 으로 확장(같은 start=0).
+  let nodes: ByteRange[] = [{ off: 0, len: 1000 }];
+  const g = createCoalescingGetter(base, () => nodes, { maxGap: 256 * KB, maxBytes: 8 * MB, cacheBytes: 64 * MB });
+
+  const pA = g(0, 1000); // 노드 A → run [0,1000) fetch 시작(첫 호출, hang). await p 에서 suspend.
+  nodes = [{ off: 0, len: 1000 }, { off: 1000, len: 1000 }]; // "rebuild" 유발(노드 수 변함)
+  const pB = g(1000, 2000); // 노드 B → rebuild → run [0,2000). inflight.get(0)=pA([0,1000)). 버그면 빈 슬라이스.
+  releaseFirst(); // 첫 fetch 해제 → 둘 다 resolve
+
+  const a = await pA;
+  const b = await pB;
+  const expectA = file.slice(0, 1000);
+  const expectB = file.slice(1000, 2000);
+  assert(a.length === 1000 && a.every((v, i) => v === expectA[i]), '#04: 레이스 — 노드 A byte-identical');
+  assert(
+    b.length === 1000 && b.every((v, i) => v === expectB[i]),
+    '#04: 레이스 — run 확장돼도 노드 B 빈/잘린 바이트 0(byte-identical)',
+  );
+}
+console.log('Task 7 passed');
+
 // --- Task 6: 골든파일(실 S3, COALESCE_NET=1 일 때만) ---
 if (process.env.COALESCE_NET === '1') {
   const NET_URL = 'https://s3.amazonaws.com/hobu-lidar/millsite.copc.laz';

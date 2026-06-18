@@ -12,6 +12,7 @@
 | [[decode-in-worker]] | 디코드는 SW도 메인스레드도 아닌 Web Worker에서 돈다 | active |
 | [[hierarchy-subpage-paging]] | 깊은 옥트리를 외부 tileset proxy로 본 만큼만 lazy 확장 | active |
 | [[range-coalescing]] | 인접 노드 range를 1회 GET으로 묶어 round-trip을 줄인다 (deep-load 레버) | active |
+| [[coalescing-inflight-race]] | 진행 중 묶음은 "받아온 범위"로 잘라야 한다 (in-flight/rebuild 레이스·디버깅 교훈) | active |
 
 ## 작성 예정 (stub — 의도된 미작성)
 

@@ -382,7 +382,9 @@ export interface CoalesceOpts {
  */
 export function createCoalescingGetter(base: RangeGetter, getNodes: () => ByteRange[], opts: CoalesceOpts): RangeGetter {
   const cache = createRegionCache(opts.cacheBytes);
-  const inflight = new Map<number, Promise<Uint8Array>>(); // run.start → region bytes
+  // in-flight 는 run.start 로 dedup 하되, promise 는 fetch 한 region 의 실제 [start,end) 를 함께 resolve.
+  // (이슈 #04) rebuild 로 run.end 가 커져도 슬라이스는 fetch 정체성 기준 → Arrow ReadRangeCache 패턴.
+  const inflight = new Map<number, Promise<CachedRegion>>(); // run.start → 가져온 region {start,end,bytes}
   let lastCount = -1;
   let offToLen = new Map<number, number>();
   let offToRun = new Map<number, Run>();
@@ -412,21 +414,27 @@ export function createCoalescingGetter(base: RangeGetter, getNodes: () => ByteRa
     if (hit) return hit;
     let p = inflight.get(run.start);
     if (!p) {
-      p = base(run.start, run.end);
-      inflight.set(run.start, p);
+      const rStart = run.start, rEnd = run.end; // 이 fetch 의 불변 정체성 스냅샷(rebuild 로 run 이 바뀌어도 고정)
+      p = base(rStart, rEnd).then((bytes) => ({ start: rStart, end: rEnd, bytes }));
+      inflight.set(rStart, p);
       p.then(
-        (b) => {
+        (region) => {
           try {
-            cache.insert(run.start, run.end, b);
+            cache.insert(region.start, region.end, region.bytes);
           } catch (e) {
             console.warn('[copc] region 캐시 insert 실패:', e); // 조용한 실패 방지(표면화)
           }
         },
         () => {}, // base() 거부는 consumer 가 await p 로 처리 — 여기선 unhandled 경고만 억제
-      ).finally(() => inflight.delete(run.start));
+      ).finally(() => inflight.delete(rStart));
     }
-    const region = await p; // 공유 region bytes
-    return region.slice(begin - run.start, end - run.start); // 복사본
+    const region = await p; // { start, end, bytes } — fetch 한 실제 정체성
+    // (이슈 #04) 슬라이스는 mutable run 이 아니라 fetch 한 region 의 [start,end) 기준(Arrow Contains→Slice).
+    // rebuild 로 run.end 가 커졌는데 in-flight 가 옛(작은) region 이면 커버리지 미달 → 직접 fetch 폴백(정확성 우선).
+    if (region.start <= begin && region.end >= end) {
+      return region.bytes.slice(begin - region.start, end - region.start); // 복사본
+    }
+    return base(begin, end); // 레이스: in-flight region 이 이 노드를 안 덮음 → 직접 정확 fetch
   };
 }
 

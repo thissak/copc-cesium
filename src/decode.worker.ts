@@ -28,7 +28,8 @@ type Entry = {
 const sessions = new Map<string, Entry>(); // sid → 디코드 세션 (다중 tileset)
 
 // 진단(이슈 #02): per-decode 타이밍 수집(경량 performance.now). resource timing 버퍼는 다수 range 요청용 확대.
-const decodeProfile: Array<{ key: string; decodeMs: number; buildMs: number; n: number }> = [];
+// 이슈 #04: heapMB(laz-perf WASM heap 현재 크기)·nodePts(raw 노드 점수) 추가 — 2GB abort 궤적 측정용.
+const decodeProfile: Array<{ key: string; decodeMs: number; buildMs: number; n: number; heapMB: number; nodePts: number }> = [];
 try {
   (performance as { setResourceTimingBufferSize?: (n: number) => void }).setResourceTimingBufferSize?.(2000);
 } catch {
@@ -87,8 +88,16 @@ const api = {
       : undefined;
     const pnts = buildQuantizedPnts(nd.lonLatH, nd.colors!, batch);
     // 진단(#02): decodeMs=fetch(S3 range)+laz-perf 디코드+reproject, buildMs=pnts 빌드. 배열 상한(누수 방지).
+    // #04: heapMB=laz-perf WASM heap 현재 바이트(emscripten 미수축 → 단조 성장 여부 측정), nodePts=raw 노드 점수.
     if (decodeProfile.length < 4096)
-      decodeProfile.push({ key, decodeMs: +(tDecEnd - tDec).toFixed(1), buildMs: +(performance.now() - tDecEnd).toFixed(1), n: nd.count });
+      decodeProfile.push({
+        key,
+        decodeMs: +(tDecEnd - tDec).toFixed(1),
+        buildMs: +(performance.now() - tDecEnd).toFixed(1),
+        n: nd.count,
+        heapMB: +((lazPerf as unknown as { HEAPU8: Uint8Array }).HEAPU8.byteLength / 1e6).toFixed(1),
+        nodePts: e.session.nodes[key]?.pointCount ?? 0,
+      });
     return Comlink.transfer(pnts, [pnts]);
   },
   /** 서브페이지를 워커 세션에 병합 (페이징 — 후속 그 노드 .pnts 디코드 가능하게). */
@@ -103,7 +112,7 @@ const api = {
   },
   /** 진단(이슈 #02): per-decode 타이밍 + 워커가 낸 S3 range fetch resource timing(개수·지속·시작시각). */
   getProfile(): {
-    decodes: Array<{ key: string; decodeMs: number; buildMs: number; n: number }>;
+    decodes: Array<{ key: string; decodeMs: number; buildMs: number; n: number; heapMB: number; nodePts: number }>;
     resTiming: Array<{ start: number; dur: number; size: number }>;
   } {
     const all = ((performance as { getEntriesByType?: (t: string) => unknown[] }).getEntriesByType?.('resource') ??

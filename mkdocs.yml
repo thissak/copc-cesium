@@ -83,6 +83,7 @@ nav:
           - wiki/decode-in-worker.md
           - wiki/hierarchy-subpage-paging.md
           - wiki/range-coalescing.md
+          - wiki/coalescing-inflight-race.md
   - "참고 (원본 문서)":
       - 문제정의: PROBLEM.md
       - 전략: STRATEGY.md
