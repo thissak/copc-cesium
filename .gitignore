@@ -33,3 +33,6 @@ copc-phaseA-demo.jpeg
 round1-*.png
 cahokia-*.png
 smoke-*.png
+
+# 결과보고서 초안 — premature deliverable, 로컬 보존만. T1 정식 착수 시 다듬어 커밋
+docs/결과보고서.md
