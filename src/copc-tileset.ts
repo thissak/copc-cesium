@@ -1,7 +1,7 @@
 import { Cesium3DTileset, Cesium3DTileStyle, RequestScheduler } from 'cesium';
 import * as Comlink from 'comlink';
 import { Copc } from 'copc';
-import { openCopc, loadSubPage, type CopcSession } from './copc-core';
+import { openCopc, loadSubPage, type CopcSession, type CoalesceOpts } from './copc-core';
 import { buildTileset, buildSubtree } from './tileset';
 import type { DecodeApi } from './decode.worker';
 import type { ColorBy } from './colors';
@@ -50,6 +50,12 @@ export interface CopcTilesetOptions {
    * HTTP/2 CDN(CloudFront 등) 뒤라면 더 높여도 된다. `0` 이하면 설정하지 않는다(Cesium 기본 유지).
    */
   maxRequestsPerServer?: number;
+  /** range coalescing: 인접 노드 point-data 를 연속 range 로 병합(이슈 #02). gap 상한(바이트). 기본 256KB. `0` 이하면 off. */
+  coalesceMaxGap?: number;
+  /** coalescing run 당 최대 병합 크기(바이트). 기본 8MB. */
+  coalesceMaxBytes?: number;
+  /** coalescing region 캐시 총바이트 상한. 기본 64MB. */
+  coalesceCacheBytes?: number;
   /**
    * COPC 콘텐츠를 가로채는 서비스워커 URL. 기본 `/copc-sw.js`.
    * SW 는 콘텐츠 요청(`/__copc-real/...`)을 덮는 scope 에 서빙돼야 한다(기본 root).
@@ -217,6 +223,15 @@ export const CopcTileset = {
       // 디코드 세션(laz-perf 포함)은 워커가 보관, 지오메트리(tileset.json)용 세션은 페이지에서.
       // 페이지 openCopc 는 헤더+옥트리만(점 디코드·WASM 불필요) → 경량. 둘은 병렬로 연다.
       const api = getWorkerApi();
+      const gap = options.coalesceMaxGap ?? 256 * 1024;
+      const coalesce: CoalesceOpts | undefined =
+        gap > 0
+          ? {
+              maxGap: gap,
+              maxBytes: options.coalesceMaxBytes ?? 8 * 1024 * 1024,
+              cacheBytes: options.coalesceCacheBytes ?? 64 * 1024 * 1024,
+            }
+          : undefined;
       const [session] = await Promise.all([
         openCopc(url),
         api.open(sid, url, {
@@ -225,6 +240,7 @@ export const CopcTileset = {
           hideClassifications: options.hideClassifications ?? [7, 18],
           // --8<-- [end:hideClass]
           attributes: options.attributes,
+          coalesce,
         }),
       ]);
       pageSessions.set(sid, session); // 서브페이지 lazy 로드용으로 보관
@@ -268,6 +284,10 @@ export const CopcTileset = {
       // lockstep 로드하므로 페이지 측 카운트가 양쪽 heap 의 프록시(워커 heap 은 performance.memory 밖).
       (tileset as unknown as { copcNodeCount: () => number }).copcNodeCount = () =>
         Object.keys(pageSessions.get(sid)?.nodes ?? {}).length;
+
+      // 진단(이슈 #02): 워커 디코드 프로파일(per-decode 타이밍 + S3 range fetch resource timing).
+      (tileset as unknown as { copcProfile: () => Promise<unknown> }).copcProfile = () =>
+        getWorkerApi().getProfile();
 
       (tileset as unknown as { attributeRange: (name: string) => Promise<[number, number]> }).attributeRange = async (name) => {
         const session = pageSessions.get(sid)!;

@@ -20,9 +20,14 @@ import type { AttributeSpec } from './attributes';
 // 둔갑시키는 조용한 실패가 있다. 이 getter 는 status 를 검사해 명확히 실패시키고, 일시적 실패는
 // 지수백오프+지터로 재시도하며 시도마다 타임아웃을 건다. copc.js 의 3경로(header/hierarchy/point)가
 // 모두 이 함수를 사용하므로 한 곳에서 전부 커버된다. (Node·브라우저·워커 공통 — fetch/AbortSignal.timeout)
-type RangeGetter = (begin: number, end: number) => Promise<Uint8Array>;
+export type RangeGetter = (begin: number, end: number) => Promise<Uint8Array>;
 const RETRYABLE_HTTP = new Set([429, 500, 502, 503, 504]); // 그 외 4xx·416 은 결정적 → 재시도 X
 const FETCH_TIMEOUT_MS = 8000;
+
+/** range 크기 비례 타임아웃 — 큰 coalesced run 이 작은-청크 타임아웃에 걸리지 않게. */
+export function rangeTimeoutMs(begin: number, end: number, baseMs: number): number {
+  return Math.max(baseMs, Math.ceil((end - begin) / (1024 * 1024)) * 2000);
+}
 
 export function httpGetterWithRetry(
   url: string,
@@ -34,7 +39,7 @@ export function httpGetterWithRetry(
       async () => {
         const res = await fetchImpl(url, {
           headers: { Range: `bytes=${begin}-${end - 1}` },
-          signal: AbortSignal.timeout(timeoutMs), // 시도마다 새 one-shot signal
+          signal: AbortSignal.timeout(rangeTimeoutMs(begin, end, timeoutMs)), // 시도마다 새 one-shot signal
         });
         if (!res.ok) {
           const msg = `COPC range ${begin}-${end}: HTTP ${res.status} (${url})`;
@@ -180,15 +185,15 @@ export interface CopcSession {
 }
 
 /** COPC 를 열어 헤더 + 옥트리(루트 페이지) + 좌표변환을 준비 (스트리밍 세션). */
-export async function openCopc(url: string): Promise<CopcSession> {
-  const getter = httpGetterWithRetry(url);
-  const copc = await Copc.create(getter);
-  const { nodes, pages } = await Copc.loadHierarchyPage(getter, copc.info.rootHierarchyPage);
+export async function openCopc(url: string, opts?: { coalesce?: CoalesceOpts }): Promise<CopcSession> {
+  const base = httpGetterWithRetry(url);
+  const copc = await Copc.create(base); // 헤더는 base 로(비-노드)
+  const { nodes, pages } = await Copc.loadHierarchyPage(base, copc.info.rootHierarchyPage); // 루트 hierarchy 도 base
   const horiz = copc.wkt ? extractHorizontalCrs(copc.wkt) : undefined;
   const toWgs = horiz ? (proj4(horiz.proj, proj4.WGS84) as unknown as Reproj) : undefined;
-  return {
+  const session: CopcSession = {
     copc,
-    getter,
+    getter: base,
     nodes,
     pages,
     toWgs,
@@ -196,6 +201,15 @@ export async function openCopc(url: string): Promise<CopcSession> {
     cube: copc.info.cube,
     spacing: copc.info.spacing,
   };
+  // coalesce 켜면 point 읽기를 병합 getter 로(헤더/hierarchy 는 passthrough). 워커 세션만 사용.
+  if (opts?.coalesce) {
+    session.getter = createCoalescingGetter(
+      base,
+      () => (Object.values(session.nodes).filter((n): n is NonNullable<typeof n> => n != null).map((n) => ({ off: n.pointDataOffset, len: n.pointDataLength }))),
+      opts.coalesce,
+    );
+  }
+  return session;
 }
 
 /**
@@ -305,4 +319,141 @@ function colorize(s: CopcSession, view: PointView, keep: number[], colorBy: Colo
     warnedFallback.add(s);
   }
   return heightColors(zVals, n, zRange);
+}
+
+// ── range coalescing (이슈 #02) ──
+export interface ByteRange {
+  off: number;
+  len: number;
+}
+export interface Run {
+  start: number;
+  end: number;
+}
+
+/**
+ * point-data 노드 range를 off 오름차순 정렬 후 two-cap greedy 로 run 묶음.
+ * 새 run 시작: 다음.off − run끝 > maxGap (gap) 또는 다음.end − run시작 > maxBytes (size). 둘 다 만족해야 병합.
+ * COPC 는 청크의 octree-순 저장을 보장 안 하므로 반드시 실제 off 로 정렬한다.
+ */
+export function groupRuns(ranges: ByteRange[], maxGap: number, maxBytes: number): Run[] {
+  if (ranges.length === 0) return [];
+  const sorted = [...ranges].sort((a, b) => a.off - b.off);
+  const runs: Run[] = [];
+  let start = sorted[0].off;
+  let end = sorted[0].off + sorted[0].len;
+  for (let i = 1; i < sorted.length; i++) {
+    const r = sorted[i];
+    const rEnd = r.off + r.len;
+    if (r.off - end <= maxGap && rEnd - start <= maxBytes) {
+      if (rEnd > end) end = rEnd; // 같은 run 확장
+    } else {
+      runs.push({ start, end });
+      start = r.off;
+      end = rEnd;
+    }
+  }
+  runs.push({ start, end });
+  return runs;
+}
+
+export interface RegionCache {
+  lookup(begin: number, end: number): Uint8Array | undefined;
+  insert(start: number, end: number, bytes: Uint8Array): void;
+}
+
+interface CachedRegion {
+  start: number;
+  end: number;
+  bytes: Uint8Array;
+}
+
+export interface CoalesceOpts {
+  maxGap: number;
+  maxBytes: number;
+  cacheBytes: number;
+}
+
+/**
+ * base getter 를 감싸 인접 노드 point-data 를 연속 range 로 병합·캐시한다(이슈 #02).
+ * - point 읽기 판별: [begin,end)가 노드의 정확한 [off,off+len) 일 때만 coalesce. 그 외 base passthrough.
+ * - 노드 수 변할 때만 run/맵 재계산(getNodes 는 session.nodes 에서 lazy 조회).
+ * - 같은 run 동시 요청은 in-flight promise 공유(run.start 키). 슬라이스는 복사본.
+ */
+export function createCoalescingGetter(base: RangeGetter, getNodes: () => ByteRange[], opts: CoalesceOpts): RangeGetter {
+  const cache = createRegionCache(opts.cacheBytes);
+  const inflight = new Map<number, Promise<Uint8Array>>(); // run.start → region bytes
+  let lastCount = -1;
+  let offToLen = new Map<number, number>();
+  let offToRun = new Map<number, Run>();
+
+  function rebuild(nodes: ByteRange[]) {
+    const runs = groupRuns(nodes, opts.maxGap, opts.maxBytes);
+    offToLen = new Map(nodes.map((n) => [n.off, n.len]));
+    offToRun = new Map();
+    // 각 노드 off → 그 노드를 포함하는 run
+    const sorted = [...nodes].sort((a, b) => a.off - b.off);
+    let ri = 0;
+    for (const n of sorted) {
+      while (ri < runs.length && runs[ri].end <= n.off) ri++;
+      offToRun.set(n.off, runs[ri]);
+    }
+    lastCount = nodes.length;
+  }
+
+  return async (begin, end) => {
+    const nodes = getNodes();
+    if (nodes.length !== lastCount) rebuild(nodes);
+    // point 읽기(정확 노드 일치)만 coalesce
+    if (offToLen.get(begin) !== end - begin) return base(begin, end);
+    const run = offToRun.get(begin);
+    if (!run) return base(begin, end); // 방어: run 매핑 없음
+    const hit = cache.lookup(begin, end);
+    if (hit) return hit;
+    let p = inflight.get(run.start);
+    if (!p) {
+      p = base(run.start, run.end);
+      inflight.set(run.start, p);
+      p.then(
+        (b) => {
+          try {
+            cache.insert(run.start, run.end, b);
+          } catch (e) {
+            console.warn('[copc] region 캐시 insert 실패:', e); // 조용한 실패 방지(표면화)
+          }
+        },
+        () => {}, // base() 거부는 consumer 가 await p 로 처리 — 여기선 unhandled 경고만 억제
+      ).finally(() => inflight.delete(run.start));
+    }
+    const region = await p; // 공유 region bytes
+    return region.slice(begin - run.start, end - run.start); // 복사본
+  };
+}
+
+/** 총바이트 상한 LRU region 캐시. lookup 은 [begin,end)를 덮는 region 의 복사본 슬라이스 반환. */
+export function createRegionCache(maxBytes: number): RegionCache {
+  const regions: CachedRegion[] = []; // 뒤일수록 MRU
+  let total = 0;
+  return {
+    lookup(begin, end) {
+      for (let i = 0; i < regions.length; i++) {
+        const r = regions[i];
+        if (r.start <= begin && r.end >= end) {
+          regions.splice(i, 1); // MRU 로 이동
+          regions.push(r);
+          return r.bytes.slice(begin - r.start, end - r.start); // 복사본
+        }
+      }
+      return undefined;
+    },
+    insert(start, end, bytes) {
+      if (bytes.length > maxBytes) return; // 캐시 전체보다 큰 region 은 보관 안 함 — cap 엄수
+      regions.push({ start, end, bytes: new Uint8Array(bytes) }); // 복사본 저장
+      total += bytes.length;
+      while (total > maxBytes && regions.length > 1) {
+        const evicted = regions.shift()!; // LRU
+        total -= evicted.bytes.length;
+      }
+    },
+  };
 }

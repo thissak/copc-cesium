@@ -3,7 +3,7 @@ import { Copc } from 'copc';
 import { LazPerf } from 'laz-perf/lib/web';
 // laz-perf 의 main 은 node 빌드 → web 빌드 + wasm URL(?url)을 워커 번들 문맥에서 해석해 주입.
 import lazPerfWasmUrl from 'laz-perf/lib/web/laz-perf.wasm?url';
-import { openCopc, decodeNode, loadSubPage, type CopcSession } from './copc-core';
+import { openCopc, decodeNode, loadSubPage, type CopcSession, type CoalesceOpts } from './copc-core';
 import { buildQuantizedPnts } from './pnts-quantized';
 import type { ColorBy } from './colors';
 import { resolveAttributes, type AttributeRequest, type AttributeSpec } from './attributes';
@@ -27,15 +27,23 @@ type Entry = {
 };
 const sessions = new Map<string, Entry>(); // sid → 디코드 세션 (다중 tileset)
 
+// 진단(이슈 #02): per-decode 타이밍 수집(경량 performance.now). resource timing 버퍼는 다수 range 요청용 확대.
+const decodeProfile: Array<{ key: string; decodeMs: number; buildMs: number; n: number }> = [];
+try {
+  (performance as { setResourceTimingBufferSize?: (n: number) => void }).setResourceTimingBufferSize?.(2000);
+} catch {
+  /* noop */
+}
+
 const api = {
   /** COPC 를 열어 디코드용 세션을 워커에 보관 (sid 로 키). colorBy 는 색칠 모드, hideClassifications 는 제외할 classification. */
   async open(
     sid: string,
     url: string,
-    opts?: { colorBy?: ColorBy; hideClassifications?: number[]; attributes?: AttributeRequest },
+    opts?: { colorBy?: ColorBy; hideClassifications?: number[]; attributes?: AttributeRequest; coalesce?: CoalesceOpts },
   ): Promise<void> {
     sessions.set(sid, {
-      session: await openCopc(url),
+      session: await openCopc(url, { coalesce: opts?.coalesce }),
       colorBy: opts?.colorBy ?? 'height',
       hideClass: new Set(opts?.hideClassifications ?? []),
       attrReq: opts?.attributes,
@@ -67,7 +75,9 @@ const api = {
         e.attrSpecs = await e.attrSpecsPromise;
       }
     }
+    const tDec = performance.now();
     const nd = await decodeNode(e.session, key, lazPerf, e.colorBy, e.hideClass, e.attrSpecs);
+    const tDecEnd = performance.now();
     // 이슈 #03: 진짜 누락 노드는 throw(버그 표면화→500), 빈 노드(0점·전부 노이즈)는 null(빈 신호→SW 404).
     // 빈 pnts 를 빌드하지 않는다(0점 Model 은 PROCESSING 영구 고착).
     if (!nd) throw new Error(`디코드 노드 없음: ${key}`);
@@ -76,6 +86,9 @@ const api = {
       ? { specs: e.attrSpecs, values: nd.attrValues }
       : undefined;
     const pnts = buildQuantizedPnts(nd.lonLatH, nd.colors!, batch);
+    // 진단(#02): decodeMs=fetch(S3 range)+laz-perf 디코드+reproject, buildMs=pnts 빌드. 배열 상한(누수 방지).
+    if (decodeProfile.length < 4096)
+      decodeProfile.push({ key, decodeMs: +(tDecEnd - tDec).toFixed(1), buildMs: +(performance.now() - tDecEnd).toFixed(1), n: nd.count });
     return Comlink.transfer(pnts, [pnts]);
   },
   /** 서브페이지를 워커 세션에 병합 (페이징 — 후속 그 노드 .pnts 디코드 가능하게). */
@@ -87,6 +100,18 @@ const api = {
   /** 세션 정리 (tileset.destroy 시). */
   async close(sid: string): Promise<void> {
     sessions.delete(sid);
+  },
+  /** 진단(이슈 #02): per-decode 타이밍 + 워커가 낸 S3 range fetch resource timing(개수·지속·시작시각). */
+  getProfile(): {
+    decodes: Array<{ key: string; decodeMs: number; buildMs: number; n: number }>;
+    resTiming: Array<{ start: number; dur: number; size: number }>;
+  } {
+    const all = ((performance as { getEntriesByType?: (t: string) => unknown[] }).getEntriesByType?.('resource') ??
+      []) as Array<{ name: string; startTime: number; duration: number; transferSize?: number; encodedBodySize?: number }>;
+    const resTiming = all
+      .filter((e) => /\.copc\.laz/.test(e.name))
+      .map((e) => ({ start: +e.startTime.toFixed(1), dur: +e.duration.toFixed(1), size: e.transferSize || e.encodedBodySize || 0 }));
+    return { decodes: decodeProfile, resTiming };
   },
 };
 

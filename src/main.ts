@@ -862,9 +862,15 @@ async function runDemo() {
   log('CopcTileset.fromUrl 데모 …');
   const maxReq = Number(new URLSearchParams(location.search).get('maxReq')) || 0; // ③ 동시성 throttle (S3 host당 ~6)
   if (maxReq > 0) RequestScheduler.maximumRequestsPerServer = maxReq;
+  const coalesceParam = new URLSearchParams(location.search).get('coalesce');
+  const coalesceMaxGap = coalesceParam === '0' ? 0 : undefined; // ?coalesce=0 → off (A/B)
   try {
     const t0 = performance.now();
-    const tileset = await CopcTileset.fromUrl(ds.url); // API 기본값(MSSE 8, 듬성/작은 점 — 진단용)
+    // ?maxReq 를 per-host throttle(fromUrl maxRequestsPerServer)에 배선 — 콘텐츠 host 동시성 측정용(이슈 #02).
+    const tileset = await CopcTileset.fromUrl(ds.url, {
+      ...(maxReq > 0 ? { maxRequestsPerServer: maxReq } : {}),
+      ...(coalesceMaxGap !== undefined ? { coalesceMaxGap } : {}),
+    }); // API 기본값(MSSE 8)
     let tileLoaded = 0;
     let tileFailed = 0;
     tileset.tileLoad.addEventListener(() => {
