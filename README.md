@@ -55,6 +55,10 @@ await CopcTileset.fromUrl(url, options);
 | `maxRequestsPerServer` | `6` | Max concurrent Cesium requests to the content host. Cesium's default (18) assumes HTTP/2; for HTTP/1.1 range sources (e.g. S3) it over-subscribes one host and causes timeout/retry storms. `6` matches the browser's HTTP/1.1 per-host connection limit. Raise it behind an HTTP/2 CDN; `0` leaves Cesium's default untouched. Applied per-host via `RequestScheduler.requestsByServer` (does not mutate the global). |
 | `serviceWorkerUrl` | `'/copc-sw.js'` | Service worker URL |
 | `serviceWorkerScope` | `'/'` | Service worker scope (must cover the content path) |
+| `crs` | — | Override CRS (force) — ignore the file's WKT and place with this CRS. proj4 string / WKT / built-in EPSG. Use when the header has no/wrong CRS. |
+| `defaultCrs` | — | Fallback CRS applied only when the file omits one (fill-if-missing). Distinct from `crs` (force). |
+
+> **CRS / placement:** a georeferenced COPC's embedded WKT is read and reprojected to WGS84 automatically — no config. If the file has **no CRS** (or a wrong one), placement fails loudly with an actionable error; pass `crs` to fix it. Heights are treated as **ellipsoidal (HAE)**; geoid/orthometric correction is out of scope (matching Potree/giro3d/py3dtiles), so orthometric-height sources may show a vertical offset.
 
 The returned object is a normal `Cesium3DTileset`. Call `tileset.destroy()` to release the worker session.
 

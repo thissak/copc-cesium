@@ -73,6 +73,9 @@
 - [x] **[#02] deep-load 속도 — range coalescing 으로 round-trip 61→6·settle 13.9s→4.8s(Eptium 동급).** 진단: deep-load 시간 ~99%가 per-node range TTFB(HTTP/1.1 S3 ~6연결 천장, 디코드 아님). 레버=round-trip 수 → 인접 노드 point-data를 연속 1 range로 병합·캐시(`createCoalescingGetter` two-cap + region-LRU, decode 경로 무변경). 골든파일 byte-identical·pointsSelected 712,458 불변. ([ADR-006](adr/006-range-coalescing.md), `src/copc-core.ts`, 이슈 #02)
 - [x] **[#04] coalescing in-flight/rebuild 레이스 수정 — 잘린 슬라이스→laz-perf WASM 폭증(#02 잠복 회귀).** 무거운 sofi(1.9GB) msse=4서 발견: in-flight dedup이 `run.start`만 키잉 → 서브페이지 로드로 run 확장 시 옛 작은 region을 새 offset으로 슬라이스 → 빈 바이트→laz-perf 1.87GB alloc→abort. 수정(Arrow `ReadRangeCache` 패턴): in-flight를 fetch 정체성 `{start,end,bytes}`로 슬라이스 + 커버리지 미달 시 `base` 폴백. RED→GREEN(heap 1877MB→7MB 고정·완주), 이득 보존(round-trip 10 불변), 회귀 0(신규 Task7 레이스 단위·골든파일·build·verify·repro-03). ([이슈 #04](issues/04-lazperf-wasm-2gb-ceiling.md), `src/copc-core.ts` `createCoalescingGetter`, [[coalescing-inflight-race]] 위키)
 
+### CRS 자동배치 견고화 (Tier1 #2, 2026-06-19 · feat/crs-auto-placement)
+- [x] **no-WKT/파싱실패 silent 지구밖 → fail-loud + `crs`/`defaultCrs` override + center sanity 가드.** 측정으로 갭 확정: WKT happy path(WKT1·WKT2 모두 proj4 2.20.9 처리)는 견고, 진짜 갭=no-WKT(copc.js `.wkt` undefined→x,y를 경위도로→지구밖)·proj4 silent NaN. BP 조사(proj4/copc.js 설치버전 실측+prior-art 6종 py3dtiles·PDAL·giro3d·Potree·loaders.gl·Cesium) 합의=fail-loud+override(PDAL force/fill 2-mode)+axis/center sanity+geoid scope-out. 수정(A안): `resolveCrs`(crs>wkt>defaultCrs+try/catch)+`checkCenterInRange`(cube 중심 reproject 범위/NaN)로 인라인 georef 3지점 통합, 옵션 `fromUrl`→페이지·워커 세션. WKT2 무작업·per-point 배치 무변경(ECEF sub-mm). check-crs 10/10·autzen C1 회귀 0·ecef·hierarchy·coalesce·tsc·build PASS(AC1~7). 한계: EPSG override는 proj4 내장분·GeoTIFF GeoKey 자동복구=B안 follow-up·geoid 미보정(업계 norm). (IMPROVEMENTS #2 ✅, spec/plan `docs/superpowers/`)
+
 ## Phase 3 — 평가 / 입상 판정 🔒
 대용량 실데이터에서 60fps / 메모리 / UX 측정 → 입상 가능성 데이터로 판정.
 

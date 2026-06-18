@@ -67,6 +67,15 @@ export interface CopcTilesetOptions {
    * 현재 페이지를 제어할 수 있는 scope 여야 Cesium 의 `/__copc-real/...` 요청을 가로챌 수 있다.
    */
   serviceWorkerScope?: string;
+  /**
+   * CRS override (force) — 파일 헤더 WKT 를 무시하고 이 CRS 로 배치.
+   * proj4 string / WKT / 내장 EPSG(WGS84·UTM·WebMercator). 헤더에 CRS 가 없거나 틀릴 때.
+   */
+  crs?: string;
+  /**
+   * 헤더에 CRS(WKT)가 없을 때만 적용하는 폴백 CRS(fill-if-missing). `crs`(force)와 구분.
+   */
+  defaultCrs?: string;
 }
 
 let sidCounter = 0;
@@ -233,7 +242,7 @@ export const CopcTileset = {
             }
           : undefined;
       const [session] = await Promise.all([
-        openCopc(url),
+        openCopc(url, { crs: options.crs, defaultCrs: options.defaultCrs }),
         api.open(sid, url, {
           colorBy: options.colorBy ?? 'rgb',
           // --8<-- [start:hideClass]
@@ -241,6 +250,8 @@ export const CopcTileset = {
           // --8<-- [end:hideClass]
           attributes: options.attributes,
           coalesce,
+          crs: options.crs,
+          defaultCrs: options.defaultCrs,
         }),
       ]);
       pageSessions.set(sid, session); // 서브페이지 lazy 로드용으로 보관

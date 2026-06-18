@@ -81,6 +81,7 @@ export async function loadCopcPoints(
   url: string,
   pointBudget: number,
   lazPerf?: LazPerf,
+  crsOpts: CrsOpts = {},
 ): Promise<CorePoints> {
   const getter = httpGetterWithRetry(url);
 
@@ -97,11 +98,10 @@ export async function loadCopcPoints(
     .filter((k) => nodes[k])
     .sort((a, b) => Number(a.split('-')[0]) - Number(b.split('-')[0]));
 
-  // 좌표계: 투영 CRS(wkt) → 경위도. COMPD_CS면 내부 PROJCS만 추출, 선형단위로 Z 보정.
+  // 좌표계: resolveCrs(crs>wkt>defaultCrs) → WGS84 변환. cube 중심 sanity 가드.
   const wkt = copc.wkt;
-  const horiz = wkt ? extractHorizontalCrs(wkt) : undefined;
-  const toWgs = horiz ? proj4(horiz.proj, proj4.WGS84) : undefined;
-  const zUnit = horiz ? horiz.linearUnit : 1;
+  const { toWgs, zUnit } = resolveCrs(wkt, crsOpts);
+  checkCenterInRange(toWgs, copc.info.cube);
 
   const lonLatH: number[] = [];
   const zVals: number[] = [];
@@ -120,14 +120,8 @@ export async function loadCopcPoints(
       const x = gx(i);
       const y = gy(i);
       const z = gz(i) * zUnit;
-      let lon = x;
-      let lat = y;
-      if (toWgs) {
-        const out = toWgs.forward([x, y]) as number[];
-        lon = out[0];
-        lat = out[1];
-      }
-      lonLatH.push(lon, lat, z);
+      const out = toWgs.forward([x, y]) as number[];
+      lonLatH.push(out[0], out[1], z);
       zVals.push(z);
     }
     collected += n;
@@ -169,6 +163,53 @@ export function extractHorizontalCrs(wkt: string): { proj: string; linearUnit: n
   return { proj, linearUnit };
 }
 
+export type CrsOpts = { crs?: string; defaultCrs?: string };
+
+/**
+ * CRS 를 우선순위로 해소해 WGS84 변환을 만든다 (PDAL 2-mode).
+ *   opts.crs(force) > wkt(header) > opts.defaultCrs(fill-if-missing) > 없음→throw.
+ * proj4 입력은 proj4 string / WKT 1급, EPSG 코드는 proj4 내장분만. 파싱 불가/미해결은 throw(조용한 오배치 방지).
+ * 높이(Z)는 선형단위만 보정한 ellipsoidal(HAE)로 취급 — geoid/정사고(orthometric) 보정 안 함
+ * (web-viewer 업계 norm: Potree·giro3d·py3dtiles 동일). orthometric 입력은 수십 m 수직 오프셋 가능.
+ */
+export function resolveCrs(wkt: string | undefined, opts: CrsOpts = {}): { toWgs: Reproj; zUnit: number } {
+  const def = opts.crs ?? wkt ?? opts.defaultCrs;
+  if (!def) {
+    throw new Error(
+      'COPC has no embedded CRS (no WKT). Pass a CRS via the `crs` option ' +
+        "(proj4 string / WKT / built-in EPSG), or `defaultCrs` to fill when the file omits one.",
+    );
+  }
+  const horiz = extractHorizontalCrs(def);
+  let toWgs: Reproj;
+  try {
+    toWgs = proj4(horiz.proj, proj4.WGS84) as unknown as Reproj;
+    if (typeof toWgs.forward !== 'function') throw new Error('no forward()');
+  } catch (e) {
+    throw new Error(
+      `CRS parse failed for "${String(def).slice(0, 60)}…" — pass a valid proj4 string or WKT ` +
+        `via the \`crs\` option. (${(e as Error).message})`,
+    );
+  }
+  return { toWgs, zUnit: horiz.linearUnit };
+}
+
+/**
+ * reproject 정합 가드: cube 중심을 1회 변환해 lon/lat 가 유효 범위인지 확인.
+ * 범위 밖/NaN 이면 throw — 잘못된 CRS·축 뒤집힘(거울상)·out-of-domain 을 점 루프 진입 전 조기 차단.
+ */
+export function checkCenterInRange(toWgs: Reproj, cube: number[]): void {
+  const cx = (cube[0] + cube[3]) / 2;
+  const cy = (cube[1] + cube[4]) / 2;
+  const [lon, lat] = toWgs.forward([cx, cy]);
+  if (!(Number.isFinite(lon) && Number.isFinite(lat) && lon >= -180 && lon <= 180 && lat >= -90 && lat <= 90)) {
+    throw new Error(
+      `CRS reproject out of range (lon=${lon}, lat=${lat}) — likely wrong CRS or swapped axis order. ` +
+        'Pass the correct CRS via the `crs` option.',
+    );
+  }
+}
+
 // ── 스트리밍 세션 (Phase 2 본편) ───────────────────────────────────────
 type Reproj = { forward: (coord: number[]) => number[] };
 
@@ -185,19 +226,19 @@ export interface CopcSession {
 }
 
 /** COPC 를 열어 헤더 + 옥트리(루트 페이지) + 좌표변환을 준비 (스트리밍 세션). */
-export async function openCopc(url: string, opts?: { coalesce?: CoalesceOpts }): Promise<CopcSession> {
+export async function openCopc(url: string, opts?: { coalesce?: CoalesceOpts } & CrsOpts): Promise<CopcSession> {
   const base = httpGetterWithRetry(url);
   const copc = await Copc.create(base); // 헤더는 base 로(비-노드)
   const { nodes, pages } = await Copc.loadHierarchyPage(base, copc.info.rootHierarchyPage); // 루트 hierarchy 도 base
-  const horiz = copc.wkt ? extractHorizontalCrs(copc.wkt) : undefined;
-  const toWgs = horiz ? (proj4(horiz.proj, proj4.WGS84) as unknown as Reproj) : undefined;
+  const { toWgs, zUnit } = resolveCrs(copc.wkt, { crs: opts?.crs, defaultCrs: opts?.defaultCrs });
+  checkCenterInRange(toWgs, copc.info.cube);
   const session: CopcSession = {
     copc,
     getter: base,
     nodes,
     pages,
     toWgs,
-    zUnit: horiz ? horiz.linearUnit : 1,
+    zUnit,
     cube: copc.info.cube,
     spacing: copc.info.spacing,
   };

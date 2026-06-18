@@ -20,7 +20,8 @@ COPC 창시자 Hobu의 상용 **Eptium**이 *"COPC, COG, EPT data support for Ce
 - **레버리지**: 최고 — 미답변 스레드 2018~2026, before/after 데모 명료, 우리 `colorBy`의 자연 심화.
 - **증거**: cesium#46399(2026 미답변)·cesium#23087·gis.se#294307(2018 미답변·724뷰)·**giro3d#633**(extra-bytes=0, open)·WebODM classification 소실(community.opendronemap.org/…/19005).
 
-### 2. CRS 자동 배치 (ECEF auto-placement) ⭐ — 최고 ROI 보완
+### 2. CRS 자동 배치 (ECEF auto-placement) ⭐ — **✅ 출하 (A안, feat/crs-auto-placement 2026-06-19)**
+- **출하**: WKT 자동 reproject(WKT1·WKT2 모두 proj4가 처리)는 happy path = zero-config. no-WKT/파싱실패/축뒤집힘 → **fail-loud**(`resolveCrs`) + `crs`(force)/`defaultCrs`(fill-if-missing) override(PDAL 2-mode) + cube 중심 sanity 가드(`checkCenterInRange`). geoid scope-out(heights=ellipsoidal, 업계 norm). **한계**: EPSG override는 proj4 내장분만, GeoTIFF GeoKey 자동복구·풀 EPSG 레지스트리 = B안 follow-up. (BP: proj4/copc.js 실측+prior-art 6종 · check-crs 10/10·AC1~7 · [ADR-007 예정])
 - **실해**: 변환 후 점군이 **지구 밖/거울상/수 m 오프셋**. Cesium은 ECEF(EPSG:4978)인데 원본 점군은 거의 아님.
 - **우리-영역성**: COPC/LAS WKT VLR 읽어 on-the-fly reproject → **zero-config** 배치.
 - **복잡도**: bounded-hard(개념 해결, 운영 footgun).

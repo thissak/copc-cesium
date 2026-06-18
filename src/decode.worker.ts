@@ -41,10 +41,10 @@ const api = {
   async open(
     sid: string,
     url: string,
-    opts?: { colorBy?: ColorBy; hideClassifications?: number[]; attributes?: AttributeRequest; coalesce?: CoalesceOpts },
+    opts?: { colorBy?: ColorBy; hideClassifications?: number[]; attributes?: AttributeRequest; coalesce?: CoalesceOpts; crs?: string; defaultCrs?: string },
   ): Promise<void> {
     sessions.set(sid, {
-      session: await openCopc(url, { coalesce: opts?.coalesce }),
+      session: await openCopc(url, { coalesce: opts?.coalesce, crs: opts?.crs, defaultCrs: opts?.defaultCrs }),
       colorBy: opts?.colorBy ?? 'height',
       hideClass: new Set(opts?.hideClassifications ?? []),
       attrReq: opts?.attributes,
