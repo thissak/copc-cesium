@@ -12,7 +12,8 @@ COPC 창시자 Hobu의 상용 **Eptium**이 *"COPC, COG, EPT data support for Ce
 
 ## Tier 1 — 입상 헤드라인 (우리만 풀 수 있는 + 실제 고통 + 데모 가능)
 
-### 1. 속성·해상도 충실도 (attribute & resolution fidelity) ⭐ — **설계 진행 중**
+### 1. 속성·해상도 충실도 (attribute & resolution fidelity) ⭐ — **✅ 출하 (main 머지 2026-06-18, [ADR-005])**
+- **출하**: `attributes` 옵션(큐레이션 기본|`'all'`|`string[]`) → pnts BATCH_TABLE+BATCH_ID → Cesium 동적 스타일링(`${Attr}`)·피킹(`getProperty`) + `rampStyle`/`attributeRange` 헬퍼. 실 브라우저 검증(autzen Classification 스타일·피킹·120fps). 제약: `${COLOR}` 폴백은 Model 경로서 미작동 → 구체색. (extra-bytes 정밀 타입은 FLOAT 폴백·테스트파일 부재로 YAGNI.)
 - **실해**: 3D Tiles 변환이 per-point 속성(GPS-time·return number·scan angle·extra-bytes)과 정밀도/해상도를 **소리없이 드롭**한다. Ion 타일러는 Intensity+Classification만 살림.
 - **우리-영역성**: COPC는 전체 LAS 속성 + native 정밀도를 보존 → **무변환이라 구조적으로 우리만 해결**. OSS 미해결(COPC를 스트리밍하는 giro3d조차 extra-bytes를 0으로 로드).
 - **복잡도**: 높음 — copc.js dimension → typed buffer → GPU 를 zeroing/정밀도 손실 없이.
