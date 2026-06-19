@@ -3,7 +3,7 @@ import { LazPerf } from 'laz-perf/lib/web';
 // laz-perf 의 main 은 node 빌드라 Vite 가 wasm 경로를 못 잡는다.
 // web 빌드를 쓰고, wasm 은 Vite 가 서빙하는 URL(?url)을 locateFile 로 명시 주입한다.
 import lazPerfWasmUrl from 'laz-perf/lib/web/laz-perf.wasm?url';
-import { loadCopcPoints } from './copc-core';
+import { loadCopcPoints } from '../src/copc-core';
 
 let lazPerfPromise: ReturnType<typeof LazPerf.create> | undefined;
 export function getLazPerf() {

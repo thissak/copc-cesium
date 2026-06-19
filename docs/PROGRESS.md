@@ -76,6 +76,9 @@
 ### CRS 자동배치 견고화 (Tier1 #2, 2026-06-19 · feat/crs-auto-placement)
 - [x] **no-WKT/파싱실패 silent 지구밖 → fail-loud + `crs`/`defaultCrs` override + center sanity 가드.** 측정으로 갭 확정: WKT happy path(WKT1·WKT2 모두 proj4 2.20.9 처리)는 견고, 진짜 갭=no-WKT(copc.js `.wkt` undefined→x,y를 경위도로→지구밖)·proj4 silent NaN. BP 조사(proj4/copc.js 설치버전 실측+prior-art 6종 py3dtiles·PDAL·giro3d·Potree·loaders.gl·Cesium) 합의=fail-loud+override(PDAL force/fill 2-mode)+axis/center sanity+geoid scope-out. 수정(A안): `resolveCrs`(crs>wkt>defaultCrs+try/catch)+`checkCenterInRange`(cube 중심 reproject 범위/NaN)로 인라인 georef 3지점 통합, 옵션 `fromUrl`→페이지·워커 세션. WKT2 무작업·per-point 배치 무변경(ECEF sub-mm). check-crs 10/10·autzen C1 회귀 0·ecef·hierarchy·coalesce·tsc·build PASS(AC1~7). 한계: EPSG override는 proj4 내장분·GeoTIFF GeoKey 자동복구=B안 follow-up·geoid 미보정(업계 norm). (IMPROVEMENTS #2 ✅, spec/plan `docs/superpowers/`)
 
+### OSS 리팩토링 Stage 1 — 데모/lib 분리 (2026-06-19 · chore/oss-refactor-stage1)
+- [x] **데모 하네스 `demo/` 분리 + 스파이크 프루닝.** `src/`=순수 라이브러리 9파일, 스파이크 7모드 프루닝(기본+`?naive`/`?bench`/`?perf`/`?soak`), `pnts`/`spike-batch` 삭제. dist byte-identical·verify·check-* 회귀 0. (Stage 2=copc-core 모듈 분할·Stage 3=영문화 심사 후)
+
 ## Phase 3 — 평가 / 입상 판정 🔒
 대용량 실데이터에서 60fps / 메모리 / UX 측정 → 입상 가능성 데이터로 판정.
 
