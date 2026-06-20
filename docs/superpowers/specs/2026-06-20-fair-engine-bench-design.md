@@ -119,3 +119,17 @@ Eptium 타일셋에 config를 set해도 Eptium이 매 프레임 자기 설정으
 1. `--disable-gpu-vsync`가 Playwright launch에서 실제로 먹는지(AC6로 검증).
 2. Eptium이 config를 매 프레임 덮는지(문제2 가드로 처리, 최악 시 verdict 무효).
 3. `EXT_disjoint_timer_query_webgl2` Chrome 가용성(없으면 vsync해제 wall-clock만).
+
+## 스파이크 실측 결과 (2026-06-20, `scripts/bench/spike-fair.ts`)
+
+```
+GL_RENDERER: ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)
+VSYNC_UNCAPPED: false (fps=65)
+EPTIUM_CONFIG_HOLDS: false
+GPU_TIMER_AVAILABLE: true
+```
+
+- **GL_RENDERER**: Apple M4 Pro Metal — 서브에이전트 headed 브라우저가 실 GPU 받음. GPU 태스크 서브에이전트 가능.
+- **VSYNC_UNCAPPED: false (fps=65)**: `--disable-gpu-vsync` 플래그가 Playwright launch로는 vsync를 해제하지 못함. fps=65는 60Hz 천장 근방. → 리스크 1 **실패** — 컨트롤러 판정 필요.
+- **EPTIUM_CONFIG_HOLDS: false**: Eptium이 config를 매 프레임 덮어씀(리스크 2 발현). 매-프레임 재적용 가드(문제2 가드) 또는 verdict 무효 처리 필요 → 컨트롤러 판정 필요.
+- **GPU_TIMER_AVAILABLE: true**: `EXT_disjoint_timer_query_webgl2` 가용. 보조 GPU ms 측정 사용 가능.
