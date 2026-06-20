@@ -89,7 +89,7 @@ Eptium 타일셋에 config를 set해도 Eptium이 매 프레임 자기 설정으
 
 ## 자기검증 (도구가 스스로를 증명)
 
-- **ours-vs-ours 영실험(null test)**: 우리 뷰어를 자기 자신과 비교(독립 2회 로드). verdict가 **반드시 1.0(동급)**. 안 나오면 도구 편향/노이즈 → ours-vs-Eptium verdict 불신. (선택: eptium-vs-eptium)
+- **ours-vs-ours 영실험(null test)**: 우리 뷰어를 자기 자신과 비교(독립 2회 로드). 두 곡선의 공통 버킷 GPU ms 상대차(대칭 분모) 최대값 = **노이즈바닥(floor)**. **nullOk = 공통버킷 ≥3 ∧ floor ≤ 절대상한(0.20)** — floor를 자기 채점에 쓰면 항상 통과(순환)라 편향을 못 잡으므로, *고정 절대상한*으로 판정. floor>20%면 도구가 너무 noisy → ours-vs-Eptium verdict 불신.
 - **결정성 체크**: 같은 config·점타깃 2회 → pointsSelected ±2% · frametime median 재현. 이 **측정된 노이즈 바닥이 "동급" 임계를 정의**(임의 숫자 아님).
 
 ## Verdict / 임계 / 메트릭 / 출력

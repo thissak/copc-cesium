@@ -705,7 +705,7 @@ function alignAndRatio(a: ViewerCurve, b: ViewerCurve, floor: number) {
 function noiseFloor(a: ViewerCurve, b: ViewerCurve): number {
   const bMap = new Map(b.curve.map((p: CurvePoint) => [p.pts, p.gpuMs]));
   let maxRel = 0;
-  for (const pa of a.curve) { const gb = bMap.get(pa.pts); if (gb == null) continue; maxRel = Math.max(maxRel, Math.abs(pa.gpuMs - gb) / pa.gpuMs); }
+  for (const pa of a.curve) { const gb = bMap.get(pa.pts); if (gb == null) continue; maxRel = Math.max(maxRel, Math.abs(pa.gpuMs - gb) / ((pa.gpuMs + gb) / 2)); } // 대칭 분모(측정 순서 무관)
   return +maxRel.toFixed(3);
 }
 
@@ -718,12 +718,14 @@ async function main() {
     const oursUrl = `http://localhost:5173/?ds=${ds}`;
     const eptiumUrl = `https://viewer.copc.io/?copc=${DATASETS[ds].copcUrl}`;
 
-    // 영실험 (ours vs ours)
+    // 영실험 (ours vs ours) — floor=도구 자체 노이즈. nullOk는 floor를 절대상한으로 판정
+    // (자기 floor로 채점하면 항상 통과 = 순환 → 편향 못 잡음).
+    const NULL_MAX = 0.20; // ours-vs-ours 노이즈가 20% 넘으면 도구 신뢰불가
     const nullA = await measureViewer(browser, 'ours', oursUrl);
     const nullB = await measureViewer(browser, 'ours', oursUrl);
     const floor = noiseFloor(nullA, nullB);
     const nullRows = alignAndRatio(nullA, nullB, floor);
-    const nullOk = nullRows.length >= 3 && nullRows.every((r) => r.verdict === '동급');
+    const nullOk = nullRows.length >= 3 && floor <= NULL_MAX;
 
     // 본 측정
     const ours = await measureViewer(browser, 'ours', oursUrl);
