@@ -82,6 +82,15 @@ async function main() {
     return !!gl?.getExtension('EXT_disjoint_timer_query_webgl2');
   });
 
+  // GPU 정체 — 서브에이전트 headed 브라우저가 실 Metal 받는지 (swiftshader면 fps/vsync 측정 무효)
+  const glRenderer = await page.evaluate(() => {
+    const c: any = (window as any).viewer?.canvas || document.querySelector('canvas');
+    const gl: any = c?.getContext('webgl2');
+    const e: any = gl?.getExtension('WEBGL_debug_renderer_info');
+    return e ? String(gl.getParameter(e.UNMASKED_RENDERER_WEBGL)) : 'unknown';
+  });
+
+  console.log(`GL_RENDERER: ${glRenderer}`);
   console.log(`VSYNC_UNCAPPED: ${vsyncUncapped} (fps=${fps})`);
   console.log(`EPTIUM_CONFIG_HOLDS: ${configHolds}`);
   console.log(`GPU_TIMER_AVAILABLE: ${gpuTimer}`);
@@ -93,8 +102,9 @@ main().catch((e) => { console.error(e); process.exit(1); });
 - [ ] **Step 2: 스파이크 실행 + 판정**
 
 Run: `npx tsx scripts/bench/spike-fair.ts`
-Expected: 3줄 출력.
-- `VSYNC_UNCAPPED: true` 필요 — false면 frametime이 못 풀려 천장 함정 못 피함 → **STOP**, GPU timer 의존 설계로 전환 검토.
+Expected: 4줄 출력. **컨트롤러(나)가 go/no-go 판정**:
+- `GL_RENDERER`: **Metal(Apple) 이어야** 서브에이전트가 실 GPU 받음 → 이후 GPU 태스크도 서브에이전트 가능. `swiftshader`/`llvmpipe`면 서브에이전트 headed 브라우저가 소프트GPU → GPU 태스크(6·7·8·10)는 컨트롤러 인라인으로 전환.
+- `VSYNC_UNCAPPED: true` 필요 — false면 frametime이 못 풀려 천장 함정 못 피함 → **STOP**, GPU timer 의존 설계로 전환 검토. (단 GL_RENDERER가 software면 이 판정은 무효 — 실GPU에서 재측정)
 - `EPTIUM_CONFIG_HOLDS: true` 필요 — false면 매-프레임 재적용(Task 3 가드)으로도 안 되면 **STOP**, "정규화 불가" 재설계.
 - `GPU_TIMER_AVAILABLE` 는 보조신호 — false여도 진행(vsync해제 wall-clock 사용).
 
@@ -245,7 +255,6 @@ export function normalizeConfig(idx: number): void {
     ts.pointCloudShading.eyeDomeLighting = false;
     ts.pointCloudShading.attenuation = false;
   }
-  v.scene.backgroundColor = v.scene.backgroundColor; // no-op 자리표시(배경 동일성은 globe off로 충분)
 }
 
 // 매 프레임 재적용용 — Eptium 이 덮어쓰면 되돌린다
