@@ -627,6 +627,8 @@ export async function measureViewer(browser: Browser, label: 'ours' | 'eptium', 
   await page.evaluate((i) => (window as any).FairProbe.setViewpoint(i), idx);
   if (!(await page.evaluate((i) => (window as any).FairProbe.assertConfig(i), idx)))
     throw new Error(`${label}: config normalization failed (readback mismatch)`);
+  // 깊은 로드가 실제 시작될 때까지 대기 — pts가 BUCKET 넘을 때까지(plateau 조기발동 방지, Task6 concern).
+  for (let i = 0; i < 60; i++) { const s: any = await page.evaluate((x) => (window as any).FairProbe.readStats(x), idx); if (s.pointsSelected > BUCKET) break; await sleep(500); }
   const reassert = label === 'eptium';
   const r: any = await page.evaluate((a) => (window as any).FairProbe.measureLoadCurve(a.i, a.m, a.cap, a.bk, a.r), { i: idx, m: MSSE, cap: CAP, bk: BUCKET, r: reassert });
   await ctx.close();
