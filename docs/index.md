@@ -51,7 +51,7 @@ flowchart LR
 
 ## 4. 그런데 왜 아무도 안 만들었을까? (= 우리 기회)
 
-점군 뷰어 자체는 오픈소스로 여럿 있습니다. **단, 전부 Cesium이 아닌 다른 엔진**으로 만들어졌습니다.
+포인트클라우드 뷰어 자체는 오픈소스로 여럿 있습니다. **단, 전부 Cesium이 아닌 다른 엔진**으로 만들어졌습니다.
 
 | 이미 있는 오픈 뷰어 | 어떤 엔진 위에 |
 |---|---|
@@ -93,7 +93,7 @@ flowchart TD
 
 ## 더 읽어보기
 
-- **개념부터** → [학습 커리큘럼](learn/index.md) (점군 · COPC · CesiumJS · 좌표계 · 통합)
+- **개념부터** → [학습 커리큘럼](learn/index.md) (포인트클라우드 · COPC · CesiumJS · 좌표계 · 통합)
 - **무엇을 푸나** → [문제 정의](PROBLEM.md) · [경쟁 전략](STRATEGY.md)
 - **무엇을 쟀나** → [측정 결과](RESULTS.md) · [4축 진단법](PROFILING.md)
 - **왜 그렇게 정했나** → [ADR-001](adr/001-provider-plugin-architecture-A.md) · [prior art 지도](REFERENCES.md)

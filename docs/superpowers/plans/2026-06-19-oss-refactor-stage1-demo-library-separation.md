@@ -138,7 +138,7 @@ Expected: C1 PASS — center ≈ `-123.069°, 44.056°` (Autzen, Oregon), stdout
 - [ ] **Step 11: 브라우저 스모크 — 기본 데모 (AC3)**
 
 `npm run dev`를 백그라운드로 띄우고 Playwright로 `http://localhost:5173` 접속 → 캔버스 렌더 + 콘솔 에러 0 확인.
-Expected: 점군 LOD 스트리밍 렌더, `pageerror`/`console.error` 0. 확인 후 dev 서버 종료.
+Expected: 포인트클라우드 LOD 스트리밍 렌더, `pageerror`/`console.error` 0. 확인 후 dev 서버 종료.
 
 - [ ] **Step 12: 커밋**
 
@@ -250,7 +250,7 @@ Expected: C1 Oregon PASS.
 
 `npm run dev` 백그라운드 + Playwright로:
 - `http://localhost:5173/?perf=autzen&secs=5` → perf 진입, 콘솔 에러 0 (AC7).
-- `http://localhost:5173/?spike5` → 제거된 모드 → `runDemo()` 폴백, 점군 렌더, 콘솔 에러 0 (AC8, 죽은 분기 없음).
+- `http://localhost:5173/?spike5` → 제거된 모드 → `runDemo()` 폴백, 포인트클라우드 렌더, 콘솔 에러 0 (AC8, 죽은 분기 없음).
 Expected: 둘 다 `pageerror` 0. 확인 후 dev 종료.
 
 - [ ] **Step 10: 커밋**

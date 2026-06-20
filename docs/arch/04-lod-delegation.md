@@ -53,7 +53,7 @@ let maxH = Math.min(cubeMinZ + side, s.copc.header.max[2]) * s.zUnit;
 ## refine: ADD — 덮지 않고 더한다
 
 각 타일은 `refine: 'ADD'`로 내보냅니다. 자식을 그릴 때 부모 점을 **지우지 않고 그 위에 더** 그린다는 뜻입니다.
-점군에서는 부모의 성긴 점 + 자식의 촘촘한 점이 합쳐져 자연스럽게 밀도가 올라갑니다.
+포인트클라우드에서는 부모의 성긴 점 + 자식의 촘촘한 점이 합쳐져 자연스럽게 밀도가 올라갑니다.
 
 ```ts
 // src/tileset.ts — buildNode()
@@ -62,7 +62,7 @@ let maxH = Math.min(cubeMinZ + side, s.copc.header.max[2]) * s.zUnit;
 
 ## 거친 LOD 단차를 부드럽게
 
-LOD가 단계로 바뀌면 점 크기·밀도가 *툭툭* 끊겨 보일 수 있습니다. 이건 Cesium이 가진 점군 셰이딩으로 가립니다 —
+LOD가 단계로 바뀌면 점 크기·밀도가 *툭툭* 끊겨 보일 수 있습니다. 이건 Cesium이 가진 포인트클라우드 셰이딩으로 가립니다 —
 거리 기반 점 크기 감쇠(attenuation)와 깊이 윤곽 강조(Eye Dome Lighting). 역시 직접 셰이더를 짜지 않고
 **옵션만** 켭니다.
 

@@ -5,13 +5,13 @@
 
 ## 1. 문제
 
-3D Tiles 변환 파이프라인은 per-point LAS 속성(GPS-time·return·scan angle·extra-bytes)과 정밀도를 **소리없이 드롭**한다(Ion 타일러는 Intensity+Classification만 살림). 그래서 Cesium에서 점군을 **임의 속성으로 동적 스타일링하거나 피킹으로 속성 조회**할 수 없다 — Cesium staff 확인: *"dynamic range styling은 3D Tiles 스타일 언어 확장 필요, 미지원"*. COPC는 전체 LAS 속성+native 정밀도를 보존하므로 **무변환인 우리만 구조적으로** 이 갭을 닫는다. (OSS 미해결: COPC를 스트리밍하는 giro3d조차 extra-bytes를 0으로 로드 — #633 open.)
+3D Tiles 변환 파이프라인은 per-point LAS 속성(GPS-time·return·scan angle·extra-bytes)과 정밀도를 **소리없이 드롭**한다(Ion 타일러는 Intensity+Classification만 살림). 그래서 Cesium에서 포인트클라우드를 **임의 속성으로 동적 스타일링하거나 피킹으로 속성 조회**할 수 없다 — Cesium staff 확인: *"dynamic range styling은 3D Tiles 스타일 언어 확장 필요, 미지원"*. COPC는 전체 LAS 속성+native 정밀도를 보존하므로 **무변환인 우리만 구조적으로** 이 갭을 닫는다. (OSS 미해결: COPC를 스트리밍하는 giro3d조차 extra-bytes를 0으로 로드 — #633 open.)
 
 현재 우리 코드는 `decodeNode`가 한 차원만 읽어 `colors.ts`가 RGB로 **굽고 값은 버린다**. pnts batch table은 비어 있어(`batchTableJSONByteLength=0`) **속성 값이 Cesium에 안 닿는다.**
 
 ## 2. PoC 확정 (2026-06-18, `?spikeBatch`)
 
-합성 점군 + per-point BATCH_TABLE(Classification)로 가설 3개 확정:
+합성 포인트클라우드 + per-point BATCH_TABLE(Classification)로 가설 3개 확정:
 - **H1 동적 스타일링 ✅**: `Cesium3DTileStyle({ color: conditions[`${Classification}`...], pointSize: ... })`가 점당 색·크기 override(좌반 노랑 class2 / 우반 빨강 class6, 화면 확인).
 - **H2 피킹 ✅**: `scene.pick` → `Cesium3DTileFeature.getProperty('Classification')` 정확. **단 feature table에 `BATCH_ID`(점당 고유 인덱스)+`BATCH_LENGTH` 필수** — 없으면 plain object·getProperty 없음(+2B/점 비용).
 - **H3 pnts 유효 ✅**: Cesium이 batch-table pnts 거부 없이 로드(tileFailed 0).

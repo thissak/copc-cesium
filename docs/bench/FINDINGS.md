@@ -105,3 +105,34 @@ operating point에서 비교. 매칭점은 scout(`scripts/bench/match-sweep.ts`)
 ## 히스토리 주의
 
 이 브랜치엔 자동 Stop-훅 리뷰 게이트(`rev-t1` 팀메이트)가 감독 없이 만든 fix 커밋(`f96834a`·`561c863`)과 중복 메시지 커밋이 섞여 있다. 머지 전 squash 정리 권장. (rev-t1은 stand-down 처리됨.)
+
+---
+
+## 2026-06-20 재검증 — 공정 비교 도구(fair-compare)로 §v4 주장 재평가
+
+§v4의 "부드러움 동급·메모리 2× 우위"가 **motion 중 측정**(LOD 못 따라잡은 under-refined 장면)과 **단일 작동점(712k 매칭)**의 산물일 수 있다는 의심에서, 엄밀한 공정 비교 도구를 새로 만들었다(`scripts/bench/fair-compare.ts`, [[설계]] `docs/superpowers/specs/2026-06-20-fair-engine-bench-design.md`). 도구 특성: 양쪽 동일 config 정규화 · 고정 시점 · **GPU 타이머 쿼리 GPU ms**(vsync 무관) · 로딩 곡선 샘플링 · **ours-vs-ours 영실험 자기검증** · 유효성 게이트 통과 시에만 verdict.
+
+### 결과: 도구가 verdict를 **거부**했다 (가짜 숫자 0)
+sofi E2E: `nullOk=false (floor=62.9%) · overlap=2 · 2/4 게이트 FAIL → 신뢰불가`. 자기검증이 정확히 작동 — 못 믿을 비교를 단정하지 않고 *왜 못 믿는지*를 정량으로 드러냈다.
+
+### 진단 (실 GPU 인라인, 2건)
+1. **노이즈(62.9%)**: 업로드 프레임 제외해도 불변(원인 아님). 진짜 원인 = **gpuMs가 점수에 가파른 비선형**(1.75M=11.6ms → 2.25M=53.6ms; 점 1.3배에 GPU 4.6배). 250k 버킷이 이 구간엔 coarse → 런 간 버킷 내 점수차가 큰 gpuMs차로 증폭.
+2. **overlap(2버킷)**: 시점 동일(양쪽 bs center ECEF ~일치)·msse override 먹음 → 버그 아님. 진짜 원인 = **엔진 근본 차이** — 같은 SSE(msse=2)·같은 시점에서 **ours 17M점 ↔ Eptium ~1M점(작은 뷰포트 464k)**. 점 범위 [1.5–17M] vs [0.4–1M]라 거의 안 겹침.
+
+### 핵심 발견 — LOD 전략이 근본적으로 다르다 (point budget vs 무제한 SSE)
+후속 msse 스윕(같은 깊은 시점, 2026-06-20)으로 정확한 원인을 못박았다 — "ours가 과-refine"이 아니라 **전략 차이**다:
+
+| msse | ours pts | **Eptium pts** |
+|------|----------|----------------|
+| 32 | 1.81M | **763,741** |
+| 16 | 5.13M | **763,741** |
+| 8 | 10.18M | **763,741** |
+
+**Eptium은 msse 무관하게 764k 고정 → 고정 점 예산(point budget)**(Potree 방식). **ours는 표준 Cesium SSE refine이라 점 상한이 없다** → 깊게 가면 무한정(10M+). "17~37×"는 *공격적 refine*이 아니라 **ours에 점 예산이 없어서** 생긴 격차.
+
+→ **§v4의 "동급/2×"는 712k 매칭 작동점 한정**(ours를 높은 msse로 throttle). 깊은 줌 실사용에선 ours가 무제한 점 → GPU-bound(~58fps), Eptium은 764k 캡 → ~120fps. **단일 공정 verdict 불가**(겹친 2버킷서 ours per-point ~0.5× gpuMs였으나 62.9% 노이즈로 확정 불가). → **약점 = point budget 부재**, 업그레이드 백로그 = **이슈 #08**(`docs/issues/08-point-budget.md`).
+
+### 대회용 주장 가이드 (정직)
+- ❌ "Eptium 대비 부드러움 동급" / "메모리 2× 우위"를 **무조건 헤드라인으로 쓰지 말 것** — 매칭 작동점 한정 + motion 측정 아티팩트.
+- ✅ 방어 가능: "변환 없이 CesiumJS 직접 렌더" · "양자화로 점당 메모리 절반" · "재현 가능한 측정 하네스" · "공정 비교 도구가 자기검증으로 신뢰불가를 표면화(정직성)".
+- 업그레이드 1순위(이슈 #08): **point budget 추가** — ours에 점 예산이 없어 깊은 줌서 무제한 점→GPU-bound. ~1~3M 캡으로 최악 비용 유계화(BP 조사→설계→검증 필요, STOP 규칙). fair-compare 도구 노이즈(가파른 곡선·버킷)·overlap(점예산 격차)은 큰 재설계 필요라 보류.

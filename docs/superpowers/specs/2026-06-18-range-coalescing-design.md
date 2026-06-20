@@ -99,7 +99,7 @@ Cesium throttle 6으로 같은 run의 형제 노드 6개를 동시 요청하면,
 
 ## 테스트 시나리오
 
-- **정상**: millsite msse=8 로드 → round-trip ≤15, settle <8s, 점군 정상 렌더(712k).
+- **정상**: millsite msse=8 로드 → round-trip ≤15, settle <8s, 포인트클라우드 정상 렌더(712k).
 - **엣지**: 빈노드(전부 노이즈) run에 포함 → 디코드 count=0 → null → 404(정확성 유지). scattered 깊은 노드 → run of 1 폴백. region 캐시 상한 초과 soak → LRU plateau.
 - **실패**: run GET 5xx → p-retry → 소진 시 표면화(조용한 실패 X). 큰 run 타임아웃 → 크기비례 타임아웃으로 회피.
 

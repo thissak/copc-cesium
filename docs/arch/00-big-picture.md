@@ -111,7 +111,7 @@ const res = await fetchImpl(url, {
 
 ### ⑤ pnts 를 zero-copy 로 돌려준다
 
-디코드 결과는 `.pnts`(3D Tiles 점군 포맷) 바이너리입니다. 점이 많으면 이 버퍼가 크기 때문에,
+디코드 결과는 `.pnts`(3D Tiles 포인트클라우드 포맷) 바이너리입니다. 점이 많으면 이 버퍼가 크기 때문에,
 **복사하지 않고 소유권만 넘기는** transferable 방식으로 전달합니다(`postMessage(pnts, [pnts])`).
 버퍼를 한 번 더 복사하는 비용을 없앱니다.
 

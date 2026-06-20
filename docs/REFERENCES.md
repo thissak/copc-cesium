@@ -4,7 +4,7 @@
 
 ## 결론 한 줄
 
-오픈소스 **빌딩블록**(copc.js·laz-perf·Cesium)과 오픈소스 **점군 스트리머**(Giro3D·iTowns·Potree)는 있다.
+오픈소스 **빌딩블록**(copc.js·laz-perf·Cesium)과 오픈소스 **포인트클라우드 스트리머**(Giro3D·iTowns·Potree)는 있다.
 그러나 **Cesium 전용 오픈소스 COPC 통합은 부재** — 완성품(Eptium / viewer.copc.io)은 전부 같은 제작자(Connor Manning/Hobu)의 **상용**이다. → 과제의 갭이 실재.
 
 → 이 갭을 *어떤 성능 목표로* 채울지(Eptium은 잣대 아님, 오픈 동료가 비교선)는 [STRATEGY.md](STRATEGY.md) 참조.

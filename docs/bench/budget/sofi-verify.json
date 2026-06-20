@@ -1,0 +1,38 @@
+{
+  "ds": "sofi",
+  "glRenderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+  "rows": [
+    {
+      "point": "deep",
+      "cap": "unlimited",
+      "mb": 512,
+      "finalPts": 9287184,
+      "plateauGpuMs": 61.075,
+      "cesiumMB": 143
+    },
+    {
+      "point": "deep",
+      "cap": "budget2M",
+      "mb": 16,
+      "finalPts": 2098011,
+      "plateauGpuMs": 11.241,
+      "cesiumMB": 32
+    },
+    {
+      "point": "normal",
+      "cap": "unlimited",
+      "mb": 512,
+      "finalPts": 6998297,
+      "plateauGpuMs": 81.999,
+      "cesiumMB": 107
+    },
+    {
+      "point": "normal",
+      "cap": "budget2M",
+      "mb": 16,
+      "finalPts": 2061583,
+      "plateauGpuMs": 34.407,
+      "cesiumMB": 31
+    }
+  ]
+}

@@ -22,14 +22,14 @@ COPC 창시자 Hobu의 상용 **Eptium**이 *"COPC, COG, EPT data support for Ce
 
 ### 2. CRS 자동 배치 (ECEF auto-placement) ⭐ — **✅ 출하 (A안, feat/crs-auto-placement 2026-06-19)**
 - **출하**: WKT 자동 reproject(WKT1·WKT2 모두 proj4가 처리)는 happy path = zero-config. no-WKT/파싱실패/축뒤집힘 → **fail-loud**(`resolveCrs`) + `crs`(force)/`defaultCrs`(fill-if-missing) override(PDAL 2-mode) + cube 중심 sanity 가드(`checkCenterInRange`). geoid scope-out(heights=ellipsoidal, 업계 norm). **한계**: EPSG override는 proj4 내장분만, GeoTIFF GeoKey 자동복구·풀 EPSG 레지스트리 = B안 follow-up. (BP: proj4/copc.js 실측+prior-art 6종 · check-crs 10/10·AC1~7 · [ADR-007 예정])
-- **실해**: 변환 후 점군이 **지구 밖/거울상/수 m 오프셋**. Cesium은 ECEF(EPSG:4978)인데 원본 점군은 거의 아님.
+- **실해**: 변환 후 포인트클라우드가 **지구 밖/거울상/수 m 오프셋**. Cesium은 ECEF(EPSG:4978)인데 원본 포인트클라우드는 거의 아님.
 - **우리-영역성**: COPC/LAS WKT VLR 읽어 on-the-fly reproject → **zero-config** 배치.
 - **복잡도**: bounded-hard(개념 해결, 운영 footgun).
 - **레버리지**: 매우 높음 — **py3dtiles maintainer가 전용 FAQ를 유지**할 만큼 빈발("This issue is so common"). 가장 즉각 "그냥 된다" 데모.
 - **증거**: SO#79257450(py3dtiles maintainer)·gis.se#481090(907뷰 "black space, mirror image")·SO#69606114(1.8m offset)·giro3d#665(옥트리도 변환 필요).
 
 ### 3. 옥트리 피킹 / 최근접점 / 스냅 (picking) — stretch
-- **실해**: Cesium pick이 점군에서 globe로 빠짐·최근접점 검색 없음·측정 스냅 안 됨.
+- **실해**: Cesium pick이 포인트클라우드에서 globe로 빠짐·최근접점 검색 없음·측정 스냅 안 됨.
 - **우리-영역성**: COPC 옥트리 = 공간 인덱스 → `.pnts` tileset엔 없는 구조적 우위로 pick API 한계 돌파.
 - **복잡도**: 진짜 hard + 부분적으로 renderer-shaped(리스크↑).
 - **레버리지**: 높음 — 측량·AEC 유료 도메인, Cesium 포럼 최다 hard 클러스터. **단 web-voiced(picking/snap)만**, clipping/cross-section은 desktop-voiced·Potree有 → 제외.
@@ -49,6 +49,12 @@ COPC 창시자 Hobu의 상용 **Eptium**이 *"COPC, COG, EPT data support for Ce
 
 ### 6. laz-perf CSP / 호스팅 스토리
 - Emscripten 출력의 `eval()`/`Function`이 CSP `default-src 'self'`에서 차단(giro3d#561, "upstream"). WASM 호스팅/CSP 가이드.
+
+### 7. Point budget — 깊은 줌 부드러움 유계화 (이슈 #08) — **✅ 완료 (2026-06-20, `feat/fair-engine-bench`)**
+- **출하**: `pointBudget` 옵션(기본 200만) → Cesium 네이티브 `cacheBytes = maximumCacheOverflowBytes = pointBudget × 8B`(점당 실측 ~16B)로 근사 캡 — **손코딩 0**(`memoryAdjustedScreenSpaceError`가 한도 초과 시 refine 자동 억제, ADR-001 위임). measure-first 게이트로 동적 SSE 외부루프 불필요 확정(Circuit Breaker).
+- **검증(실 GPU M4 Pro, 2시점×on/off, `scripts/bench/probe-budget.ts`)**: 깊은 줌 9.29M/16fps → **2.10M/89fps**, 정상뷰 7.0M → 2.06M, **양 시점 스크린샷 시각 동일**(여분점=sub-pixel noise). 환산 ±5%. tsc·verify 회귀 0. measure-first가 전제 2개 적발(sub-pixel 가정은 EDL on서도 참 / "정상뷰 무영향" 거짓이나 품질 OK).
+- **코드 확정 갭(해결 전)**: ours 표준 SSE refine은 점 상한 없음 → 깊은 줌 무제한(10M+)·GPU-bound. Eptium은 764k 고정 점예산.
+- **판정**: 북극성 **"부드럽게"** 직결 — Eptium parity라 헤드라인 차별화는 약하나(Tier 2) 완성도 필수. 상세 `docs/issues/08-point-budget.md` §3~5 · handoff.
 
 ## Tier 3 — 이미 강점 / commodity (유지·튜닝만, 차별화로 안 밂)
 - LOD/메모리/point budget → Cesium 위임 **상속**([ADR-001]). EDL/attenuation → Cesium 네이티브(3DTilesRendererJS보다 앞섬, #912). 동시성 → 방금 출하(`maxRequestsPerServer`, [ADR-004]). colorBy 5모드 → 이미 있음(**Tier1-#1이 이걸 심화**).

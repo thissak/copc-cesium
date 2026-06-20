@@ -5,7 +5,7 @@
 
 ## 맥락
 
-- 과제: COPC 점군을 **변환 없이** CesiumJS에 직접 가시화.
+- 과제: COPC 포인트클라우드를 **변환 없이** CesiumJS에 직접 가시화.
 - 과제가 명시한 본보기: *"COG용 `TIFFImageryProvider`와 유사한 가시화 라이브러리 개발"* → **결과물 형식을 지정한 힌트.**
 - Phase 1 측정([RESULTS](../RESULTS.md)):
   - naive(전량 로드 + `PointPrimitiveCollection`)는 **~2~3M점에서 무너짐** (메모리 1KB/점, 4M=3.9GB, fps 17). 지배축은 GPU가 아니라 **편의 API의 CPU·메모리 오버헤드**.

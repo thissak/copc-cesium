@@ -13,7 +13,7 @@
 
 ```mermaid
 flowchart LR
-    A["점군이란<br/>(데이터 본질)"] --> B["COPC<br/>(저장·전송 포맷)"]
+    A["포인트클라우드란<br/>(데이터 본질)"] --> B["COPC<br/>(저장·전송 포맷)"]
     B --> D["통합 + LOD<br/>(이 프로젝트의 본체)"]
     C["CesiumJS<br/>(렌더 엔진)"] --> D
     E["좌표계<br/>(지구에 앉히기)"] --> D
@@ -23,8 +23,8 @@ flowchart LR
 
 | # | 문서 | 한 줄 |
 |---|------|-------|
-| 01 | [점군 기초](01-point-clouds.md) | 점군이 뭐고 왜 무거운가 |
-| 02 | [COPC 포맷](02-copc.md) | 변환 없이 스트리밍되는 점군 파일 |
+| 01 | [포인트클라우드 기초](01-point-clouds.md) | 포인트클라우드가 뭐고 왜 무거운가 |
+| 02 | [COPC 포맷](02-copc.md) | 변환 없이 스트리밍되는 포인트클라우드 파일 |
 | 03 | [CesiumJS](03-cesiumjs.md) | 웹 3D 지구본 렌더 엔진 |
 | 04 | [좌표계와 georeferencing](04-coordinate-systems.md) | 점을 지구 위 제 위치에 |
 | 05 | [통합과 LOD 스트리밍](05-copc-cesium-integration.md) | 둘을 잇는 진짜 문제 |

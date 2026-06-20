@@ -1,6 +1,6 @@
 # CopcCesiumLab — 운영 규칙
 
-COPC 점군을 사전 변환 없이 CesiumJS에 직접 렌더하는 기술 프로토타입. (대회 입상 타진용 실험 랩)
+COPC 포인트클라우드를 사전 변환 없이 CesiumJS에 직접 렌더하는 기술 프로토타입. (대회 입상 타진용 실험 랩)
 성격: 학습·사이드. SSOT는 이 파일 → `docs/PROGRESS.md` → `docs/CHANGELOG.md` 순.
 
 ## 빌드 / 실행
