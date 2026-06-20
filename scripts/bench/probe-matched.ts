@@ -15,8 +15,9 @@ const EDL = process.argv.includes('--edl'); // 실사용(EDL/atten on) vs raw �
 const MSSE = 2;        // 깊은 refine 압박 — ours 가 많이 그리려 하고 예산이 캡
 const BUCKET = 100_000; // 매칭점 부근(~500-800k) 미세 해상도
 const CAP = 60_000;
-const OURS_CACHE_MB = [4, 6, 8, 10]; // cacheBytes=overflow=mb(실효 2mb). ~437k~1M 브래킷(Eptium plateau 부근)
+const OURS_CACHE_MB = [3, 4, 6, 8, 10]; // cacheBytes=overflow=mb(실효 2mb). ~350k~1.3M — Eptium plateau(400~764k) 전 범위 덮음
 const DATASETS: Record<string, string> = {
+  autzen: 'https://s3.amazonaws.com/hobu-lidar/autzen-classified.copc.laz',
   millsite: 'https://s3.amazonaws.com/hobu-lidar/millsite.copc.laz',
   sofi: 'https://hobu-lidar.s3.amazonaws.com/sofi.copc.laz',
 };
@@ -54,13 +55,8 @@ async function ensureDevServer(): Promise<() => void> {
   child.kill(); throw new Error('dev server failed on :5173');
 }
 
-async function main() {
-  const ds = process.argv.includes('--ds') ? process.argv[process.argv.indexOf('--ds') + 1] : 'sofi';
-  if (!DATASETS[ds]) throw new Error(`unknown --ds ${ds}`);
-  const browser = await chromium.launch({ headless: false });
-  const stopDev = await ensureDevServer();
-  mkdirSync('docs/bench/budget', { recursive: true });
-  try {
+// 한 데이터셋의 매칭 비교 — Eptium plateau + ours cacheBytes 스윕 + 매칭점 선택
+async function runDataset(browser: Browser, ds: string) {
     // 1) Eptium plateau (자체 점예산)
     const eptium = await measure(browser, `https://viewer.copc.io/?copc=${DATASETS[ds]}`, EDL ? 'edlOn' : true);
     console.log(`[matched] eptium  plateauPts=${eptium.plateauPts}  gpuMs=${eptium.plateauGpuMs}  (n=${eptium.plateauN}, finalPts=${eptium.finalPts})`);
@@ -107,6 +103,50 @@ async function main() {
     writeFileSync(`docs/bench/budget/matched-${ds}${suffix}.md`, md);
     writeFileSync(`docs/bench/budget/matched-${ds}${suffix}.json`, JSON.stringify({ ds, msse: MSSE, edl: EDL, target, eptium, oursRuns, matched, mismatch, ratio }, null, 2));
     console.log(`[matched] wrote docs/bench/budget/matched-${ds}${suffix}.{md,json}  ratio=${ratio.toFixed(3)} mismatch=${(mismatch * 100).toFixed(1)}%`);
+    // ours 곡선 평탄성(전 작동점): 스윕 gpuMs 의 max/min — 1 에 가까울수록 점수 무관 평탄
+    const oursGpu = oursRuns.filter((o: any) => o.plateauGpuMs != null).map((o: any) => o.plateauGpuMs);
+    const flatness = oursGpu.length ? +(Math.max(...oursGpu) / Math.min(...oursGpu)).toFixed(2) : null;
+    return { ds, eptium, oursRuns, matched, mismatch, ratio, flatness };
+}
+
+async function main() {
+  const dsArg = process.argv.includes('--ds') ? process.argv[process.argv.indexOf('--ds') + 1] : 'sofi';
+  const dsList = dsArg.split(',').map((s) => s.trim());
+  for (const ds of dsList) if (!DATASETS[ds]) throw new Error(`unknown --ds ${ds}`);
+  const browser = await chromium.launch({ headless: false });
+  const stopDev = await ensureDevServer();
+  mkdirSync('docs/bench/budget', { recursive: true });
+  try {
+    const results: any[] = [];
+    for (const ds of dsList) results.push(await runDataset(browser, ds));
+    if (dsList.length < 2) return; // 단일 ds = 기존 per-ds 리포트로 충분
+
+    // 통합 리포트 (전 작동점·다중 ds 우위 검증)
+    const mode = EDL ? 'EDL/atten ON (실사용)' : 'EDL/atten OFF (raw 점)';
+    const fps = (ms: number) => (ms > 0 ? Math.round(1000 / ms) : 0);
+    const allFaster = results.every((r) => r.ratio < 1);
+    const allFlat = results.every((r) => r.flatness != null && r.flatness <= 2.0);
+    const md = [
+      `# 매칭 head-to-head 일반화 — 다중 ds·전 작동점 (${mode}, 깊은 0.15r, 정상상태, 실 GPU)`,
+      ``,
+      `GL: ${results[0].eptium.gl} · msse=${MSSE} · 데이터셋 ${dsList.join('·')} · ⚠️ **매칭 작동점 한정, Eptium plateau run변동**`,
+      ``,
+      `## 데이터셋별 매칭점 비교`,
+      `| ds | ours (점수/gpuMs/fps) | eptium (점수/gpuMs/fps) | ratio | 매칭오차 | ours 곡선 평탄(max/min) |`,
+      `|---|---|---|---|---|---|`,
+      ...results.map((r) => `| ${r.ds} | ${r.matched.plateauPts?.toLocaleString()}/${r.matched.plateauGpuMs}/${fps(r.matched.plateauGpuMs)} | ${r.eptium.plateauPts?.toLocaleString()}/${r.eptium.plateauGpuMs}/${fps(r.eptium.plateauGpuMs)} | **${r.ratio.toFixed(3)}** | ${(r.mismatch * 100).toFixed(0)}% | ${r.flatness}× |`),
+      ``,
+      `## 판정 (전 작동점·다중 ds)`,
+      `- **AC1 다중 ds 우위**: ${allFaster ? '✅ 전 데이터셋서 ours ratio<1 (Eptium보다 빠름)' : '⚠️ 일부 ds서 ratio≥1'}`,
+      `- **AC2 전 작동점(곡선 평탄)**: ${allFlat ? '✅ 전 ds서 ours gpuMs max/min ≤2× — 우위가 한 점 아닌 전 점수 범위' : '⚠️ 일부 ds서 곡선 비평탄'}`,
+      `- **AC3 정직**: Eptium plateau 는 뷰포트·회차 의존(단일 run). 매칭 작동점·실 GPU 1대·${mode} 한정. ours 점수는 cacheBytes 결정론.`,
+      ``,
+      `> 각 ds 상세: matched-{ds}${EDL ? '-edl' : ''}.md. ours 곡선 평탄=점수 바꿔도 gpuMs 거의 불변 → "전 작동점" 근거.`,
+    ].join('\n');
+    const suffix = EDL ? '-edl' : '';
+    writeFileSync(`docs/bench/budget/matched-general${suffix}.md`, md);
+    writeFileSync(`docs/bench/budget/matched-general${suffix}.json`, JSON.stringify({ mode, dsList, results }, null, 2));
+    console.log(`[matched] wrote matched-general${suffix}.md  allFaster=${allFaster} allFlat=${allFlat}`);
   } finally { await browser.close(); stopDev(); }
 }
 main().catch((e) => { console.error('[matched] fatal', e); process.exit(1); });

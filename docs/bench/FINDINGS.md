@@ -202,3 +202,26 @@ ours 스윕 전 구간 평탄: 500k/5.72 · 800k/5.24 · 1M/5.71 · 1.3M/5.97 ms
 - **EDL 비용이 ours에 ~1ms 이하만 더함**(500k: off 5.72→on 5.19 · 1.3M: 5.97→7.05). GPU 타이머가 EDL 패스(preRender~postRender) 포함하므로 누락 아님 — EDL이 M4서 싸다. → **직전 우위가 EDL-off 아티팩트가 아님 확인**: 실사용 시각에서도 ours 빠름(5.19↔9.08, ours ~1.75×, ours가 점도 더 많음).
 - **caveat 심화**: ratio가 0.40(off)→0.57(on)로 우위 축소했으나 **EDL 탓 아님** — 이번 Eptium plateau가 400k(직전 600k)로 떨어진 탓(뷰포트 의존). 매칭 오차 25%(ours 500k vs Eptium 400k)·**Eptium plateau run 변동(400~764k)이 이 비교의 최대 약점**.
 - ✅ 방어 톤: "우위 방향(ours GPU 비용 낮음)은 EDL off/on 양쪽서 견고, 크기는 1.75~2.5× 범위로 불확실(Eptium plateau 변동). 실사용 EDL-on서도 ours 우위 유지 — raw-point 아티팩트 아님." 매칭점·단일 ds 한정, 헤드라인 아님.
+
+---
+
+## 2026-06-20 다중 ds 일반화 시도 — measure-first가 "단순 우위 헤드라인"을 반증
+
+"ours가 Eptium보다 빠르다"를 대회 주장으로 굳히기 전, sofi 단일·600k 한정을 **3개 ds·전 작동점**으로 일반화 시도(`probe-matched.ts --ds autzen,millsite,sofi`, EDL-off, `matched-general.md`). **결과: 클린하게 일반화되지 않았다 — 그리고 그게 핵심 발견이다.**
+
+### 측정 (매칭점 gpuMs, 깊은 0.15r)
+| ds | Eptium 작동점(plateau/finalPts) | ours @ 같은 점수 | ratio | 클린 매칭? |
+|----|------|------|-------|-----------|
+| autzen | 3.1M / 3.05M (정착) | ours 캡 ~1.3M | 0.171 | ❌ 오차 58% (ours가 적게 그림) |
+| millsite | 400k / **5.5M** (미정착) | 400k 4.46ms ↔ Eptium 9.96ms | 0.448 | ⚠️ Eptium 작동점은 5.5M, 400k는 로딩 통과점 |
+| sofi | 400k / 442k (정착) | 400k 4.33ms ↔ Eptium 9.98ms | 0.434 | ✅ 둘 다 정착·400k |
+
+### 보정된 결론 (도구 자동 verdict "전 ds 우위 ✅"는 과장 — 정정)
+1. **Eptium은 균일하게 캡하지 않는다 → 기존 "764k 고정 점예산"은 sofi-뷰 한정.** 깊은 0.15r서 Eptium 작동점이 데이터셋마다 극명히 갈림(autzen 3.1M·millsite 5.5M·sofi 442k). "Eptium=고정 점예산"(이슈 #08/이 문서 §2026-06-20 상단)은 sofi 특정 뷰의 산물이었다.
+2. **"ours가 Eptium보다 빠르다"는 단순 헤드라인은 일반화 안 됨.** autzen/millsite 깊은 뷰서 Eptium은 3~5.5M(더 많은 디테일)을 그리고 ours 캡은 거기 안 감 → 같은 *디테일* 비교 불가. **클린 same-operating-point 우위는 sofi에서만** 성립(0.43×).
+3. **단 robust한 것 = per-point GPU 효율.** 같은 점 수에서 ours gpuMs(4~5.5ms) < Eptium(~10ms), **전 3개 ds 일관**. ours 곡선 평탄(max/min 1.2~1.27×) → 우위가 한 점 아닌 전 점수 범위(단 millsite는 Eptium 로딩 중 버퍼업로드 confound 가능).
+
+### 주장 가이드 (정정·강화)
+- ❌ "오픈소스가 상용보다 빠름" 단순 헤드라인 금지 — 일반화 안 됨(measure-first가 반증).
+- ✅ 방어 가능: **"같은 점 수(매칭 디테일)에서 ours가 GPU를 ~2× 덜 쓴다 — 양자화 경량 파이프라인(uint16 위치), 3개 ds 일관."** + **"ours는 point budget으로 깊은 줌 부드러움을 유계화(2M/~11ms/89fps), Eptium은 무제한 디테일(5.5M)을 택해 더 무거움 — 다른 트레이드오프."**
+- 이게 measure-first의 가치: 과장(전 작동점 우위)을 대회 주장으로 굳히기 전에 측정으로 잡고, *진짜 방어 가능한* 더 정밀한 주장(per-point 효율 + 트레이드오프)으로 교체.
