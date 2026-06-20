@@ -25,7 +25,10 @@ var FairProbe = (() => {
     findTilesetIndex: () => findTilesetIndex,
     normalizeConfig: () => normalizeConfig,
     readConfig: () => readConfig,
-    reassertConfig: () => reassertConfig
+    readStats: () => readStats,
+    reassertConfig: () => reassertConfig,
+    setViewpoint: () => setViewpoint,
+    settleFull: () => settleFull
   });
   var W = () => window;
   function findTilesetIndex() {
@@ -77,6 +80,48 @@ var FairProbe = (() => {
   function assertConfig(idx) {
     const c = readConfig(idx);
     return c.edl === false && c.attenuation === false && c.globeShow === false && c.resolutionScale === NORM.resolutionScale;
+  }
+  function readStats(idx) {
+    const v = W().viewer;
+    const ts = v.scene.primitives.get(idx);
+    const st = ts.statistics || {};
+    const m = performance.memory;
+    return {
+      pointsSelected: st.numberOfPointsSelected || 0,
+      tilesReady: st.numberOfTilesWithContentReady || 0,
+      pending: st.numberOfPendingRequests || 0,
+      heapMB: m ? m.usedJSHeapSize / 1048576 : 0,
+      cesiumMB: ts.totalMemoryUsageInBytes / 1048576
+    };
+  }
+  function setViewpoint(idx) {
+    const v = W().viewer;
+    const ts = v.scene.primitives.get(idx);
+    const bs = ts.boundingSphere;
+    const sph = bs.clone();
+    sph.radius = bs.radius * 0.15;
+    v.camera.flyToBoundingSphere(sph, { duration: 0 });
+    v.scene.requestRender();
+  }
+  async function settleFull(idx, capMs) {
+    const v = W().viewer;
+    const s = (ms) => new Promise((r) => setTimeout(r, ms));
+    const t0 = performance.now();
+    let prevR = -1, prevP = -1, stable = 0;
+    while (performance.now() - t0 < capMs) {
+      v.scene.requestRender();
+      await s(200);
+      const st = readStats(idx);
+      if (st.pending === 0 && st.tilesReady > 0 && st.tilesReady === prevR && st.pointsSelected === prevP) {
+        stable += 200;
+        if (stable >= 2500) return { settleMs: Math.round(performance.now() - t0 - stable), settled: true };
+      } else {
+        stable = 0;
+        prevR = st.tilesReady;
+        prevP = st.pointsSelected;
+      }
+    }
+    return { settleMs: capMs, settled: false };
   }
   return __toCommonJS(fair_probe_exports);
 })();
