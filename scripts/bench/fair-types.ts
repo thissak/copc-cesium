@@ -28,3 +28,5 @@ export interface ValidityGates {
   varianceOk: boolean;
   nullTestOk: boolean;
 }
+export interface CurvePoint { pts: number; gpuMs: number; n: number }
+export interface ViewerCurve { label: 'ours' | 'eptium'; glRenderer: string; gpuOk: boolean; finalPts: number; curve: CurvePoint[] }

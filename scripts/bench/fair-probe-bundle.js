@@ -23,13 +23,13 @@ var FairProbe = (() => {
   __export(fair_probe_exports, {
     assertConfig: () => assertConfig,
     findTilesetIndex: () => findTilesetIndex,
+    measureLoadCurve: () => measureLoadCurve,
     normalizeConfig: () => normalizeConfig,
     readConfig: () => readConfig,
     readStats: () => readStats,
     reassertConfig: () => reassertConfig,
     setMsse: () => setMsse,
-    setViewpoint: () => setViewpoint,
-    settleFull: () => settleFull
+    setViewpoint: () => setViewpoint
   });
   var W = () => window;
   function findTilesetIndex() {
@@ -108,25 +108,74 @@ var FairProbe = (() => {
     const v = W().viewer;
     v.scene.primitives.get(idx).maximumScreenSpaceError = msse;
   }
-  async function settleFull(idx, capMs) {
+  async function measureLoadCurve(idx, msse, capMs, bucketSize, reassert) {
     const v = W().viewer;
-    const s = (ms) => new Promise((r) => setTimeout(r, ms));
+    const ts = v.scene.primitives.get(idx);
+    const s = (d) => new Promise((r) => setTimeout(r, d));
+    const gl = (v.canvas || document.querySelector("canvas"))?.getContext("webgl2");
+    const ext = gl ? gl.getExtension("EXT_disjoint_timer_query_webgl2") : null;
+    ts.maximumScreenSpaceError = msse;
+    const buckets = /* @__PURE__ */ new Map();
+    const inflight = [];
+    let active = null;
+    let activePts = 0;
+    let disjoint = false;
+    const onPre = () => {
+      if (!ext || active) return;
+      active = gl.createQuery();
+      activePts = readStats(idx).pointsSelected;
+      gl.beginQuery(ext.TIME_ELAPSED_EXT, active);
+    };
+    const onPost = () => {
+      if (ext && active) {
+        gl.endQuery(ext.TIME_ELAPSED_EXT);
+        inflight.push({ q: active, pts: activePts });
+        active = null;
+      }
+      if (!ext) return;
+      if (gl.getParameter(ext.GPU_DISJOINT_EXT)) {
+        disjoint = true;
+        inflight.length = 0;
+        return;
+      }
+      for (let i = inflight.length - 1; i >= 0; i--) {
+        const { q, pts } = inflight[i];
+        if (gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)) {
+          const ms = gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6;
+          const key = Math.round(pts / bucketSize) * bucketSize;
+          if (!buckets.has(key)) buckets.set(key, []);
+          buckets.get(key).push(ms);
+          gl.deleteQuery(q);
+          inflight.splice(i, 1);
+        }
+      }
+    };
+    v.scene.preRender.addEventListener(onPre);
+    v.scene.postRender.addEventListener(onPost);
     const t0 = performance.now();
-    let prevR = -1, prevP = -1, stable = 0;
+    let prevPts = -1, plateau = 0;
     while (performance.now() - t0 < capMs) {
+      if (reassert) reassertConfig(idx);
       v.scene.requestRender();
-      await s(200);
-      const st = readStats(idx);
-      if (st.tilesReady > 0 && st.tilesReady === prevR && st.pointsSelected === prevP) {
-        stable += 200;
-        if (stable >= 3e3) return { settleMs: Math.round(performance.now() - t0 - stable), settled: true };
+      await s(50);
+      const pts = readStats(idx).pointsSelected;
+      if (pts === prevPts) {
+        plateau += 50;
+        if (plateau >= 5e3) break;
       } else {
-        stable = 0;
-        prevR = st.tilesReady;
-        prevP = st.pointsSelected;
+        plateau = 0;
+        prevPts = pts;
       }
     }
-    return { settleMs: capMs, settled: false };
+    await s(200);
+    v.scene.preRender.removeEventListener(onPre);
+    v.scene.postRender.removeEventListener(onPost);
+    const med = (a) => {
+      const x = [...a].sort((m, n) => m - n);
+      return +x[Math.floor(x.length / 2)].toFixed(3);
+    };
+    const curve = [...buckets.entries()].map(([pts, arr]) => ({ pts, gpuMs: med(arr), n: arr.length })).filter((b) => b.n >= 3).sort((a, b) => a.pts - b.pts);
+    return { curve, gpuOk: !!ext && !disjoint && curve.length > 0, gpuDisjoint: disjoint, finalPts: prevPts };
   }
   return __toCommonJS(fair_probe_exports);
 })();

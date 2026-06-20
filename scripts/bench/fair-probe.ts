@@ -93,22 +93,61 @@ export function setMsse(idx: number, msse: number): void {
   v.scene.primitives.get(idx).maximumScreenSpaceError = msse;
 }
 
-// 완전정착: tilesReady ∧ pointsSelected 안정 3s; pending 미게이트
-// (SW 파이프라인이 pending 을 영구 non-zero 로 유지 — #03 processing stuck 과 동형;
-//  render-finality 신호는 pointsSelected/tilesReady 안정성). cap 도달 시 settled=false.
-export async function settleFull(idx: number, capMs: number): Promise<{ settleMs: number; settled: boolean }> {
+export async function measureLoadCurve(idx: number, msse: number, capMs: number, bucketSize: number, reassert: boolean) {
   const v = W().viewer;
-  const s = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const ts = v.scene.primitives.get(idx);
+  const s = (d: number) => new Promise((r) => setTimeout(r, d));
+  const gl: any = (v.canvas || document.querySelector('canvas'))?.getContext('webgl2');
+  const ext: any = gl ? gl.getExtension('EXT_disjoint_timer_query_webgl2') : null;
+  ts.maximumScreenSpaceError = msse;
+
+  const buckets = new Map<number, number[]>(); // bucketKey → gpuMs[]
+  const inflight: { q: any; pts: number }[] = [];
+  let active: any = null;
+  let activePts = 0;
+  let disjoint = false;
+  const onPre = () => {
+    if (!ext || active) return;
+    active = gl.createQuery();
+    activePts = readStats(idx).pointsSelected; // 이 프레임 렌더 시점의 점 수
+    gl.beginQuery(ext.TIME_ELAPSED_EXT, active);
+  };
+  const onPost = () => {
+    if (ext && active) { gl.endQuery(ext.TIME_ELAPSED_EXT); inflight.push({ q: active, pts: activePts }); active = null; }
+    if (!ext) return;
+    if (gl.getParameter(ext.GPU_DISJOINT_EXT)) { disjoint = true; inflight.length = 0; return; }
+    for (let i = inflight.length - 1; i >= 0; i--) {
+      const { q, pts } = inflight[i];
+      if (gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)) {
+        const ms = gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6; // ns → ms
+        const key = Math.round(pts / bucketSize) * bucketSize;
+        if (!buckets.has(key)) buckets.set(key, []);
+        buckets.get(key)!.push(ms);
+        gl.deleteQuery(q); inflight.splice(i, 1);
+      }
+    }
+  };
+  v.scene.preRender.addEventListener(onPre);
+  v.scene.postRender.addEventListener(onPost);
+
   const t0 = performance.now();
-  let prevR = -1, prevP = -1, stable = 0;
+  let prevPts = -1, plateau = 0;
   while (performance.now() - t0 < capMs) {
+    if (reassert) reassertConfig(idx); // Eptium 매프레임 덮어쓰기 방어
     v.scene.requestRender();
-    await s(200);
-    const st = readStats(idx);
-    if (st.tilesReady > 0 && st.tilesReady === prevR && st.pointsSelected === prevP) {
-      stable += 200;
-      if (stable >= 3000) return { settleMs: Math.round(performance.now() - t0 - stable), settled: true };
-    } else { stable = 0; prevR = st.tilesReady; prevP = st.pointsSelected; }
+    await s(50);
+    const pts = readStats(idx).pointsSelected;
+    if (pts === prevPts) { plateau += 50; if (plateau >= 5000) break; } // 5s 정지 = 로드 완료 → 조기 종료
+    else { plateau = 0; prevPts = pts; }
   }
-  return { settleMs: capMs, settled: false };
+  await s(200); // 잔여 query 드레인
+  v.scene.preRender.removeEventListener(onPre);
+  v.scene.postRender.removeEventListener(onPost);
+
+  const med = (a: number[]) => { const x = [...a].sort((m, n) => m - n); return +x[Math.floor(x.length / 2)].toFixed(3); };
+  const curve = [...buckets.entries()]
+    .map(([pts, arr]) => ({ pts, gpuMs: med(arr), n: arr.length }))
+    .filter((b) => b.n >= 3) // 버킷당 최소 3 프레임
+    .sort((a, b) => a.pts - b.pts);
+  return { curve, gpuOk: !!ext && !disjoint && curve.length > 0, gpuDisjoint: disjoint, finalPts: prevPts };
 }
