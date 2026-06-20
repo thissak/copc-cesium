@@ -4,7 +4,7 @@ import { resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { spawn } from 'node:child_process';
 import { writeFileSync, mkdirSync } from 'node:fs';
-import type { ViewerCurve } from './fair-types';
+import type { ViewerCurve, CurvePoint } from './fair-types';
 import { renderFairReport } from './fair-report';
 
 const BUNDLE = resolve(fileURLToPath(import.meta.url), '../fair-probe-bundle.js');
@@ -39,3 +39,71 @@ export async function measureViewer(browser: Browser, label: 'ours' | 'eptium', 
   await ctx.close();
   return { label, glRenderer, gpuOk: r.gpuOk, finalPts: r.finalPts, curve: r.curve };
 }
+
+async function ensureDevServer(): Promise<() => void> {
+  const ok = async () => { try { return (await fetch('http://localhost:5173')).status < 500; } catch { return false; } };
+  if (await ok()) return () => {};
+  const child = spawn('npx', ['vite', '--port', '5173'], { cwd: process.cwd(), stdio: 'ignore' });
+  for (let i = 0; i < 60; i++) { await sleep(500); if (await ok()) return () => child.kill(); }
+  child.kill(); throw new Error('dev server failed on :5173');
+}
+
+// 공통 점 버킷에서 ours/eptium GPU ms 비교
+function alignAndRatio(a: ViewerCurve, b: ViewerCurve, floor: number) {
+  const threshold = Math.max(0.10, floor);
+  const bMap = new Map(b.curve.map((p: CurvePoint) => [p.pts, p.gpuMs]));
+  const rows: any[] = [];
+  for (const pa of a.curve) {
+    const gb = bMap.get(pa.pts);
+    if (gb == null) continue; // 겹치는 버킷만
+    const ratio = pa.gpuMs / gb;
+    const verdict = Math.abs(ratio - 1) <= threshold ? '동급' : ratio < 1 ? '우위(우리가 빠름)' : '열위(우리가 느림)';
+    rows.push({ pts: pa.pts, oursGpuMs: pa.gpuMs, eptiumGpuMs: gb, ratio: +ratio.toFixed(3), verdict });
+  }
+  return rows;
+}
+
+// 영실험: 두 곡선의 공통 버킷 상대차 최대값 = 노이즈바닥
+function noiseFloor(a: ViewerCurve, b: ViewerCurve): number {
+  const bMap = new Map(b.curve.map((p: CurvePoint) => [p.pts, p.gpuMs]));
+  let maxRel = 0;
+  for (const pa of a.curve) { const gb = bMap.get(pa.pts); if (gb == null) continue; maxRel = Math.max(maxRel, Math.abs(pa.gpuMs - gb) / pa.gpuMs); }
+  return +maxRel.toFixed(3);
+}
+
+async function main() {
+  const ds = process.argv.includes('--ds') ? process.argv[process.argv.indexOf('--ds') + 1] : 'sofi';
+  if (!DATASETS[ds]) throw new Error(`unknown --ds ${ds}`);
+  const browser = await chromium.launch({ headless: false });
+  const stopDev = await ensureDevServer();
+  try {
+    const oursUrl = `http://localhost:5173/?ds=${ds}`;
+    const eptiumUrl = `https://viewer.copc.io/?copc=${DATASETS[ds].copcUrl}`;
+
+    // 영실험 (ours vs ours)
+    const nullA = await measureViewer(browser, 'ours', oursUrl);
+    const nullB = await measureViewer(browser, 'ours', oursUrl);
+    const floor = noiseFloor(nullA, nullB);
+    const nullRows = alignAndRatio(nullA, nullB, floor);
+    const nullOk = nullRows.length >= 3 && nullRows.every((r) => r.verdict === '동급');
+
+    // 본 측정
+    const ours = await measureViewer(browser, 'ours', oursUrl);
+    const eptium = await measureViewer(browser, 'eptium', eptiumUrl);
+    const verdict = alignAndRatio(ours, eptium, floor);
+
+    const gates = {
+      gpuMsOk: ours.gpuOk && eptium.gpuOk,
+      configHeld: true, // measureViewer 가 실패 시 throw → 여기 도달=held
+      overlapOk: verdict.length >= 3,
+      nullTestOk: nullOk,
+    };
+
+    mkdirSync('docs/bench', { recursive: true });
+    const md = renderFairReport({ ds, ours, eptium, verdict, floor, gates, nullOk });
+    writeFileSync(`docs/bench/fair-compare-${ds}.md`, md);
+    writeFileSync(`docs/bench/fair-compare-${ds}.json`, JSON.stringify({ ds, ours, eptium, verdict, floor, gates }, null, 2));
+    console.log(`[fair] wrote docs/bench/fair-compare-${ds}.{md,json}  nullOk=${nullOk} floor=${floor} overlap=${verdict.length}`);
+  } finally { await browser.close(); stopDev(); }
+}
+main().catch((e) => { console.error('[fair] fatal', e); process.exit(1); });
