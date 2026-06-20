@@ -29,9 +29,21 @@
 | 아키텍처 | **B안: 신규 `scripts/bench/fair-compare.ts`** — 기존 bench/ 스캐폴딩(데이터셋·probe 주입·browser/CDP) 재사용 + 클린 측정 코어 | 감독 확정. 기존 `bench:eptium`은 "motion 중 인터랙션 부드러움" 별개 측정으로 존치 |
 | 환경 | Playwright headed = 실 GPU(Apple M4 Pro Metal, PoC 확인) | swiftshader fps 무효 회피 |
 
+## 설계 개정 — 로딩 곡선 샘플링 (2026-06-20, Task4 진단 후)
+
+**Task4 진단**: sofi 깊은 뷰는 churn이 아니라 **단조 로딩**(스로틀된 SW 파이프라인 pending 6 고정 → 4892타일 다 받는 데 60s+). 따라서 "완전정착 후 측정"은 비현실적이고, "점타깃마다 이진탐색 settle"은 무거운 데이터에서 전체 수 시간이 된다.
+
+**채택(감독 승인)**: settle·이진탐색을 버리고 **로딩 곡선 샘플링**:
+- 고정 config·고정 시점·고정(낮은) msse로 깊은 뷰를 **1회 로드**.
+- 로딩되는 동안(pts 1.7M→5M+ 단조 증가) **매 프레임 (pointsSelected, GPU ms) 샘플**.
+- pointsSelected를 **버킷(예 250k)으로 묶어 버킷별 GPU ms median** → gpuMs-vs-points 곡선.
+- 양쪽 곡선을 **겹치는 점 버킷에서 비교**(점매칭이 보간으로 자연 해결).
+
+이로써 ③완전정착·②이진탐색이 **불필요**해진다. 나머지 통제(①config 정규화·④동일 시점·⑤다중 trial=곡선 반복·GPU 타이머·영실험·게이트)는 그대로. gpuMs는 그리는 점 수에 의존하지 로딩 상태에 무관(타일 업로드 프레임 스파이크는 버킷 median이 흡수). 아래 5대 통제 중 ②③은 이 개정으로 대체됨.
+
 ## 측정 단위
 
-`measure(viewer, pointTarget, trial)` → **정규화·정착·점매칭된 한 표본**. 이 단위에 5대 통제가 모두 적용된다.
+`measureLoadCurve(viewer, msse, cap)` → **고정 시점 1회 로드 동안의 [{ptsBucket, gpuMsMedian, n}] 곡선**. 한 번의 로드가 점 범위 전체를 훑는다. trial = 곡선 측정 반복.
 
 ## 5대 통제 (공정성 보장)
 
@@ -49,7 +61,7 @@
 - 헤드라인 1~2 점타깃은 msse **이진탐색으로 ±5% 정밀매칭**.
 
 ### ③ 완전정착 (드리프트 차단)
-- 정착 = `numberOfPendingRequests===0 ∧ tilesReady 안정 ∧ pointsSelected 안정` 이 **2.5s 연속** 유지.
+- 정착 = `tilesReady 안정 ∧ pointsSelected 안정` 이 **3s 연속** 유지. (`numberOfPendingRequests===0` 미게이트 — Task4 스모크 실측: 우리 SW 파이프라인이 pending을 영구 non-zero 유지(이슈 #03 processing 고착과 동형). 렌더 프레임 최종성 신호 = pointsSelected·tilesReady 안정. 양쪽 동일 기준 → 공정.)
 - cap = 60s. **cap 도달 = 정착 실패로 간주, 그 점은 측정 안 하고 플래그**(정착 안 된 수치 금지).
 - 한 viewer 1회 로드로 msse 사다리 순회 가능(각 점이 완전정착하면 상태가 이력 무관 결정적). 같은 msse 2회 → pointsSelected 재현으로 검증.
 
