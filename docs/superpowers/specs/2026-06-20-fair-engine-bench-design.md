@@ -63,14 +63,15 @@
 
 ## 두 개의 깨질 수 있는 지점 + 가드
 
-### 문제 1 — vsync 천장이 천장 아래 차이를 가린다
-120Hz에서 p50가 8.3ms에 붙어 우리6ms↔Eptium3ms 차이가 안 보임(2026-06-20 조사에서 5M점까지 둘 다 8.3ms로 나온 함정).
-- **해법**: 새 하네스가 Chromium을 직접 launch → **`--disable-gpu-vsync --disable-frame-rate-limit`** 플래그로 천장 제거 → wall-clock frametime = 실제 렌더 비용. 가벼운 점에서도 차이 드러남.
-- **보조 신호**: `EXT_disjoint_timer_query_webgl2`로 GPU ms 직접 측정(가용 시). load-bearing 아님.
-- **가드**: 측정 시작 시 fps가 여전히 ~120/frametime 8.3ms floor에 붙으면 **"vsync 미해제" 플래그 → 그 수치 신뢰불가**.
+### 문제 1 — vsync 천장이 천장 아래 차이를 가린다 (메트릭 = GPU 타이머, 스파이크 후 피벗)
+120Hz/60Hz vsync에서 wall-clock frametime이 floor에 붙어 우리6ms↔Eptium3ms 차이가 안 보임(2026-06-20 조사에서 둘 다 8.3ms로 나온 함정).
+- ~~`--disable-gpu-vsync` 플래그로 천장 제거~~ → **스파이크 실패**(macOS Metal에서 안 먹음, fps=65). 폐기.
+- **해법(확정)**: **`EXT_disjoint_timer_query_webgl2`로 GPU ms 직접 측정 = 1차 cost 메트릭.** 순수 렌더 GPU 시간이라 vsync가 wall-clock을 capping해도 무관. Cesium `scene.preRender/postRender`로 `beginQuery/endQuery`(TIME_ELAPSED_EXT) 브래킷, disjoint 시 결과 폐기, async 결과 폴링. 스파이크에서 가용 확인(`GPU_TIMER_AVAILABLE: true`).
+- **보조 신호**: wall-clock frametime은 부차 기록(양쪽 vsync 동일 조건이라 floor 위 차이만 의미).
+- **가드**: GPU 타이머가 disjoint/미가용/0 반환이면 **그 점 "GPU ms 측정불가" 플래그 → verdict에서 제외**. (조용한 0 금지)
 
-### 문제 2 — Eptium config 정규화가 실제로 먹히는가
-Eptium 타일셋에 config를 set해도 Eptium이 매 프레임 자기 설정으로 덮어쓰면 정규화가 조용히 풀림.
+### 문제 2 — Eptium config 정규화가 실제로 먹히는가 (스파이크: 실제로 덮어씀 → 가드 필수)
+Eptium 타일셋에 config를 set해도 Eptium이 매 프레임 자기 설정으로 덮어씀(스파이크 `EPTIUM_CONFIG_HOLDS: false` 확인) → 정규화가 조용히 풀림. 매 프레임 재적용 가드 **필수**.
 - **해법**: set → 1프레임 렌더 → **read-back 검증**. 되돌아가면 rAF 루프 내 **매 프레임 재적용**.
 - **가드**: 매 프레임 재적용해도 안 잡히면 → **"Eptium 정규화 불가 — verdict 무효"로 중단.** 불공정 숫자 절대 산출 안 함.
 
@@ -81,10 +82,10 @@ Eptium 타일셋에 config를 set해도 Eptium이 매 프레임 자기 설정으
 
 ## Verdict / 임계 / 메트릭 / 출력
 
-- 점타깃별 `ratio = ours_cost / eptium_cost` (cost = vsync해제 frametime median), trial들로 신뢰구간.
+- 점타깃별 `ratio = ours_cost / eptium_cost` (cost = **GPU 타이머 GPU ms median**), trial들로 신뢰구간.
 - **임계 = max(±10%, 측정 노이즈바닥)**. `|ratio−1| ≤ 임계` → 동급, 밖이면 우위/열위. 노이즈바닥보다 작은 격차는 "판정 불가"로 정직 보고.
 - **메트릭(점타깃별, 정착·정규화 상태)**: pointsSelected · wall-clock frametime{p50,p95,p99} · GPU ms(가용 시) · hitch · longTask · peakHeap · `totalMemoryUsageInBytes` · drawCalls(가용 시) · settle ms.
-- **유효성 게이트(전부 PASS해야 verdict 단정)**: ①vsync해제 ②config readback 일치 ③완전정착(캡 미도달) ④점매칭 ±5% ⑤trial분산 ≤ 노이즈바닥 ⑥ours-vs-ours=동급. **하나라도 FAIL → "신뢰불가 + 실패 게이트" 표기, 가짜 숫자 0.**
+- **유효성 게이트(전부 PASS해야 verdict 단정)**: ①GPU ms 측정가능(disjoint/0 아님) ②config readback 일치(Eptium은 매프레임 reassert로 유지·검증) ③완전정착(캡 미도달) ④점매칭 ±5% ⑤trial분산 ≤ 노이즈바닥 ⑥ours-vs-ours=동급. **하나라도 FAIL → "신뢰불가 + 실패 게이트" 표기, 가짜 숫자 0.**
 - **출력**: `docs/bench/fair-compare-<ds>.{json,md}` — fps/ms-vs-points 곡선(양쪽)·ratio 곡선·verdict·유효성 체크리스트. 진입 `npm run bench:fair -- --ds sofi`.
 - **1차 범위**: sofi(격차 드러나는 곳) + millsite.
 
@@ -95,7 +96,7 @@ Eptium 타일셋에 config를 set해도 Eptium이 매 프레임 자기 설정으
 - [ ] **AC3 (완전정착)**: 리포트에 오른 모든 점은 cap 미도달로 완전정착. 캡 도달 점은 "정착 실패"로 표기되고 verdict에서 제외.
 - [ ] **AC4 (점매칭)**: 헤드라인 점타깃에서 양쪽 pointsSelected가 목표 ±5% 내, 리포트에 실측 점수 명기.
 - [ ] **AC5 (분산)**: 각 보고 점은 N≥5 trial의 median-of-medians + IQR로 보고. IQR > 노이즈바닥인 점은 "신뢰불가" 표기.
-- [ ] **AC6 (vsync 해제)**: 측정 frametime이 vsync floor(8.3ms)에 붙지 않음을 로그로 증명. 붙으면 "vsync 미해제"로 verdict 무효.
+- [ ] **AC6 (GPU 타이머)**: cost = GPU 타이머 쿼리 GPU ms median. 각 점에서 GPU ms가 disjoint/0/미가용이 아님을 로그로 증명. 측정불가 점은 verdict에서 제외(조용한 0 금지).
 - [ ] **AC7 (재현)**: 한 명령(`npm run bench:fair -- --ds <ds>`)으로 전 과정 자동 실행 → JSON+md 생성, 재실행 시 verdict 동일(±노이즈바닥).
 
 ## 테스트 시나리오

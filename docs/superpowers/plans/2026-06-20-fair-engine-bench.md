@@ -12,8 +12,9 @@
 
 - TypeScript strict. 기존 `scripts/bench/` 스타일을 따른다(probe.ts/compare-eptium.ts).
 - 측정 코드는 **조용한 실패 금지** — 유효성 게이트 실패 시 throw 또는 verdict "신뢰불가" 표기, 가짜 숫자 0 ([[no-silent-failures]]).
-- 실 GPU 필수: Playwright `chromium.launch({ headless: false, args })`. swiftshader fps는 무효.
-- vsync 해제 floor 기준값 = 8.3ms (120Hz). 측정 frametime이 이 floor에 붙으면 vsync 미해제.
+- 실 GPU 필수: Playwright `chromium.launch({ headless: false, args })`. swiftshader fps는 무효. (스파이크 확인: 서브에이전트도 실 Metal 받음)
+- **cost 메트릭 = GPU 타이머 쿼리(`EXT_disjoint_timer_query_webgl2`) GPU ms median.** wall-clock frametime은 보조. (`--disable-gpu-vsync`는 macOS Metal에서 미작동 — 스파이크 `VSYNC_UNCAPPED: false` 확인 → vsync 해제 폐기, GPU 타이머로 피벗.)
+- GPU ms가 disjoint/0/미가용인 점은 verdict에서 제외(조용한 0 금지).
 - 점 타깃 = [0.5M, 1M, 2M, 4M] (데이터셋 상한 내). 점매칭 = `numberOfPointsSelected` ±5%.
 - 1차 데이터셋 = sofi(`https://hobu-lidar.s3.amazonaws.com/sofi.copc.laz`) + millsite(`https://s3.amazonaws.com/hobu-lidar/millsite.copc.laz`).
 - Eptium URL 패턴 = `https://viewer.copc.io/?copc=<copcUrl>` (eptium.com 리다이렉트). 우리 = `http://localhost:5173/?ds=<id>`.
@@ -148,17 +149,17 @@ export interface Sample {
   pointsSelected: number;
   frametimeMs: { p50: number; p95: number; p99: number };
   fps: number;
-  gpuMs: number | null;
+  gpuMs: number | null; // p50 GPU ms (timer query). null = disjoint/미가용 → verdict 제외
   hitches: number;
   peakHeapMB: number;
   cesiumMB: number;
   settleMs: number;
   tilesReady: number;
 }
-export interface PointResult { target: number; trials: Sample[]; median: Sample; iqrFps: number }
+export interface PointResult { target: number; trials: Sample[]; median: Sample; iqrGpuMs: number }
 export interface ViewerResult { label: 'ours' | 'eptium'; glRenderer: string; points: PointResult[] }
 export interface ValidityGates {
-  vsyncUncapped: boolean;
+  gpuMsOk: boolean;
   configHeld: boolean;
   allSettled: boolean;
   pointMatchOk: boolean;
@@ -455,7 +456,7 @@ git commit -m "feat(fair-bench): setMsse + 점매칭 단조성 확인"
 
 ---
 
-### Task 6: vsync해제 frametime 측정 (N-trial)
+### Task 6: GPU ms 측정 (GPU 타이머 쿼리, N-trial)
 
 **Files:**
 - Modify: `scripts/bench/fair-probe.ts` (add `measureFrametime`)
@@ -466,17 +467,45 @@ git commit -m "feat(fair-bench): setMsse + 점매칭 단조성 확인"
 
 - [ ] **Step 1: measureFrametime 추가 (카메라 고정, 매 프레임 강제 렌더 + config 재적용)**
 
+vsync 플래그가 안 먹어(스파이크) **cost = GPU 타이머 GPU ms**로 측정한다. Cesium `scene.preRender/postRender`로 `beginQuery/endQuery(TIME_ELAPSED_EXT)`를 프레임마다 브래킷하고, disjoint 시 폐기, async 결과를 폴링한다. `v.canvas.getContext('webgl2')`는 Cesium이 이미 만든 컨텍스트를 반환한다(같은 type → 기존 반환).
+
 ```typescript
 // fair-probe.ts 에 추가
+const pctOf = (a: number[], p: number) => { if (!a.length) return 0; const x = [...a].sort((m, n) => m - n); return +x[Math.min(x.length - 1, Math.floor((p / 100) * x.length))].toFixed(3); };
+
 export async function measureFrametime(idx: number, ms: number, reassert: boolean) {
   const v = W().viewer;
   const s = (d: number) => new Promise((r) => setTimeout(r, d));
+  const gl: any = (v.canvas || document.querySelector('canvas'))?.getContext('webgl2');
+  const ext: any = gl ? gl.getExtension('EXT_disjoint_timer_query_webgl2') : null;
+
+  // GPU 타이머: 프레임당 1 query (TIME_ELAPSED 는 중첩 불가), 결과는 async 폴링
+  const gpuSamples: number[] = [];
+  const inflight: any[] = [];
+  let active: any = null;
+  let disjoint = false;
+  const onPre = () => { if (!ext || active) return; active = gl.createQuery(); gl.beginQuery(ext.TIME_ELAPSED_EXT, active); };
+  const onPost = () => {
+    if (ext && active) { gl.endQuery(ext.TIME_ELAPSED_EXT); inflight.push(active); active = null; }
+    if (!ext) return;
+    if (gl.getParameter(ext.GPU_DISJOINT_EXT)) { disjoint = true; inflight.length = 0; return; }
+    for (let i = inflight.length - 1; i >= 0; i--) {
+      const q = inflight[i];
+      if (gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)) {
+        gpuSamples.push(gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6); // ns → ms
+        gl.deleteQuery(q); inflight.splice(i, 1);
+      }
+    }
+  };
+  v.scene.preRender.addEventListener(onPre);
+  v.scene.postRender.addEventListener(onPost);
+
   const fts: number[] = [];
   let peakHeap = 0, peakCes = 0, run = true, last = performance.now();
   const loop = () => {
     const now = performance.now();
     fts.push(now - last); last = now;
-    if (reassert) reassertConfig(idx); // Eptium 덮어쓰기 방어
+    if (reassert) reassertConfig(idx); // Eptium 덮어쓰기 방어 (매 프레임)
     v.scene.requestRender();
     const st = readStats(idx);
     peakHeap = Math.max(peakHeap, st.heapMB);
@@ -486,11 +515,16 @@ export async function measureFrametime(idx: number, ms: number, reassert: boolea
   requestAnimationFrame(loop);
   await s(ms);
   run = false;
-  await s(50);
+  await s(150); // 잔여 query 결과 드레인
+  v.scene.preRender.removeEventListener(onPre);
+  v.scene.postRender.removeEventListener(onPost);
+
   const st = readStats(idx);
+  const gpuOk = !!ext && !disjoint && gpuSamples.length > 3 && gpuSamples.every((x) => x > 0);
   return {
-    frametimes: fts.slice(1), // 첫 간격 버림
-    gpuMs: null, // GPU timer 가용 시 Task 확장(스파이크 결과에 따라)
+    frametimes: fts.slice(1), // 보조 (wall-clock)
+    gpuMs: gpuOk ? { p50: pctOf(gpuSamples, 50), p95: pctOf(gpuSamples, 95), p99: pctOf(gpuSamples, 99), n: gpuSamples.length } : null,
+    gpuDisjoint: disjoint,
     peakHeapMB: Math.round(peakHeap),
     peakCesiumMB: Math.round(peakCes),
     tilesReady: st.tilesReady,
@@ -499,14 +533,14 @@ export async function measureFrametime(idx: number, ms: number, reassert: boolea
 }
 ```
 
-- [ ] **Step 2: vsync 해제 확인 스모크 (frametime floor 검증)**
+- [ ] **Step 2: GPU 타이머 측정 스모크 (gpuMs 비-null·양수 검증)**
 
 Run (dev 서버):
 ```bash
 npx tsx -e "
 import { chromium } from 'playwright';
 (async () => {
-  const b = await chromium.launch({ headless:false, args:['--disable-gpu-vsync','--disable-frame-rate-limit'] });
+  const b = await chromium.launch({ headless:false, args:['--disable-gpu-vsync'] });
   const p = await b.newPage();
   await p.addInitScript({ path: 'scripts/bench/fair-probe-bundle.js' });
   await p.goto('http://localhost:5173/?ds=sofi', { waitUntil:'domcontentloaded' });
@@ -514,16 +548,15 @@ import { chromium } from 'playwright';
   const idx = await p.evaluate(()=>FairProbe.findTilesetIndex());
   await p.evaluate((i)=>FairProbe.normalizeConfig(i), idx);
   await p.evaluate((i)=>FairProbe.setViewpoint(i), idx);
-  await p.evaluate((a)=>FairProbe.setMsse(a.i,a.m), {i:idx,m:32});
+  await p.evaluate((a)=>FairProbe.setMsse(a.i,a.m), {i:idx,m:8});
   await p.evaluate((i)=>FairProbe.settleFull(i,60000), idx);
   const r = await p.evaluate((i)=>FairProbe.measureFrametime(i,3000,false), idx);
-  const sorted=[...r.frametimes].sort((a,c)=>a-c); const p50=sorted[Math.floor(sorted.length/2)];
-  console.log('frames',r.frametimes.length,'p50ms',p50.toFixed(2),'fps',(1000/p50).toFixed(0));
+  console.log('gpuMs', JSON.stringify(r.gpuMs), 'disjoint', r.gpuDisjoint, 'wallP50', (r.frametimes.sort((a,c)=>a-c)[Math.floor(r.frametimes.length/2)]||0).toFixed(2));
   await b.close();
 })();
 "
 ```
-Expected: 가벼운 32 msse(few points)에서 **p50 < 8.3ms / fps > 120** → vsync 해제 확인. ~8.3ms에 붙으면 **AC6 실패 → STOP**, 플래그·런치인자 재검토.
+Expected: `gpuMs`가 `null`이 아니고 `{p50,p95,p99,n}` 양수(예 p50 수~수십 ms, n>3), `disjoint false`. **gpuMs가 null이면 AC6 실패 → STOP**, GPU 타이머 브래킷(preRender/postRender·컨텍스트) 재검토. (wallP50는 보조 — vsync로 floor에 붙어도 무방)
 
 - [ ] **Step 3: Commit**
 
@@ -608,13 +641,14 @@ export async function measureViewer(browser: Browser, label: 'ours' | 'eptium', 
     await page.evaluate((a) => (window as any).FairProbe.measureFrametime(a.i, 1500, a.r), { i: idx, r: reassert });
     for (let t = 0; t < TRIALS; t++) {
       const r: any = await page.evaluate((a) => (window as any).FairProbe.measureFrametime(a.i, 3000, a.r), { i: idx, r: reassert });
-      const p50 = pct(r.frametimes, 50);
-      trials.push({ pointsSelected: r.pointsSelected, frametimeMs: { p50, p95: pct(r.frametimes, 95), p99: pct(r.frametimes, 99) }, fps: +(1000 / p50).toFixed(1), gpuMs: r.gpuMs, hitches: r.frametimes.filter((d: number) => d > 50).length, peakHeapMB: r.peakHeapMB, cesiumMB: r.peakCesiumMB, settleMs: settle.settleMs, tilesReady: r.tilesReady });
+      const wp50 = pct(r.frametimes, 50);
+      trials.push({ pointsSelected: r.pointsSelected, frametimeMs: { p50: wp50, p95: pct(r.frametimes, 95), p99: pct(r.frametimes, 99) }, fps: +(1000 / wp50).toFixed(1), gpuMs: r.gpuMs ? r.gpuMs.p50 : null, hitches: r.frametimes.filter((d: number) => d > 50).length, peakHeapMB: r.peakHeapMB, cesiumMB: r.peakCesiumMB, settleMs: settle.settleMs, tilesReady: r.tilesReady });
     }
-    const fpsList = trials.map((t) => t.fps).sort((a, b) => a - b);
-    const median = trials.slice().sort((a, b) => a.fps - b.fps)[Math.floor(trials.length / 2)];
-    const iqrFps = fpsList[Math.floor(fpsList.length * 0.75)] - fpsList[Math.floor(fpsList.length * 0.25)];
-    points.push({ target, trials, median, iqrFps });
+    // cost = GPU ms (낮을수록 빠름). null 은 큰 값으로 정렬해 뒤로 → median 은 측정된 trial 대표.
+    const median = trials.slice().sort((a, b) => (a.gpuMs ?? 1e9) - (b.gpuMs ?? 1e9))[Math.floor(trials.length / 2)];
+    const g = trials.map((t) => t.gpuMs).filter((x): x is number => x != null).sort((a, b) => a - b);
+    const iqrGpuMs = g.length ? +(g[Math.floor(g.length * 0.75)] - g[Math.floor(g.length * 0.25)]).toFixed(3) : 0;
+    points.push({ target, trials, median, iqrGpuMs });
   }
   await ctx.close();
   return { label, glRenderer, points };
@@ -656,14 +690,14 @@ async function ensureDevServer(): Promise<() => void> {
   child.kill(); throw new Error('dev server failed on :5173');
 }
 
-// 영실험: ours-vs-ours → ratio≈1 이어야 + 노이즈바닥 산출
+// 영실험: ours-vs-ours → ratio≈1 이어야 + 노이즈바닥 산출 (cost = GPU ms)
 function noiseFloor(a: ViewerResult, b: ViewerResult): number {
-  // 같은 점타깃에서 두 측정 fps median 의 상대차 최대값 = 노이즈바닥
+  // 같은 점타깃에서 두 측정 GPU ms median 의 상대차 최대값 = 노이즈바닥
   let maxRel = 0;
   for (const pa of a.points) {
     const pb = b.points.find((x) => x.target === pa.target);
-    if (!pb) continue;
-    maxRel = Math.max(maxRel, Math.abs(pa.median.fps - pb.median.fps) / pa.median.fps);
+    if (!pb || pa.median.gpuMs == null || pb.median.gpuMs == null) continue;
+    maxRel = Math.max(maxRel, Math.abs(pa.median.gpuMs - pb.median.gpuMs) / pa.median.gpuMs);
   }
   return +maxRel.toFixed(3);
 }
@@ -673,12 +707,13 @@ function computeVerdict(ours: ViewerResult, eptium: ViewerResult, floor: number)
   return eptium.points.map((pe) => {
     const po = ours.points.find((x) => x.target === pe.target);
     if (!po) return { target: pe.target, verdict: 'no-ours-data' as const };
-    // cost = frametime p50 (낮을수록 빠름). ratio = ours/eptium.
-    const ratio = po.median.frametimeMs.p50 / pe.median.frametimeMs.p50;
+    if (po.median.gpuMs == null || pe.median.gpuMs == null) return { target: pe.target, verdict: 'no-gpu-data' as const };
+    // cost = GPU ms (낮을수록 빠름). ratio = ours/eptium.
+    const ratio = po.median.gpuMs / pe.median.gpuMs;
     let verdict: string;
     if (Math.abs(ratio - 1) <= threshold) verdict = '동급';
     else verdict = ratio < 1 ? '우위(우리가 빠름)' : '열위(우리가 느림)';
-    return { target: pe.target, oursP50: po.median.frametimeMs.p50, eptiumP50: pe.median.frametimeMs.p50, ratio: +ratio.toFixed(3), verdict, threshold };
+    return { target: pe.target, oursGpuMs: po.median.gpuMs, eptiumGpuMs: pe.median.gpuMs, ratio: +ratio.toFixed(3), verdict, threshold };
   });
 }
 
@@ -704,11 +739,11 @@ async function main() {
     const verdict = computeVerdict(ours, eptium, floor);
 
     const gates = {
-      vsyncUncapped: [...ours.points, ...eptium.points].every((p) => p.median.fps > 122 || p.median.frametimeMs.p50 < 8.2),
+      gpuMsOk: [...ours.points, ...eptium.points].length > 0 && [...ours.points, ...eptium.points].every((p) => p.median.gpuMs != null),
       configHeld: true, // measureViewer 가 실패 시 throw 하므로 여기 도달=held
       allSettled: ours.points.length === POINT_TARGETS.length && eptium.points.length === POINT_TARGETS.length,
       pointMatchOk: true, // matchMsse ±5% (미달 시 리포트에 실측 점수로 표기)
-      varianceOk: [...ours.points, ...eptium.points].every((p) => p.iqrFps / p.median.fps <= Math.max(0.10, floor)),
+      varianceOk: [...ours.points, ...eptium.points].every((p) => p.median.gpuMs == null || p.iqrGpuMs / p.median.gpuMs <= Math.max(0.10, floor)),
       nullTestOk: nullOk,
     };
 
@@ -764,16 +799,17 @@ export function renderFairReport(a: ReportArg): string {
   L.push(`## 유효성 게이트: ${allPass ? '✅ 전부 PASS' : '❌ 일부 FAIL → verdict 신뢰불가'}`, '');
   for (const [k, v] of Object.entries(a.gates)) L.push(`- ${v ? '✅' : '❌'} ${k}`);
   L.push('', `## Verdict ${allPass ? '' : '(신뢰불가 — 게이트 실패)'}`, '');
-  L.push('| 점 타깃 | ours p50(ms) | eptium p50(ms) | ratio | 판정 |', '|---|---|---|---|---|');
+  L.push('| 점 타깃 | ours GPU ms | eptium GPU ms | ratio | 판정 |', '|---|---|---|---|---|');
   for (const v of a.verdict) {
-    if (v.verdict === 'no-ours-data') { L.push(`| ${v.target.toLocaleString()} | — | — | — | 데이터없음 |`); continue; }
-    L.push(`| ${v.target.toLocaleString()} | ${v.oursP50} | ${v.eptiumP50} | ${v.ratio} | ${v.verdict} |`);
+    if (v.verdict === 'no-ours-data') { L.push(`| ${v.target.toLocaleString()} | — | — | — | ours 데이터없음 |`); continue; }
+    if (v.verdict === 'no-gpu-data') { L.push(`| ${v.target.toLocaleString()} | — | — | — | GPU ms 측정불가 |`); continue; }
+    L.push(`| ${v.target.toLocaleString()} | ${v.oursGpuMs} | ${v.eptiumGpuMs} | ${v.ratio} | ${v.verdict} |`);
   }
-  L.push('', '## 곡선 (fps @ pointsSelected)', '');
+  L.push('', '## 곡선 (GPU ms @ pointsSelected · cost는 GPU ms, fps는 보조)', '');
   for (const r of [a.ours, a.eptium]) {
     L.push(`**${r.label}** (${r.glRenderer})`);
-    L.push('| 점타깃 | 실측 points | fps median | IQR fps | p99(ms) | heapMB | cesiumMB |', '|---|---|---|---|---|---|---|');
-    for (const p of r.points) L.push(`| ${p.target.toLocaleString()} | ${p.median.pointsSelected.toLocaleString()} | ${p.median.fps} | ${p.iqrFps.toFixed(1)} | ${p.median.frametimeMs.p99} | ${p.median.peakHeapMB} | ${p.median.cesiumMB} |`);
+    L.push('| 점타깃 | 실측 points | GPU ms median | IQR GPU ms | wall fps | heapMB | cesiumMB |', '|---|---|---|---|---|---|---|');
+    for (const p of r.points) L.push(`| ${p.target.toLocaleString()} | ${p.median.pointsSelected.toLocaleString()} | ${p.median.gpuMs ?? '측정불가'} | ${p.iqrGpuMs.toFixed(3)} | ${p.median.fps} | ${p.median.peakHeapMB} | ${p.median.cesiumMB} |`);
     L.push('');
   }
   L.push(`## 영실험 (ours-vs-ours, 동급이어야 함)`, '');
@@ -836,15 +872,15 @@ git commit -m "feat(fair-bench): E2E 실행(sofi·millsite) + 스파이크 정�
 
 **1. Spec coverage:**
 - 5대 통제 → ①config(Task 3)·②점매칭(Task 5,7)·③정착(Task 4)·④시점(Task 4)·⑤trial(Task 6,7). ✅
-- 문제1 vsync → Task 1 스파이크 + Task 6 floor 검증 + Task 8 게이트. ✅
+- 문제1 vsync(→GPU 타이머 피벗, 스파이크 후) → Task 6 GPU ms 측정 + Task 8 gpuMsOk 게이트 + AC6. ✅
 - 문제2 Eptium config → Task 1 스파이크 + Task 3 reassert + Task 7 readback throw. ✅
 - 자기검증 영실험 → Task 8 nullTest + 노이즈바닥. ✅
 - 6 유효성 게이트 → Task 8 gates + Task 9 리포트 표기. ✅
 - AC1~7 → Task 8(verdict/gates)·Task 10(E2E 점검). ✅
 - 출력 docs/bench/fair-compare-<ds> → Task 9. ✅
 
-**2. Placeholder scan:** `normalizeConfig` 의 backgroundColor 줄은 no-op 자리표시 — 의도 명시됨(globe off로 충분). GPU timer(gpuMs)는 null 고정 + "스파이크 결과에 따라 확장"으로 명시(보조신호, load-bearing 아님). 그 외 TBD 없음.
+**2. Placeholder scan:** (피벗 후) GPU 타이머가 1차 cost 메트릭 — `measureFrametime`이 실 측정·반환. wall-clock frametime은 보조로 기록. TBD/no-op 없음.
 
-**3. Type consistency:** `Sample`/`PointResult`/`ViewerResult`/`ValidityGates`(Task 2) ↔ Task 7,8,9 사용 일치. `FairProbe` 함수명(findTilesetIndex·readConfig·normalizeConfig·assertConfig·reassertConfig·readStats·setViewpoint·settleFull·setMsse·measureFrametime) 전 태스크 일관.
+**3. Type consistency:** `Sample`(gpuMs=p50 GPU ms number|null)·`PointResult`(iqrGpuMs)·`ViewerResult`·`ValidityGates`(gpuMsOk)(Task 2) ↔ Task 7,8,9 사용 일치. verdict 필드 `oursGpuMs`/`eptiumGpuMs` ↔ Task 9 리포트 일치. `FairProbe` 함수명(findTilesetIndex·readConfig·normalizeConfig·assertConfig·reassertConfig·readStats·setViewpoint·settleFull·setMsse·measureFrametime) 전 태스크 일관.
 
 **알려진 미해결(구현 중 판정):** Task 1 스파이크가 vsync/Eptium-config 둘 중 하나라도 false면 그 지점에서 STOP·재설계(plan 진행 전제). Task 7 `fair-report` import 순환은 Task 9 stub 선배치로 해소.
