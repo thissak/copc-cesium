@@ -86,7 +86,7 @@
 - [x] **공정 엔진 비교 도구 작성** — `scripts/bench/fair-compare.ts`(+probe/types/report). 5대 통제(config 정규화·고정 시점·**GPU 타이머 GPU ms**·로딩 곡선 샘플링·ours-vs-ours 영실험). vsync 플래그 macOS Metal 미작동→GPU 타이머 피벗, settle 비현실적(단조 로딩 60s+)→곡선 샘플링 피벗(둘 다 스파이크/진단으로 확정). 설계/계획 `docs/superpowers/{specs,plans}/2026-06-20-fair-engine-bench*`.
 - [x] **E2E(sofi): 도구가 verdict 거부(정직)** — `nullOk=false(floor 62.9%)·overlap=2 → 2/4 게이트 FAIL → 신뢰불가`. 가짜 숫자 0. 단일 공정 verdict 불가가 결론.
 - [x] **진짜 발견(measure-first): point budget 부재** — msse 스윕서 Eptium 764k 고정(점 예산)↔ours 무제한 SSE refine(10M+). 깊은 줌 ours ~58fps↔Eptium ~120fps. → **이슈 #08** `docs/issues/08-point-budget.md`, `docs/bench/FINDINGS.md §2026-06-20`, handoff `docs/handoff/fair-compare-and-point-budget-handoff.md`.
-- [ ] **다음(이슈 #08)**: point budget 업그레이드 — BP 조사(Cesium 네이티브/Potree pointBudget/prior art) → 설계 → 구현(`pointBudget` 옵션, ~1~3M 캡) → 검증(품질 회귀 0·깊은 줌 fps↑·유계성). STOP 규칙(LOD).
+- [x] **이슈 #08 point budget ✅ (PR #9)**: measure-first 게이트로 BP→구현→검증. Cesium 네이티브 `cacheBytes`로 근사 캡(손코딩 0) — `pointBudget` 옵션(기본 200만)→`cacheBytes=overflow=pointBudget×8B`. 검증(실 GPU): 깊은 줌 9.29M/16fps→2.10M/89fps·품질 동일(여분점=sub-pixel noise)·정상뷰 회귀 0(≤~2.1M 헤드룸 미작동). dual review 후 기본 2M 회귀 전수검증(msse=8 × 3데이터셋). `docs/issues/08-point-budget.md` §3~5.
 
 ## Phase 3 — 평가 / 입상 판정 🔒
 대용량 실데이터에서 60fps / 메모리 / UX 측정 → 입상 가능성 데이터로 판정.

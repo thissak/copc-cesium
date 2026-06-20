@@ -46,6 +46,7 @@ await CopcTileset.fromUrl(url, options);
 | Option | Default | Description |
 |--------|---------|-------------|
 | `maximumScreenSpaceError` | `8` | Cesium LOD knob — lower = more detail, more load |
+| `pointBudget` | `2_000_000` | Approximate cap on rendered point count, to bound GPU cost at deep zoom. Cesium has no direct point-count cap, so this is approximated via its memory budget: `cacheBytes = maximumCacheOverflowBytes = pointBudget × 8 B` (~16 B/point measured). It is a **best-effort (soft) budget, not a hard limit** — Cesium suppresses refinement via `memoryAdjustedScreenSpaceError` once exceeded, and exposing attributes (`BATCH_ID`) raises per-point bytes so the effective point count runs lower. **Note: the default `2_000_000` caps every view, not only deep zoom** — normal/wide views below the budget are unaffected, but dense or aggressive-`maximumScreenSpaceError` views are clipped. Set `0` to disable (Cesium's unbounded default), or set the tileset's `cacheBytes` directly for finer control. |
 | `colorBy` | `'rgb'` | `'rgb'` \| `'height'` \| `'classification'` \| `'intensity'` \| `'returns'` (falls back to height if the dimension is absent) |
 | `eyeDomeLighting` | `true` | Eye-dome lighting — depth contours that hide LOD seams (implies `attenuation`) |
 | `attenuation` | `true` | Distance-based point-size attenuation |

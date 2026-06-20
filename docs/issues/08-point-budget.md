@@ -1,6 +1,6 @@
 # #08 Point budget 부재 — 깊은 줌 무제한 SSE refine으로 GPU-bound
 
-Status: Open (BP 조사 대기 — 다음 작업) · Label: enhancement (perf / LOD)
+Status: **Resolved 후보** (구현·검증 완료 2026-06-20, PR #9 · dual review 후 기본 2M 회귀 전수검증 중) · Label: enhancement (perf / LOD)
 발견 경로: 공정 비교 도구(fair-compare) 작업(2026-06-20). Eptium 대비 단일 verdict는 불가(자기검증 거부)했으나, 그 진단 과정에서 **두 엔진의 LOD 전략 차이**를 측정으로 발견. 상세: `docs/bench/FINDINGS.md` §2026-06-20, 설계 `docs/superpowers/specs/2026-06-20-fair-engine-bench-design.md`.
 재현 하니스: `scripts/bench/fair-probe.ts` `measureLoadCurve`(GPU 타이머 GPU ms vs 점수) + 인라인 plateau 측정.
 
@@ -110,6 +110,19 @@ sofi(1.9GB) 깊은 시점(boundingSphere 0.15r, globe off, 실 GPU M4 Pro Metal)
 - [x] **부드러움 ✅**: deep 61→11ms(16→**89fps**), normal 82→34ms. (C1 후보기준 fps≥110은 미달이나 무제한 대비 +5.5×·60fps 위 → 부드러움 달성. 기준 110은 게이트 1.9M/100fps 기반으로 과빡빡 → 현실화. pointBudget 1.5M면 ~100fps+ 가능하나 2M=품질·부드러움 균형.)
 - [x] **품질 유지 ✅ (전제 반전 발견)**: deep·normal **둘 다** budget2M 스크린샷이 unlimited보다 오히려 매끈(speckle↓). **C4 예상("정상뷰 점<2M라 무영향")은 거짓** — msse=2 정상뷰도 7M이라 캡 걸림. 단 7M→2M가 **시각 동일**(여분 점 = sub-pixel noise, §3(5).1 통찰 일관) → 정상뷰서도 캡이 품질 안 깎고 부드러움만 산다.
 - [x] **회귀 0 ✅**: tsc 타입체크 통과, `npm run verify`(autzen 디코드 정확성) PASS(center in Oregon).
+
+### 전수 회귀 검증 (dual review BLOCKING 해소, msse=8 실사용, `docs/bench/budget/regression-m8.md`)
+dual review(Claude+Codex)가 **기본 2M가 정상 뷰 동작을 바꾼다(검증 부족)**를 머지 차단으로 지적 → 3 데이터셋 × 정상/깊은 × off/2M 전수 측정(실 GPU). Codex 근거였던 "정상뷰 7M→2M"는 **msse=2(기본의 4배 공격적) 아티팩트**로 판명.
+
+| ds | normal off→cap | 회귀 | deep off→cap (gpuMs) |
+|----|----------------|------|----------------------|
+| autzen | 2.08M→**2.08M** | 0 ✅ | 3.83M→2.11M (38.9→12.2) |
+| millsite | 1.42M→**1.42M** | 0 ✅ | 6.98M→1.98M (73→24) |
+| sofi | 1.75M→**1.75M** | 0 ✅ | 7.11M→1.91M (69→20.9) |
+
+- **정상 뷰 회귀 0(밀도 무관)**: 3개 모두 off==cap byte-identical. 실사용 기본 msse=8서 정상 뷰 ≤2.1M(실효 헤드룸=cacheBytes 16+overflow 16MB) → 캡 미작동. 기본 2M는 안전(opt-in 불필요).
+- **깊은 줌 이득은 msse=8서도 유효**: 3개 모두 7M급 폭주 → ~2M, gpuMs ~3배↓.
+- 기본값 2M는 prior art와 일치(iTowns 2M·loaders.gl 2M·Potree 1M). README에 breaking change(기본 캡)·soft·근사 명시.
 
 ### 결론
 **Cesium 네이티브 `cacheBytes` 메모리예산으로 point budget 근사 — 손코딩 0, 동적 SSE 루프 불필요.** measure-first 게이트(§4)가 #05 식 전제 거짓("정상뷰 무영향")을 측정으로 잡아냈고, 그럼에도 캡은 품질 유지·부드러움 개선이 양 시점서 입증. 기본 pointBudget=2M 확정. soft·근사(점당~16B, 속성노출 시 점당 바이트↑ → 실점수↓)는 JSDoc 명시.

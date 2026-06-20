@@ -1,0 +1,102 @@
+{
+  "msse": 8,
+  "glRenderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+  "rows": [
+    {
+      "ds": "autzen",
+      "point": "normal",
+      "cap": "off",
+      "finalPts": 2082516,
+      "plateauGpuMs": 48.141,
+      "cesiumMB": 32
+    },
+    {
+      "ds": "autzen",
+      "point": "normal",
+      "cap": "budget2M",
+      "finalPts": 2082516,
+      "plateauGpuMs": 47.37,
+      "cesiumMB": 32
+    },
+    {
+      "ds": "autzen",
+      "point": "deep",
+      "cap": "off",
+      "finalPts": 3825728,
+      "plateauGpuMs": 38.856,
+      "cesiumMB": 59
+    },
+    {
+      "ds": "autzen",
+      "point": "deep",
+      "cap": "budget2M",
+      "finalPts": 2113446,
+      "plateauGpuMs": 12.187,
+      "cesiumMB": 33
+    },
+    {
+      "ds": "millsite",
+      "point": "normal",
+      "cap": "off",
+      "finalPts": 1418240,
+      "plateauGpuMs": 26.022,
+      "cesiumMB": 22
+    },
+    {
+      "ds": "millsite",
+      "point": "normal",
+      "cap": "budget2M",
+      "finalPts": 1418240,
+      "plateauGpuMs": 26.021,
+      "cesiumMB": 22
+    },
+    {
+      "ds": "millsite",
+      "point": "deep",
+      "cap": "off",
+      "finalPts": 6978912,
+      "plateauGpuMs": 73.011,
+      "cesiumMB": 109
+    },
+    {
+      "ds": "millsite",
+      "point": "deep",
+      "cap": "budget2M",
+      "finalPts": 1978111,
+      "plateauGpuMs": 23.975,
+      "cesiumMB": 30
+    },
+    {
+      "ds": "sofi",
+      "point": "normal",
+      "cap": "off",
+      "finalPts": 1752719,
+      "plateauGpuMs": 28.28,
+      "cesiumMB": 27
+    },
+    {
+      "ds": "sofi",
+      "point": "normal",
+      "cap": "budget2M",
+      "finalPts": 1752719,
+      "plateauGpuMs": 28.204,
+      "cesiumMB": 27
+    },
+    {
+      "ds": "sofi",
+      "point": "deep",
+      "cap": "off",
+      "finalPts": 7110015,
+      "plateauGpuMs": 69.457,
+      "cesiumMB": 109
+    },
+    {
+      "ds": "sofi",
+      "point": "deep",
+      "cap": "budget2M",
+      "finalPts": 1906842,
+      "plateauGpuMs": 20.872,
+      "cesiumMB": 29
+    }
+  ]
+}
