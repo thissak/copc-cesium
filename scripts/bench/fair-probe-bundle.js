@@ -28,6 +28,7 @@ var FairProbe = (() => {
     readConfig: () => readConfig,
     readStats: () => readStats,
     reassertConfig: () => reassertConfig,
+    setCacheBytes: () => setCacheBytes,
     setMsse: () => setMsse,
     setViewpoint: () => setViewpoint
   });
@@ -95,18 +96,25 @@ var FairProbe = (() => {
       cesiumMB: ts.totalMemoryUsageInBytes / 1048576
     };
   }
-  function setViewpoint(idx) {
+  function setViewpoint(idx, factor = 0.15) {
     const v = W().viewer;
     const ts = v.scene.primitives.get(idx);
     const bs = ts.boundingSphere;
     const sph = bs.clone();
-    sph.radius = bs.radius * 0.15;
+    sph.radius = bs.radius * factor;
     v.camera.flyToBoundingSphere(sph, { duration: 0 });
     v.scene.requestRender();
   }
   function setMsse(idx, msse) {
     const v = W().viewer;
     v.scene.primitives.get(idx).maximumScreenSpaceError = msse;
+  }
+  function setCacheBytes(idx, mb) {
+    if (mb <= 0) return;
+    const ts = W().viewer.scene.primitives.get(idx);
+    const bytes = mb * 1048576;
+    ts.cacheBytes = bytes;
+    ts.maximumCacheOverflowBytes = bytes;
   }
   async function measureLoadCurve(idx, msse, capMs, bucketSize, reassert) {
     const v = W().viewer;

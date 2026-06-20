@@ -39,6 +39,8 @@
     "bench:fair-bundle": "esbuild scripts/bench/fair-probe.ts --bundle --platform=browser --format=iife --global-name=FairProbe --footer:js=\"window.FairProbe=FairProbe;\" --outfile=scripts/bench/fair-probe-bundle.js",
     "prebench:fair": "npm run bench:fair-bundle",
     "bench:fair": "tsx scripts/bench/fair-compare.ts",
+    "prebench:budget": "npm run bench:fair-bundle",
+    "bench:budget": "tsx scripts/bench/probe-budget.ts",
     "release": "npm run build:lib && set -a && . ./.env && set +a && npm publish"
   },
   "peerDependencies": {

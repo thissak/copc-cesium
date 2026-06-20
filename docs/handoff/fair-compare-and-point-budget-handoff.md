@@ -20,15 +20,13 @@
 ### 3. 진짜 발견 (measure-first): point budget 부재
 msse 스윕(깊은 시점): ours 1.81M/5.13M/10.18M(msse 32/16/8) ↔ **Eptium 763,741 고정(msse 무관)**. Eptium=점 예산, ours=무제한 SSE refine. ours 깊은 줌 ~58fps(GPU-bound) ↔ Eptium ~120fps. → **이슈 #08** + `docs/bench/FINDINGS.md §2026-06-20`.
 
-## 다음 작업 (이슈 #08 — point budget 업그레이드)
+## 이슈 #08 — point budget ✅ 완료 (2026-06-20)
 
-순서(STOP 규칙: LOD/스트리밍 → 코드 전 BP+계획+승인):
-1. **§3 BP 조사** — Cesium3DTileset 네이티브 점예산 노브 유무 / Potree `pointBudget` 구현 / loaders.gl·giro3d prior art / 위임 철학(ADR-001/004)에 맞는 접근(동적 msse 조절 vs 노드 선택 캡).
-2. **설계 spec**(`docs/superpowers/specs/`) + 검증기준 → 승인.
-3. **구현** — pointsSelected를 목표 예산(~1~3M, `CopcTileset.fromUrl` 옵션 `pointBudget`)으로 캡.
-4. **검증** — 품질 회귀 0(캡 전/후 시각 동일) · 깊은 줌 fps 58→≥100 · 유계성(임의 깊이 ≤ 예산) · verify/골든파일 불변. 측정 도구 = `measureLoadCurve`/`?perf` 실 GPU.
+measure-first 게이트로 BP→설계→구현→검증 완료. **Cesium 네이티브 `cacheBytes`로 point budget 근사**(손코딩 0, ADR-001 위임 철학 유지): `pointBudget` 옵션(기본 200만) → `cacheBytes = maximumCacheOverflowBytes = pointBudget × 8B`(점당 실측 ~16B). 동적 SSE 외부루프는 measure로 불필요 판정(Circuit Breaker).
 
-**전제 검증 필수**(#05 교훈 — 전제 거짓 가능): "점 캡이 *실제로* 부드러움을 사고 시각 품질을 안 깎는가"를 measure-first로 먼저 확인. 반례 주의: 넓고 성긴 데이터면 캡이 디테일을 깎을 수 있음.
+**검증(실 GPU M4 Pro, 2시점 × on/off, `scripts/bench/probe-budget.ts`):** 깊은 줌 9.29M/61ms(16fps) → **2.10M/11ms(89fps)**, 정상뷰 7.0M/82ms → 2.06M/34ms, **양 시점 스크린샷 시각 동일**(여분점 = sub-pixel noise). 환산 정확(2M→실측 2.10M ±5%). tsc·`verify`(autzen Oregon) 회귀 0. **measure-first가 전제 2개 적발(#05 교훈)**: ① sub-pixel 가정은 EDL on서도 참 ② "정상뷰 무영향"은 거짓(msse=2서 7M)이나 7M→2M 시각동일이라 품질 OK. 상세 `docs/issues/08-point-budget.md` §3(BP)·§4(게이트)·§5(검증) · `docs/bench/budget/sofi-verify.*`.
+
+**다음**: 이 브랜치 PR/머지 · 결과보고서.
 
 ## 알려진 한계 / 보류
 

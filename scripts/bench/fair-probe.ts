@@ -78,12 +78,12 @@ export function readStats(idx: number) {
 
 // 고정 깊은 시점 — 각 viewer bs 의 0.15배 반경으로 동일 비율 앵커.
 // (동일 COPC → 동일 ECEF 중심. flyToBoundingSphere 대신 축소 sphere 로 결정적 깊이.)
-export function setViewpoint(idx: number): void {
+export function setViewpoint(idx: number, factor = 0.15): void {
   const v = W().viewer;
   const ts = v.scene.primitives.get(idx);
   const bs = ts.boundingSphere;
   const sph = bs.clone();
-  sph.radius = bs.radius * 0.15;
+  sph.radius = bs.radius * factor; // 0.15=깊은 줌(기본), 1.0=정상/원거리(C4 회귀 측정)
   v.camera.flyToBoundingSphere(sph, { duration: 0 });
   v.scene.requestRender();
 }
@@ -91,6 +91,17 @@ export function setViewpoint(idx: number): void {
 export function setMsse(idx: number, msse: number): void {
   const v = W().viewer;
   v.scene.primitives.get(idx).maximumScreenSpaceError = msse;
+}
+
+// 이슈 #08 measure-first 게이트: Cesium 메모리예산(cacheBytes)으로 깊은 줌 점수를 유계화하는지 측정.
+// mb<=0 이면 건드리지 않음(Cesium 기본 512MB 유지=무제한 baseline). overflow 도 같이 좁혀 memoryAdjustedSSE
+// 자동조절을 가시화(demo soak/perf 와 동일 관례). LOD 손코딩 아님 — 네이티브 노브 설정일 뿐.
+export function setCacheBytes(idx: number, mb: number): void {
+  if (mb <= 0) return;
+  const ts = W().viewer.scene.primitives.get(idx);
+  const bytes = mb * 1048576;
+  ts.cacheBytes = bytes;
+  ts.maximumCacheOverflowBytes = bytes;
 }
 
 export async function measureLoadCurve(idx: number, msse: number, capMs: number, bucketSize: number, reassert: boolean) {

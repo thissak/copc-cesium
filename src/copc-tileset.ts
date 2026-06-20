@@ -20,6 +20,16 @@ import type { AttributeRequest } from './attributes';
 export interface CopcTilesetOptions {
   /** Cesium LOD 노브 (낮을수록 디테일↑·부하↑). 기본 8. */
   maximumScreenSpaceError?: number;
+  /**
+   * 깊은 줌 point budget — 렌더 점 개수 상한의 *근사*. 기본 200만(`0` 이하면 끔 = Cesium 기본 512MB).
+   * Cesium 은 점-개수 직접 캡이 없어 메모리 예산으로 근사한다: `cacheBytes = maximumCacheOverflowBytes
+   * = pointBudget × 8B`(점당 실측 ~16B = 양자화 pnts 위치6+RGB3 + Cesium 오버헤드). 한도 초과 시 Cesium 이
+   * `memoryAdjustedScreenSpaceError` 로 refine 을 자동 억제 — **soft limit**(정확한 개수 보장 X; 속성
+   * 노출 시 점당 바이트가 늘어 실제 점수는 더 낮아진다). 깊은 줌서 무제한 SSE refine 이 GPU-bound 되던 것을
+   * 유계화(측정: sofi 깊은 줌 8M점·8fps → ~1.9M점·~100fps, 이슈 #08). 정상/원거리 뷰는 점이 적어
+   * 한도 미달 → 무영향. 더 정밀히 제어하려면 반환된 tileset 의 `cacheBytes` 를 직접 설정.
+   */
+  pointBudget?: number;
   /** 점 픽셀 크기 (Cesium3DTileStyle.pointSize). attenuation off 일 때 적용. */
   pointSize?: number;
   /** 거리 기반 점 크기 감쇠 (pointCloudShading). 거친 LOD 끊김 완화. 기본 on. */
@@ -271,6 +281,14 @@ export const CopcTileset = {
       // --8<-- [start:maxSSE]
       tileset.maximumScreenSpaceError = options.maximumScreenSpaceError ?? 8;
       // --8<-- [end:maxSSE]
+      // 이슈 #08: 깊은 줌 point budget — Cesium 은 점-개수 직접 캡이 없어 메모리예산(cacheBytes)으로 근사.
+      // 무제한 SSE refine 이 깊은 줌서 GPU-bound 되던 것을 유계화(measure-first 게이트 통과, docs/issues/08-point-budget.md).
+      const pointBudget = options.pointBudget ?? 2_000_000;
+      if (pointBudget > 0) {
+        const halfBytes = pointBudget * 8; // 실효 한도 = cacheBytes + overflow = pointBudget × 16B(점당 실측 ~16B)
+        tileset.cacheBytes = halfBytes;
+        tileset.maximumCacheOverflowBytes = halfBytes;
+      }
       if (options.pointSize !== undefined) {
         tileset.style = new Cesium3DTileStyle({ pointSize: options.pointSize });
       }

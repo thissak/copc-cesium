@@ -50,10 +50,11 @@ COPC 창시자 Hobu의 상용 **Eptium**이 *"COPC, COG, EPT data support for Ce
 ### 6. laz-perf CSP / 호스팅 스토리
 - Emscripten 출력의 `eval()`/`Function`이 CSP `default-src 'self'`에서 차단(giro3d#561, "upstream"). WASM 호스팅/CSP 가이드.
 
-### 7. Point budget — 깊은 줌 부드러움 유계화 (이슈 #08, 2026-06-20 measure-first 발견)
-- **코드 확정 갭**: ours는 표준 Cesium SSE refine이라 **점 상한이 없다** → 깊은 줌서 무제한(10M+)으로 그려 GPU-bound(~58fps). 상용 Eptium은 **msse 무관 764k 고정 = 점 예산(Potree 방식)** → ~120fps.
-- **측정 증거**: msse 32/16/8서 ours 1.81M/5.13M/10.18M ↔ Eptium 763,741 고정. (`docs/bench/FINDINGS.md §2026-06-20`)
-- **판정**: 주최사 북극성 **"부드럽게"** 직결 — 단 Eptium도 가진 *parity* 기능이라 헤드라인 차별화는 약함(Tier 2). 업그레이드 = `pointBudget` 옵션(~1~3M 캡). **STOP 규칙**(LOD): BP 조사→설계→검증(품질 회귀 0 전제 검증) 필요. handoff `docs/handoff/fair-compare-and-point-budget-handoff.md`.
+### 7. Point budget — 깊은 줌 부드러움 유계화 (이슈 #08) — **✅ 완료 (2026-06-20, `feat/fair-engine-bench`)**
+- **출하**: `pointBudget` 옵션(기본 200만) → Cesium 네이티브 `cacheBytes = maximumCacheOverflowBytes = pointBudget × 8B`(점당 실측 ~16B)로 근사 캡 — **손코딩 0**(`memoryAdjustedScreenSpaceError`가 한도 초과 시 refine 자동 억제, ADR-001 위임). measure-first 게이트로 동적 SSE 외부루프 불필요 확정(Circuit Breaker).
+- **검증(실 GPU M4 Pro, 2시점×on/off, `scripts/bench/probe-budget.ts`)**: 깊은 줌 9.29M/16fps → **2.10M/89fps**, 정상뷰 7.0M → 2.06M, **양 시점 스크린샷 시각 동일**(여분점=sub-pixel noise). 환산 ±5%. tsc·verify 회귀 0. measure-first가 전제 2개 적발(sub-pixel 가정은 EDL on서도 참 / "정상뷰 무영향" 거짓이나 품질 OK).
+- **코드 확정 갭(해결 전)**: ours 표준 SSE refine은 점 상한 없음 → 깊은 줌 무제한(10M+)·GPU-bound. Eptium은 764k 고정 점예산.
+- **판정**: 북극성 **"부드럽게"** 직결 — Eptium parity라 헤드라인 차별화는 약하나(Tier 2) 완성도 필수. 상세 `docs/issues/08-point-budget.md` §3~5 · handoff.
 
 ## Tier 3 — 이미 강점 / commodity (유지·튜닝만, 차별화로 안 밂)
 - LOD/메모리/point budget → Cesium 위임 **상속**([ADR-001]). EDL/attenuation → Cesium 네이티브(3DTilesRendererJS보다 앞섬, #912). 동시성 → 방금 출하(`maxRequestsPerServer`, [ADR-004]). colorBy 5모드 → 이미 있음(**Tier1-#1이 이걸 심화**).
