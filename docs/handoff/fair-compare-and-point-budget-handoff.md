@@ -28,6 +28,14 @@ measure-first 게이트로 BP→설계→구현→검증 완료. **Cesium 네이
 
 **다음**: 이 브랜치 PR/머지 · 결과보고서.
 
+## Eptium 재테스트 (point budget 후, 2026-06-20 · PR #9·#10·#11 머지)
+
+#08 출하 후 같은 도구로 Eptium 재비교:
+- **fair-compare 재실행**: ours 2M 캡 → 영실험 노이즈 62.9%→8.4%(자기검증 처음 통과). 단 overlap 2/3로 단일 verdict 여전히 거부.
+- **매칭 head-to-head**(`probe-matched.ts`, ours를 Eptium 점수에 맞춤·정상상태): EDL-off ours GPU ~0.4×(5.72↔14.16ms). EDL-on(`--edl`) ours ~1.75×(5.19↔9.08ms) — **EDL이 ours에 ~1ms만 더해 우위가 raw-point 아티팩트 아님 확인**.
+- ⚠️ **headline 금지**: 매칭점·단일 ds·Eptium plateau run 변동(400~764k) → 방향 견고, 크기 1.75~2.5× 불확실. `docs/bench/FINDINGS.md` §재재검증·§매칭·§EDL-on.
+- **미커밋(EDL-on 작업)**: `scripts/bench/{fair-probe,probe-matched}.ts`(EDL 지원) + `matched-sofi-edl.*` — 작업 브랜치 커밋 필요.
+
 ## 알려진 한계 / 보류
 
 - **fair-compare 도구는 단일 verdict 산출 불가**(설계 한계, 보류): ①노이즈(gpuMs가 점수에 가파른 비선형 → 250k 버킷 coarse → ours-vs-ours 62.9%) ②overlap(엔진 점예산 격차로 곡선 거의 안 겹침). 살리려면 큰 재설계(버킷 초세분+장시간 샘플, 점 범위 정합) 필요 — ROI 불확실, 보류.
