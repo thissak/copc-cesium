@@ -67,11 +67,12 @@ function alignAndRatio(a: ViewerCurve, b: ViewerCurve, floor: number) {
 function noiseFloor(a: ViewerCurve, b: ViewerCurve): number {
   const bMap = new Map(b.curve.map((p: CurvePoint) => [p.pts, p.gpuMs]));
   let maxRel = 0;
-  for (const pa of a.curve) { const gb = bMap.get(pa.pts); if (gb == null) continue; maxRel = Math.max(maxRel, Math.abs(pa.gpuMs - gb) / pa.gpuMs); }
+  for (const pa of a.curve) { const gb = bMap.get(pa.pts); if (gb == null) continue; maxRel = Math.max(maxRel, Math.abs(pa.gpuMs - gb) / ((pa.gpuMs + gb) / 2)); }
   return +maxRel.toFixed(3);
 }
 
 async function main() {
+  const NULL_MAX = 0.20; // 도구 자체 ours-vs-ours 노이즈 상한
   const ds = process.argv.includes('--ds') ? process.argv[process.argv.indexOf('--ds') + 1] : 'sofi';
   if (!DATASETS[ds]) throw new Error(`unknown --ds ${ds}`);
   const browser = await chromium.launch({ headless: false });
@@ -85,7 +86,7 @@ async function main() {
     const nullB = await measureViewer(browser, 'ours', oursUrl);
     const floor = noiseFloor(nullA, nullB);
     const nullRows = alignAndRatio(nullA, nullB, floor);
-    const nullOk = nullRows.length >= 3 && nullRows.every((r) => r.verdict === '동급');
+    const nullOk = nullRows.length >= 3 && floor <= NULL_MAX;
 
     // 본 측정
     const ours = await measureViewer(browser, 'ours', oursUrl);
