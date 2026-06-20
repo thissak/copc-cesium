@@ -88,7 +88,9 @@ export function setViewpoint(idx: number): void {
   v.scene.requestRender();
 }
 
-// 완전정착: pending=0 ∧ tilesReady ∧ pointsSelected 안정 2.5s. cap 도달 시 settled=false.
+// 완전정착: tilesReady ∧ pointsSelected 안정 3s; pending 미게이트
+// (SW 파이프라인이 pending 을 영구 non-zero 로 유지 — #03 processing stuck 과 동형;
+//  render-finality 신호는 pointsSelected/tilesReady 안정성). cap 도달 시 settled=false.
 export async function settleFull(idx: number, capMs: number): Promise<{ settleMs: number; settled: boolean }> {
   const v = W().viewer;
   const s = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -98,9 +100,9 @@ export async function settleFull(idx: number, capMs: number): Promise<{ settleMs
     v.scene.requestRender();
     await s(200);
     const st = readStats(idx);
-    if (st.pending === 0 && st.tilesReady > 0 && st.tilesReady === prevR && st.pointsSelected === prevP) {
+    if (st.tilesReady > 0 && st.tilesReady === prevR && st.pointsSelected === prevP) {
       stable += 200;
-      if (stable >= 2500) return { settleMs: Math.round(performance.now() - t0 - stable), settled: true };
+      if (stable >= 3000) return { settleMs: Math.round(performance.now() - t0 - stable), settled: true };
     } else { stable = 0; prevR = st.tilesReady; prevP = st.pointsSelected; }
   }
   return { settleMs: capMs, settled: false };

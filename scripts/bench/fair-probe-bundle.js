@@ -112,9 +112,9 @@ var FairProbe = (() => {
       v.scene.requestRender();
       await s(200);
       const st = readStats(idx);
-      if (st.pending === 0 && st.tilesReady > 0 && st.tilesReady === prevR && st.pointsSelected === prevP) {
+      if (st.tilesReady > 0 && st.tilesReady === prevR && st.pointsSelected === prevP) {
         stable += 200;
-        if (stable >= 2500) return { settleMs: Math.round(performance.now() - t0 - stable), settled: true };
+        if (stable >= 3e3) return { settleMs: Math.round(performance.now() - t0 - stable), settled: true };
       } else {
         stable = 0;
         prevR = st.tilesReady;
