@@ -79,6 +79,9 @@
 ### OSS 리팩토링 Stage 1 — 데모/lib 분리 (2026-06-19 · chore/oss-refactor-stage1)
 - [x] **데모 하네스 `demo/` 분리 + 스파이크 프루닝.** `src/`=순수 라이브러리 9파일, 스파이크 7모드 프루닝(기본+`?naive`/`?bench`/`?perf`/`?soak`), `pnts`/`spike-batch` 삭제. dist byte-identical·verify·check-* 회귀 0. (Stage 2=copc-core 모듈 분할·Stage 3=영문화 심사 후)
 
+### Tier1 #3-A 점 피킹 정보 조회 (2026-06-20 · feat/point-picking)
+- [x] **클릭→점 경위도·고도 + LAS 속성 조회.** `pickPoint()` free 함수(Cesium pick/pickPosition + #1 getProperty, 렌더러 손코딩 0) + 데모 패널. 소유권 `picked.primitive===tileset`(globe/하늘/타 tileset→undefined). check-picking 4케이스·autzen 브라우저 스모크·verify C1·기존 check-* 회귀 0. 범위 B(옥트리 최근접점·측정 스냅)=별도.
+
 ## Phase 3 — 평가 / 입상 판정 🔒
 대용량 실데이터에서 60fps / 메모리 / UX 측정 → 입상 가능성 데이터로 판정.
 

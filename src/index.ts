@@ -12,3 +12,5 @@ export { CopcTileset } from './copc-tileset';
 export type { CopcTilesetOptions } from './copc-tileset';
 export type { ColorBy } from './colors';
 export { rampStyle } from './copc-style';
+export { pickPoint } from './picking';
+export type { PickedPoint } from './picking';

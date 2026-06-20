@@ -87,6 +87,23 @@ feature?.getProperty('Classification'); // → e.g. 5
 feature?.getProperty('Intensity');      // → e.g. 5120
 ```
 
+`pickPoint(tileset, scene, windowPosition)` is a higher-level helper: one call returns the clicked point's exact location **and** attributes, or `undefined` if the click missed the point cloud (sky, globe, or another tileset):
+
+```ts
+import { pickPoint } from 'copc-cesium';
+
+handler.setInputAction((movement) => {
+  const hit = pickPoint(tileset, viewer.scene, movement.position);
+  if (hit) {
+    // hit.cartographic → exact lon/lat/height · hit.attributes → per-point LAS values
+    // hit.featureId → tile-local batch id (not a stable global id; absent when no batch table)
+    console.log(hit.cartographic, hit.attributes);
+  }
+}, ScreenSpaceEventType.LEFT_CLICK);
+```
+
+If the tileset exposes no attributes (`attributes: []`, or a COPC lacking the curated dimensions), `pickPoint` still returns the location with `attributes: {}` (no throw).
+
 `rampStyle(name, range)` builds a normalized color-ramp style for any attribute, and `await tileset.attributeRange(name)` samples the root node for `[min, max]`:
 
 ```ts

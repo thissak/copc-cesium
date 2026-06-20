@@ -14,6 +14,7 @@ import 'cesium/Build/Cesium/Widgets/widgets.css';
 import { loadCopcNaive } from './copc';
 import { DATASETS } from './datasets';
 import { CopcTileset } from '../src/copc-tileset';
+import { installPickPanel } from './pick-panel';
 
 // 자체 ion 토큰이 있으면 .env 의 VITE_CESIUM_ION_TOKEN 로 주입. 없으면 베이스맵을 끈다
 // (Cesium 기본 ion imagery 는 토큰 없으면 401 — 점군은 토큰 불필요).
@@ -25,6 +26,8 @@ const viewer = new Viewer('app', {
   animation: false,
   geocoder: false,
   baseLayerPicker: false,
+  infoBox: false,
+  selectionIndicator: false,
   baseLayer: ionToken ? undefined : false,
 });
 viewer.scene.debugShowFramesPerSecond = true; // ④ 렌더 (좌상단)
@@ -472,6 +475,7 @@ async function runDemo() {
       tileFailed++;
     });
     viewer.scene.primitives.add(tileset);
+    installPickPanel(viewer, tileset);
     await viewer.zoomTo(tileset);
     await new Promise((res) => setTimeout(res, 4000));
     log(
