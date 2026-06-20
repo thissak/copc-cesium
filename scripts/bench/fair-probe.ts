@@ -29,3 +29,35 @@ export function readConfig(idx: number): ConfigSnapshot {
     globeShow: v.scene.globe ? !!v.scene.globe.show : false,
   };
 }
+
+const NORM = { resolutionScale: 1, canvasW: 1600, canvasH: 900 };
+
+export function normalizeConfig(idx: number): void {
+  const v = W().viewer;
+  const ts = v.scene.primitives.get(idx);
+  if (v.scene.globe) v.scene.globe.show = false;
+  if (v.imageryLayers?.removeAll) v.imageryLayers.removeAll();
+  v.useBrowserRecommendedResolution = false;
+  v.resolutionScale = NORM.resolutionScale;
+  if (ts.pointCloudShading) {
+    ts.pointCloudShading.eyeDomeLighting = false;
+    ts.pointCloudShading.attenuation = false;
+  }
+}
+
+// 매 프레임 재적용용 — Eptium 이 덮어쓰면 되돌린다
+export function reassertConfig(idx: number): void {
+  const v = W().viewer;
+  const ts = v.scene.primitives.get(idx);
+  if (v.scene.globe?.show) v.scene.globe.show = false;
+  if (ts.pointCloudShading) {
+    if (ts.pointCloudShading.eyeDomeLighting) ts.pointCloudShading.eyeDomeLighting = false;
+    if (ts.pointCloudShading.attenuation) ts.pointCloudShading.attenuation = false;
+  }
+}
+
+// readback 검증 — 정규화가 실제로 먹었나
+export function assertConfig(idx: number): boolean {
+  const c = readConfig(idx);
+  return c.edl === false && c.attenuation === false && c.globeShow === false && c.resolutionScale === NORM.resolutionScale;
+}
