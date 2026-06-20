@@ -136,3 +136,34 @@ sofi E2E: `nullOk=false (floor=62.9%) · overlap=2 · 2/4 게이트 FAIL → 신
 - ❌ "Eptium 대비 부드러움 동급" / "메모리 2× 우위"를 **무조건 헤드라인으로 쓰지 말 것** — 매칭 작동점 한정 + motion 측정 아티팩트.
 - ✅ 방어 가능: "변환 없이 CesiumJS 직접 렌더" · "양자화로 점당 메모리 절반" · "재현 가능한 측정 하네스" · "공정 비교 도구가 자기검증으로 신뢰불가를 표면화(정직성)".
 - 업그레이드 1순위(이슈 #08): **point budget 추가** — ours에 점 예산이 없어 깊은 줌서 무제한 점→GPU-bound. ~1~3M 캡으로 최악 비용 유계화(BP 조사→설계→검증 필요, STOP 규칙). fair-compare 도구 노이즈(가파른 곡선·버킷)·overlap(점예산 격차)은 큰 재설계 필요라 보류.
+
+---
+
+## 2026-06-20 재재검증 — point budget(이슈 #08) 적용 후 fair-compare 재실행
+
+이슈 #08(pointBudget 기본 200만, PR #9 머지) 출하 후 **코드 변경 0으로 같은 도구 재실행**(`npm run bench:fair -- --ds sofi`). ours가 이제 2M로 캡되니 위 §2026-06-20이 거부 이유로 든 두 장벽(노이즈·overlap)이 바뀌는지 검증. 산출물 `docs/bench/fair-compare-sofi.{md,json}`(재생성).
+
+### 결과: 게이트 `nullOk=true(floor 8.4%) · overlap=2 · 여전히 verdict 거부`
+
+| 축 | 이전(무제한) | point budget 후 | 판정 |
+|----|-------------|----------------|------|
+| **노이즈 바닥**(ours-vs-ours) | 62.9% ❌ | **8.4% ✅** | **해소 — 영실험 처음 통과** |
+| overlap 버킷 | 2 ❌ | 2 ❌ | 미해소(Eptium plateau 437k, 뷰포트 의존) |
+| ours finalPts | 10M+ | **1.91M** | 캡 작동 확인 |
+
+### 핵심 발견 (정직)
+1. **point budget이 노이즈 장벽을 제거(62.9%→8.4%)** → 도구 자기검증(영실험 ours-vs-ours=동급) **처음 통과**. 캡이 ours GPU 곡선을 평탄화한 직접 결과 — *공정 비교의 노이즈 축은 point budget으로 풀렸다.*
+2. **ours 깊은 줌이 부드럽게 plateau**: 2M 버킷 @ **7.25ms (n=5156, 정착)** — 무제한 시절 10M/120ms GPU-bound가 해소됨을 대칭 도구로 재확인. (1.25~1.5M의 53/65ms는 로딩 transient, n=43/14로 미미.)
+3. **단 overlap 2/3 부족 → 도구는 여전히 단일 verdict 정직 거부.** 이번 Eptium plateau 437k(뷰포트 의존, §2026-06-20 회차는 764k)라 250k·500k 2버킷만 겹침.
+
+### 겹친 버킷 (시사적 — headline 불가)
+| 버킷 | ours gpuMs | eptium gpuMs | ratio |
+|------|-----------|--------------|-------|
+| 250k | 5.94 | 11.23 | 0.53 |
+| 500k | 6.11 | 11.41 | 0.54 |
+
+ours per-point ~2× 빠르나 — **2버킷뿐 + 로딩 transient 구간(ours n=415/157, eptium n=11/60)**이라 정상상태 비교 아님. ❌ "Eptium 대비 2× 빠름" 헤드라인 금지(overlap 게이트 FAIL을 도구가 명시).
+
+### 주장 가이드 갱신 (이번 회차로 추가 방어 가능)
+- ✅ **추가 방어 가능**: "point budget 도입으로 깊은 줌 GPU-bound 해소 — 대칭 측정서 ours가 2M에서 ~7ms로 정착(무제한 120ms→캡 7ms)" · "공정 비교 도구의 노이즈 장벽(62.9%→8.4%)이 캡으로 제거돼 자기검증 처음 통과".
+- ⚠️ 여전히: 단일 공정 verdict는 overlap 부족(엔진 plateau 격차 + 뷰포트 의존)으로 불가. 매칭 작동점(ours를 Eptium 예산에 맞춤) head-to-head는 별도 — transient·overlap 우회하나 "매칭 한정" caveat 동일.
