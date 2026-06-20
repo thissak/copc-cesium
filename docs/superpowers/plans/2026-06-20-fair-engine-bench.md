@@ -215,9 +215,9 @@ export function readConfig(idx: number): ConfigSnapshot {
 
 - [ ] **Step 4: 번들 빌드 + 주입 스모크 테스트**
 
-Run:
+Run (node엔 window 없으므로 stub 후 require — IIFE footer `window.FairProbe=...`가 stub에 세팅됨):
 ```bash
-npm run bench:fair-bundle && node -e "require('./scripts/bench/fair-probe-bundle.js'); console.log(typeof FairProbe.findTilesetIndex, typeof FairProbe.readConfig)"
+npm run bench:fair-bundle && node -e "global.window={}; require('./scripts/bench/fair-probe-bundle.js'); console.log(typeof window.FairProbe.findTilesetIndex, typeof window.FairProbe.readConfig)"
 ```
 Expected: `function function` (번들이 두 함수를 global로 노출).
 
