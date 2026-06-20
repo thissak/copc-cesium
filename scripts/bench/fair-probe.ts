@@ -88,6 +88,11 @@ export function setViewpoint(idx: number): void {
   v.scene.requestRender();
 }
 
+export function setMsse(idx: number, msse: number): void {
+  const v = W().viewer;
+  v.scene.primitives.get(idx).maximumScreenSpaceError = msse;
+}
+
 // 완전정착: tilesReady ∧ pointsSelected 안정 3s; pending 미게이트
 // (SW 파이프라인이 pending 을 영구 non-zero 로 유지 — #03 processing stuck 과 동형;
 //  render-finality 신호는 pointsSelected/tilesReady 안정성). cap 도달 시 settled=false.

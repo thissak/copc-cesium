@@ -27,6 +27,7 @@ var FairProbe = (() => {
     readConfig: () => readConfig,
     readStats: () => readStats,
     reassertConfig: () => reassertConfig,
+    setMsse: () => setMsse,
     setViewpoint: () => setViewpoint,
     settleFull: () => settleFull
   });
@@ -102,6 +103,10 @@ var FairProbe = (() => {
     sph.radius = bs.radius * 0.15;
     v.camera.flyToBoundingSphere(sph, { duration: 0 });
     v.scene.requestRender();
+  }
+  function setMsse(idx, msse) {
+    const v = W().viewer;
+    v.scene.primitives.get(idx).maximumScreenSpaceError = msse;
   }
   async function settleFull(idx, capMs) {
     const v = W().viewer;
