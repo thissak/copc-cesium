@@ -167,3 +167,26 @@ ours per-point ~2× 빠르나 — **2버킷뿐 + 로딩 transient 구간(ours n=
 ### 주장 가이드 갱신 (이번 회차로 추가 방어 가능)
 - ✅ **추가 방어 가능**: "point budget 도입으로 깊은 줌 GPU-bound 해소 — 대칭 측정서 ours가 2M에서 ~7ms로 정착(무제한 120ms→캡 7ms)" · "공정 비교 도구의 노이즈 장벽(62.9%→8.4%)이 캡으로 제거돼 자기검증 처음 통과".
 - ⚠️ 여전히: 단일 공정 verdict는 overlap 부족(엔진 plateau 격차 + 뷰포트 의존)으로 불가. 매칭 작동점(ours를 Eptium 예산에 맞춤) head-to-head는 별도 — transient·overlap 우회하나 "매칭 한정" caveat 동일.
+
+---
+
+## 2026-06-20 매칭 예산 head-to-head — fair-compare 한계(overlap·transient) 우회
+
+fair-compare가 overlap 부족·transient로 못 푼 비교를, **ours cacheBytes를 Eptium 점 수에 맞춰** 고정 깊은 시점·같은 config(globe/EDL/atten off·res=1)·**정상상태 plateau(최다프레임 버킷)** gpuMs로 직접 비교(`scripts/bench/probe-matched.ts`, `npm run bench:matched`). 산출물 `docs/bench/budget/matched-sofi.{md,json}`.
+
+| 엔진 | plateau 점수 | gpuMs | n(프레임) | GPU fps 천장 |
+|------|-------------|-------|-----------|-------------|
+| **ours** (cacheBytes 4MB) | 500k | **5.72** | 899 | 175 |
+| **eptium** (자체 예산) | 600k | **14.16** | 58 | 71 |
+
+ours 스윕 전 구간 평탄: 500k/5.72 · 800k/5.24 · 1M/5.71 · 1.3M/5.97 ms.
+
+### 발견 (정상상태, fair-compare보다 견고)
+- **ours per-frame GPU ~0.4× (≈2.5배 빠름)** — 매칭 점 오차 16.7%(브래킷이 600k 건너뜀)지만 **ours gpuMs가 500k~1.3M 평탄(~5.5ms)**이라 결론 견고. 정상상태 n=899~3074(fair-compare transient n=11~415보다 훨씬 안정).
+- **overlap·transient 둘 다 우회**: 둘 다 ~500-600k(겹침) + plateau(정상상태).
+- GPU 타이머 관점: Eptium도 깊은 줌 GPU 작업 ~14ms — 이전 "120fps"는 vsync 벽시계, 실제 GPU는 11~14ms.
+
+### ⚠️ caveat (headline 금지 — competition-goal-north-star 준수)
+1. **EDL/atten OFF** — **raw 점 래스터화** 비용만. ours 양자화 pnts(uint16 위치=바이트 절반)가 GPU 대역폭 우위의 유력 원인. 실사용(EDL on)선 다를 수 있음(미측정).
+2. **매칭 작동점 한정**(~500-600k) + 단일 데이터셋(sofi) + Eptium plateau 뷰포트 의존.
+- ✅ 방어 가능 톤: "매칭 디테일·EDL-off raw-point·정상상태에서 ours GPU 비용이 Eptium의 ~0.4배 — 양자화 경량 파이프라인의 측정 가능한 이득(매칭점 한정, 헤드라인 아님)."
