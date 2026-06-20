@@ -22,14 +22,14 @@ COPC 창시자 Hobu의 상용 **Eptium**이 *"COPC, COG, EPT data support for Ce
 
 ### 2. CRS 자동 배치 (ECEF auto-placement) ⭐ — **✅ 출하 (A안, feat/crs-auto-placement 2026-06-19)**
 - **출하**: WKT 자동 reproject(WKT1·WKT2 모두 proj4가 처리)는 happy path = zero-config. no-WKT/파싱실패/축뒤집힘 → **fail-loud**(`resolveCrs`) + `crs`(force)/`defaultCrs`(fill-if-missing) override(PDAL 2-mode) + cube 중심 sanity 가드(`checkCenterInRange`). geoid scope-out(heights=ellipsoidal, 업계 norm). **한계**: EPSG override는 proj4 내장분만, GeoTIFF GeoKey 자동복구·풀 EPSG 레지스트리 = B안 follow-up. (BP: proj4/copc.js 실측+prior-art 6종 · check-crs 10/10·AC1~7 · [ADR-007 예정])
-- **실해**: 변환 후 점군이 **지구 밖/거울상/수 m 오프셋**. Cesium은 ECEF(EPSG:4978)인데 원본 점군은 거의 아님.
+- **실해**: 변환 후 포인트클라우드가 **지구 밖/거울상/수 m 오프셋**. Cesium은 ECEF(EPSG:4978)인데 원본 포인트클라우드는 거의 아님.
 - **우리-영역성**: COPC/LAS WKT VLR 읽어 on-the-fly reproject → **zero-config** 배치.
 - **복잡도**: bounded-hard(개념 해결, 운영 footgun).
 - **레버리지**: 매우 높음 — **py3dtiles maintainer가 전용 FAQ를 유지**할 만큼 빈발("This issue is so common"). 가장 즉각 "그냥 된다" 데모.
 - **증거**: SO#79257450(py3dtiles maintainer)·gis.se#481090(907뷰 "black space, mirror image")·SO#69606114(1.8m offset)·giro3d#665(옥트리도 변환 필요).
 
 ### 3. 옥트리 피킹 / 최근접점 / 스냅 (picking) — stretch
-- **실해**: Cesium pick이 점군에서 globe로 빠짐·최근접점 검색 없음·측정 스냅 안 됨.
+- **실해**: Cesium pick이 포인트클라우드에서 globe로 빠짐·최근접점 검색 없음·측정 스냅 안 됨.
 - **우리-영역성**: COPC 옥트리 = 공간 인덱스 → `.pnts` tileset엔 없는 구조적 우위로 pick API 한계 돌파.
 - **복잡도**: 진짜 hard + 부분적으로 renderer-shaped(리스크↑).
 - **레버리지**: 높음 — 측량·AEC 유료 도메인, Cesium 포럼 최다 hard 클러스터. **단 web-voiced(picking/snap)만**, clipping/cross-section은 desktop-voiced·Potree有 → 제외.

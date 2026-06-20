@@ -53,7 +53,7 @@ SW 가로채기·워커 디코드·WASM 로드·의존성이 **전부 소비자 
 | 프로덕션 빌드, static 서빙, cold | **1ms** (`SW_REGISTERED→SW_UPDATED` 1ms) | fromUrl 완료 |
 | 리뷰가 쓴 *그 빌드*의 콘솔 로그 | `SW_UPDATED 1131ms` | 리뷰 자신이 반증 |
 
-그 빌드의 화면을 직접 캡처하니 **점군이 RGB·EDL로 완벽히 렌더**되고 있었습니다. "실패"의 근거였던 신호 세 개는 전부 **가짜**였습니다:
+그 빌드의 화면을 직접 캡처하니 **포인트클라우드가 RGB·EDL로 완벽히 렌더**되고 있었습니다. "실패"의 근거였던 신호 세 개는 전부 **가짜**였습니다:
 
 - `nonBlackPixels: 0` → WebGL drawingBuffer를 `preserveDrawingBuffer` 없이 읽으면 항상 빈 값. **계측 아티팩트**, 화면은 멀쩡.
 - `api.cesium.com 401` → ion 토큰 없는 Viewer **기본 베이스맵** 요청 실패. **라이브러리와 무관**.
@@ -67,7 +67,7 @@ SW 가로채기·워커 디코드·WASM 로드·의존성이 **전부 소비자 
 false positive 안에도 배울 건 있었습니다. 가짜 원인(`reg.update` hang) 말고 **진짜 약점** 둘:
 
 - `reg.update()`는 **redundant**(register가 이미 update를 트리거)면서 `ensureServiceWorker`에서 **유일하게 timeout이 없는 무한대기 가능 await**였습니다. 느린/단일스레드 서버에선 큰 번들 뒤에 막힐 *수* 있습니다 → **비차단화**(활성/제어 게이트는 register+ready+controller가 담당). 무한 대기 금지([06장](06-streaming-engine-and-production-core.md))와 같은 원칙. **버그 수정이 아니라 방어적 개선**으로 분류.
-- ion 401은 *우리* 문제는 아니지만 **smoke 오판의 진짜 원인**이었습니다 → 예제·문서의 Viewer를 `baseLayer: false`로(점군은 토큰 불필요). 심사위원이 복붙했을 때 401·검은 지구본에 "깨졌다"고 오해할 false-negative를 차단.
+- ion 401은 *우리* 문제는 아니지만 **smoke 오판의 진짜 원인**이었습니다 → 예제·문서의 Viewer를 `baseLayer: false`로(포인트클라우드는 토큰 불필요). 심사위원이 복붙했을 때 401·검은 지구본에 "깨졌다"고 오해할 false-negative를 차단.
 
 !!! info "지금 위치와 다음"
     T1 게이트는 **통과**입니다 — 패키징·클린앱 재현·CI·README·LICENSE 완료, FAIL 판정은 false positive로 확정. 남은 T1은 산출물 둘뿐: **결과보고서 + 3분 시연 영상**. 우리의 측정·재검증 깊이가 곧 그 보고서의 원재료입니다. 현재 상태는 [PROGRESS](../PROGRESS.md), 변경 이력은 [CHANGELOG](../CHANGELOG.md), 메모리·동시성 위임 근거는 [ADR-004](../adr/004-delegate-memory-concurrency-to-cesium.md).

@@ -5,7 +5,7 @@
 
 ## 맥락
 
-3D Tiles 변환 파이프라인은 per-point LAS 속성(GpsTime·ReturnNumber·ScanAngle·extra-bytes…)과 정밀도를 **소리없이 드롭**한다(예: Cesium ion 타일러는 Intensity+Classification만 보존). 그래서 Cesium 사용자는 점군을 *임의 속성으로 동적 스타일링*하거나 *피킹으로 속성 조회*할 수 없다(Cesium staff: dynamic-range styling 미지원). COPC 는 전체 LAS 속성+native 정밀도를 보존하므로, **무변환인 우리만** 이 갭을 구조적으로 닫을 수 있다(커뮤니티 실수요 확인: Eptium 상용 $5k~25k, OSS 대체 전무; giro3d#633 은 COPC 스트리밍에도 extra-bytes 를 0 으로 로드).
+3D Tiles 변환 파이프라인은 per-point LAS 속성(GpsTime·ReturnNumber·ScanAngle·extra-bytes…)과 정밀도를 **소리없이 드롭**한다(예: Cesium ion 타일러는 Intensity+Classification만 보존). 그래서 Cesium 사용자는 포인트클라우드를 *임의 속성으로 동적 스타일링*하거나 *피킹으로 속성 조회*할 수 없다(Cesium staff: dynamic-range styling 미지원). COPC 는 전체 LAS 속성+native 정밀도를 보존하므로, **무변환인 우리만** 이 갭을 구조적으로 닫을 수 있다(커뮤니티 실수요 확인: Eptium 상용 $5k~25k, OSS 대체 전무; giro3d#633 은 COPC 스트리밍에도 extra-bytes 를 0 으로 로드).
 
 선택지: (A) 속성 값을 Cesium 에 노출(클라이언트가 스타일/피킹) vs (B) 워커에서 색으로 굽기만(값 미노출). (A)만 동적 스타일링·피킹을 가능케 한다.
 

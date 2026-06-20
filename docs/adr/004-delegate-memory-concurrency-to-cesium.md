@@ -13,7 +13,7 @@ ADR-001 §결과는 "LOD는 Cesium 위임, 단 **메모리 캐시는 우리 일*
 
 1. **④ eviction + ② 점 예산 = Cesium에 위임 (손코딩 LRU/point-budget 기각).** `Cesium3DTileset.cacheBytes`(기본 512MB) + `memoryAdjustedScreenSpaceError`가 *메모리 바운드 예산 + 화면 밖 타일 자동 unload*를 이미 수행. **실측 증명**(`?soak=autzen&cache=2`): 로드 점이 2MB 한도 초과 시 `tileUnload` 발동 → **우리 SW-pnts도 evict**, cesiumMB가 한도에서 plateau(무한 climb 없음), heap 평탄.
    - **단 범위 한정**: Cesium이 축출하는 것은 *렌더된 점 타일*. 서브페이지 **노드 메타데이터**(page/worker session.nodes)는 우리 장부라 Cesium 밖 → 여전히 누적(경량·미측정, [hierarchy-subpage-paging] wiki line 44 유효). 필요 시 *우리 장부 정리*이지 점 데이터 LRU가 아니다.
-2. **③ 동시성 = Cesium RequestScheduler 설정 튜닝 (손코딩 워커풀 기각).** 근본원인 측정: 기본 server당 18 동시요청 → 워커 디코드의 S3 range fetch가 브라우저 6/host 한도에 큐잉 → 큐 대기시간이 per-attempt 8s 타임아웃(`FETCH_TIMEOUT_MS`)에 포함 → 헛타임아웃 → 재시도, 일부 소진 → 500(점군 구멍). 같은 항해서 `maximumRequestsPerServer` 18→6 시 **재시도 184→23·실패 4→0**(단 tilesReady 후반 7→0, **throughput↓ tradeoff**). → 워커풀이 아니라 **config 레버**(동시성 상한 / 타임아웃) 문제.
+2. **③ 동시성 = Cesium RequestScheduler 설정 튜닝 (손코딩 워커풀 기각).** 근본원인 측정: 기본 server당 18 동시요청 → 워커 디코드의 S3 range fetch가 브라우저 6/host 한도에 큐잉 → 큐 대기시간이 per-attempt 8s 타임아웃(`FETCH_TIMEOUT_MS`)에 포함 → 헛타임아웃 → 재시도, 일부 소진 → 500(포인트클라우드 구멍). 같은 항해서 `maximumRequestsPerServer` 18→6 시 **재시도 184→23·실패 4→0**(단 tilesReady 후반 7→0, **throughput↓ tradeoff**). → 워커풀이 아니라 **config 레버**(동시성 상한 / 타임아웃) 문제.
 3. **정확한 노브값(maxReq·timeout·기본 cacheBytes)은 실 GPU+정상 네트워크 측정 후 확정.** 헤드리스 샌드박스는 S3가 느려/혼잡해 타임아웃 빈도를 과장하므로 값을 못 박지 않는다.
 
 ## 결과
@@ -40,7 +40,7 @@ ADR-001 §결과는 "LOD는 Cesium 위임, 단 **메모리 캐시는 우리 일*
 
 **메커니즘 = `RequestScheduler.requestsByServer[콘텐츠호스트]` (전역 미오염).** 원 결과 −항목 *"전역 static — per-server override(우리 origin 스코프)로 한정해야, 설계 미정"* 을 그대로 해결. 콘텐츠(`/__copc-real/`)는 앱 origin 서빙이므로 **그 호스트 키에만** per-server override를 둔다(Cesium 공식 문서가 `requestsByServer`를 정확히 이 용도로 제공 — "useful when streaming from a known server"). 전역 `maximumRequestsPerServer` 는 건드리지 않아 소비자 앱의 다른 서버 요청 영향 0. 손코딩 워커풀/세마포어 0 — STOP 규칙 충족.
 
-**원 "throughput↓ tradeoff" 우려 반증.** 고밀도 헤드리스 soak 재측정(MSSE=2·near=0.04): range 재시도 **85(타임아웃 58)@기본18 → 1@maxReq6**, tileFailed(점군 구멍)은 양쪽 **0**(복원력 레이어가 흡수 — ③은 정확성 갭이 아니라 지연/throughput 문제로 좁혀짐). 그리고 6이 **throughput 도 높았다**(30s간 39→49 타일): 과동시성의 8s 타임아웃 낭비(받던 바이트 버리고 재시도)가 처리량을 더 깎기 때문. → 원 ADR의 *"6 고정이 답이 아님"* 은 **HTTP/1.1 range 소스 한해 해소**(6이 우수). HTTP/2 CDN 뒤면 옵션으로 상향.
+**원 "throughput↓ tradeoff" 우려 반증.** 고밀도 헤드리스 soak 재측정(MSSE=2·near=0.04): range 재시도 **85(타임아웃 58)@기본18 → 1@maxReq6**, tileFailed(포인트클라우드 구멍)은 양쪽 **0**(복원력 레이어가 흡수 — ③은 정확성 갭이 아니라 지연/throughput 문제로 좁혀짐). 그리고 6이 **throughput 도 높았다**(30s간 39→49 타일): 과동시성의 8s 타임아웃 낭비(받던 바이트 버리고 재시도)가 처리량을 더 깎기 때문. → 원 ADR의 *"6 고정이 답이 아님"* 은 **HTTP/1.1 range 소스 한해 해소**(6이 우수). HTTP/2 CDN 뒤면 옵션으로 상향.
 
 **출하.** `CopcTileset.fromUrl(url, { maxRequestsPerServer })` 옵션, 기본 6, `0` 이하면 미설정(Cesium 기본 유지·escape hatch). commit `923d0ed`. 검증: 새 기본값 sofi 고밀도 soak 재시도 4(타임아웃 1)·실패 0, build·build:lib·verify C1 PASS.
 

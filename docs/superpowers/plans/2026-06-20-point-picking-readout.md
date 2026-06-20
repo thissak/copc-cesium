@@ -266,7 +266,7 @@ Expected: tsc 타입에러 0 (`demo/pick-panel.ts` 가 tsconfig include `demo` �
 - [ ] **Step 4: 브라우저 스모크 (AC6)**
 
 `npm run dev` 백그라운드 + Playwright MCP:
-1. `http://localhost:5173/` 접속, 점군 렌더 대기(~6s, `?` 없는 기본 데모).
+1. `http://localhost:5173/` 접속, 포인트클라우드 렌더 대기(~6s, `?` 없는 기본 데모).
 2. 캔버스 중앙 클릭(autzen 밀집 → 점 히트) → `#pick-panel` 표시·`textContent` 에 `Lon -123` 포함·`Classification`/`Intensity` 행 존재.
 3. 캔버스 좌상단 모서리 클릭(하늘 영역) → `#pick-panel` `display:none`.
 4. 콘솔 `pageerror`/`console.error` 0.

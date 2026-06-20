@@ -80,7 +80,7 @@ index.html    ← <script src> 한 줄만 /demo/main.ts 로
 
 - [ ] **AC1**: `npm run build:lib` 후 `dist/` 가 변경 전과 **byte-identical** (`git stash` 기준 또는 사전 해시 대조, diff 0).
 - [ ] **AC2**: `npm run build` (tsc --noEmit + vite) — 타입에러 0, demo-dist 산출.
-- [ ] **AC3**: `npm run dev` 실브라우저 — 기본 데모(`CopcTileset.fromUrl`)가 점군 LOD 스트리밍 렌더, 콘솔 에러 0.
+- [ ] **AC3**: `npm run dev` 실브라우저 — 기본 데모(`CopcTileset.fromUrl`)가 포인트클라우드 LOD 스트리밍 렌더, 콘솔 에러 0.
 - [ ] **AC4**: `npm run verify` — C1 Oregon(-123.069°, 44.056°) PASS.
 - [ ] **AC5**: `scripts/check-*` 전부 통과 (최소 `check-ecef`·`check-coalesce`·`check-attributes` 회귀 0).
 - [ ] **AC6**: `src/` 에 데모/스파이크 파일 부재 (main/copc/datasets/pnts/spike-batch 없음), `demo/` 에 main/copc/datasets 존재, pnts/spike-batch 삭제됨.
@@ -89,7 +89,7 @@ index.html    ← <script src> 한 줄만 /demo/main.ts 로
 
 ## 테스트 시나리오
 
-- **정상**: `?` 없는 기본 URL → `runDemo()` → 점군 렌더 (AC3).
+- **정상**: `?` 없는 기본 URL → `runDemo()` → 포인트클라우드 렌더 (AC3).
 - **정상**: `?perf=millsite&secs=10` → perf 하네스 진입·`window.__perf` 산출 (AC7).
 - **엣지**: `?spike5`(제거된 모드) → 분기 없으니 `runDemo()` 폴백, 콘솔 에러 0 (AC8).
 - **실패**: tsc 가 unused import(`buildTileset`/`getLazPerf`) 잔존 시 에러 → 제거로 GREEN (AC2).

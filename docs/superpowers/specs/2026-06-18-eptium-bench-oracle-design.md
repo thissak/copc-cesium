@@ -38,7 +38,7 @@ Cesium 블로그(2025-06-20)가 Eptium을 "consumes COPC on the fly, **convertin
 ## 정규화 / 통제
 
 - **데이터**: 동일 autzen URL.
-- **베이스맵/지형**: 양쪽 **off**. 우리 `?perf`는 이미 점군만; Eptium은 `window.viewer.scene.globe.show=false` + `imageryLayers.removeAll()`로 끔(PoC에서 접근 확인).
+- **베이스맵/지형**: 양쪽 **off**. 우리 `?perf`는 이미 포인트클라우드만; Eptium은 `window.viewer.scene.globe.show=false` + `imageryLayers.removeAll()`로 끔(PoC에서 접근 확인).
 - **품질 정규화 = msse 일치 + 고정 뷰포인트 풀레솔** (PoC로 doable 확정): 양쪽 `Cesium3DTileset.maximumScreenSpaceError`를 동일값으로 강제하고(Eptium은 `window.viewer` 통해, 우리는 `&msse=`), `numberOfPointsSelected`를 양쪽에서 읽어 **동일 점 수를 증명**. 풀레솔 도달 = `numberOfPendingRequests===0 && numberOfTilesProcessing===0` 안정(양쪽 동일 Cesium 지표). 헤드라인은 매칭 msse 1쌍(예 32), 보조로 우리 출하기본(8)도 기록.
 - **네트워크**: CDP `Network.emulateNetworkConditions` 로 양쪽 동일 프로파일(고정 다운링크/RTT). 무제한도 1회 측정하되, 비교 헤드라인은 throttle 고정값.
 
