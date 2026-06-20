@@ -62,6 +62,36 @@ export function assertConfig(idx: number): boolean {
   return c.edl === false && c.attenuation === false && c.globeShow === false && c.resolutionScale === NORM.resolutionScale;
 }
 
+// EDL-on 변형 (이슈 #08 실사용 매칭 비교) — 표면(globe/imagery/res)만 정규화하고 EDL/atten 은 켠다.
+// 직전 매칭 비교(EDL off=raw 점)의 caveat 검증용: 실사용 후처리 켜도 ours 우위가 남나.
+export function normalizeSurfaceEdlOn(idx: number): void {
+  const v = W().viewer;
+  const ts = v.scene.primitives.get(idx);
+  if (v.scene.globe) v.scene.globe.show = false;
+  if (v.imageryLayers?.removeAll) v.imageryLayers.removeAll();
+  v.useBrowserRecommendedResolution = false;
+  v.resolutionScale = NORM.resolutionScale;
+  if (ts.pointCloudShading) {
+    ts.pointCloudShading.eyeDomeLighting = true;
+    ts.pointCloudShading.attenuation = true;
+  }
+}
+
+export function reassertSurfaceEdlOn(idx: number): void {
+  const v = W().viewer;
+  const ts = v.scene.primitives.get(idx);
+  if (v.scene.globe?.show) v.scene.globe.show = false;
+  if (ts.pointCloudShading) {
+    if (!ts.pointCloudShading.eyeDomeLighting) ts.pointCloudShading.eyeDomeLighting = true;
+    if (!ts.pointCloudShading.attenuation) ts.pointCloudShading.attenuation = true;
+  }
+}
+
+export function assertSurfaceEdlOn(idx: number): boolean {
+  const c = readConfig(idx);
+  return c.edl === true && c.attenuation === true && c.globeShow === false && c.resolutionScale === NORM.resolutionScale;
+}
+
 export function readStats(idx: number) {
   const v = W().viewer;
   const ts = v.scene.primitives.get(idx);
@@ -104,7 +134,8 @@ export function setCacheBytes(idx: number, mb: number): void {
   ts.maximumCacheOverflowBytes = bytes;
 }
 
-export async function measureLoadCurve(idx: number, msse: number, capMs: number, bucketSize: number, reassert: boolean) {
+// reassert: false=없음 · true/'off'=EDL off 재적용(fair-compare 레거시) · 'edlOn'=EDL on 재적용(실사용 매칭)
+export async function measureLoadCurve(idx: number, msse: number, capMs: number, bucketSize: number, reassert: boolean | 'off' | 'edlOn') {
   const v = W().viewer;
   const ts = v.scene.primitives.get(idx);
   const s = (d: number) => new Promise((r) => setTimeout(r, d));
@@ -144,7 +175,8 @@ export async function measureLoadCurve(idx: number, msse: number, capMs: number,
   const t0 = performance.now();
   let prevPts = -1, plateau = 0;
   while (performance.now() - t0 < capMs) {
-    if (reassert) reassertConfig(idx); // Eptium 매프레임 덮어쓰기 방어
+    if (reassert === 'edlOn') reassertSurfaceEdlOn(idx); // 실사용 매칭: EDL on 재적용(Eptium 덮어쓰기 방어)
+    else if (reassert) reassertConfig(idx); // Eptium 매프레임 덮어쓰기 방어(EDL off 레거시)
     v.scene.requestRender();
     await s(50);
     const pts = readStats(idx).pointsSelected;

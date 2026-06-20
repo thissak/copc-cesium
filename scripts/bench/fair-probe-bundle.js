@@ -22,12 +22,15 @@ var FairProbe = (() => {
   var fair_probe_exports = {};
   __export(fair_probe_exports, {
     assertConfig: () => assertConfig,
+    assertSurfaceEdlOn: () => assertSurfaceEdlOn,
     findTilesetIndex: () => findTilesetIndex,
     measureLoadCurve: () => measureLoadCurve,
     normalizeConfig: () => normalizeConfig,
+    normalizeSurfaceEdlOn: () => normalizeSurfaceEdlOn,
     readConfig: () => readConfig,
     readStats: () => readStats,
     reassertConfig: () => reassertConfig,
+    reassertSurfaceEdlOn: () => reassertSurfaceEdlOn,
     setCacheBytes: () => setCacheBytes,
     setMsse: () => setMsse,
     setViewpoint: () => setViewpoint
@@ -82,6 +85,31 @@ var FairProbe = (() => {
   function assertConfig(idx) {
     const c = readConfig(idx);
     return c.edl === false && c.attenuation === false && c.globeShow === false && c.resolutionScale === NORM.resolutionScale;
+  }
+  function normalizeSurfaceEdlOn(idx) {
+    const v = W().viewer;
+    const ts = v.scene.primitives.get(idx);
+    if (v.scene.globe) v.scene.globe.show = false;
+    if (v.imageryLayers?.removeAll) v.imageryLayers.removeAll();
+    v.useBrowserRecommendedResolution = false;
+    v.resolutionScale = NORM.resolutionScale;
+    if (ts.pointCloudShading) {
+      ts.pointCloudShading.eyeDomeLighting = true;
+      ts.pointCloudShading.attenuation = true;
+    }
+  }
+  function reassertSurfaceEdlOn(idx) {
+    const v = W().viewer;
+    const ts = v.scene.primitives.get(idx);
+    if (v.scene.globe?.show) v.scene.globe.show = false;
+    if (ts.pointCloudShading) {
+      if (!ts.pointCloudShading.eyeDomeLighting) ts.pointCloudShading.eyeDomeLighting = true;
+      if (!ts.pointCloudShading.attenuation) ts.pointCloudShading.attenuation = true;
+    }
+  }
+  function assertSurfaceEdlOn(idx) {
+    const c = readConfig(idx);
+    return c.edl === true && c.attenuation === true && c.globeShow === false && c.resolutionScale === NORM.resolutionScale;
   }
   function readStats(idx) {
     const v = W().viewer;
@@ -163,7 +191,8 @@ var FairProbe = (() => {
     const t0 = performance.now();
     let prevPts = -1, plateau = 0;
     while (performance.now() - t0 < capMs) {
-      if (reassert) reassertConfig(idx);
+      if (reassert === "edlOn") reassertSurfaceEdlOn(idx);
+      else if (reassert) reassertConfig(idx);
       v.scene.requestRender();
       await s(50);
       const pts = readStats(idx).pointsSelected;

@@ -187,6 +187,18 @@ ours 스윕 전 구간 평탄: 500k/5.72 · 800k/5.24 · 1M/5.71 · 1.3M/5.97 ms
 - GPU 타이머 관점: Eptium도 깊은 줌 GPU 작업 ~14ms — 이전 "120fps"는 vsync 벽시계, 실제 GPU는 11~14ms.
 
 ### ⚠️ caveat (headline 금지 — competition-goal-north-star 준수)
-1. **EDL/atten OFF** — **raw 점 래스터화** 비용만. ours 양자화 pnts(uint16 위치=바이트 절반)가 GPU 대역폭 우위의 유력 원인. 실사용(EDL on)선 다를 수 있음(미측정).
+1. **EDL/atten OFF** — **raw 점 래스터화** 비용만. ours 양자화 pnts(uint16 위치=바이트 절반)가 GPU 대역폭 우위의 유력 원인. 실사용(EDL on)선 다를 수 있음(→ 아래 §EDL-on 으로 검증).
 2. **매칭 작동점 한정**(~500-600k) + 단일 데이터셋(sofi) + Eptium plateau 뷰포트 의존.
 - ✅ 방어 가능 톤: "매칭 디테일·EDL-off raw-point·정상상태에서 ours GPU 비용이 Eptium의 ~0.4배 — 양자화 경량 파이프라인의 측정 가능한 이득(매칭점 한정, 헤드라인 아님)."
+
+### §EDL-on — 실사용 셰이딩 켜고 매칭(위 caveat 1 검증, `npm run bench:matched -- --edl`)
+직전 매칭의 "EDL-off라 양자화 아티팩트일 뿐" caveat을 검증 — EDL/atten ON(실사용 시각)으로 양 엔진 동일 측정(`fair-probe.normalizeSurfaceEdlOn`). 산출물 `docs/bench/budget/matched-sofi-edl.{md,json}`.
+
+| 엔진 | plateau 점수 | gpuMs | GPU fps 천장 |
+|------|-------------|-------|-------------|
+| **ours** (cacheBytes 4MB) | 500k | **5.19** | 193 |
+| eptium (자체 예산) | 400k | **9.08** | 110 |
+
+- **EDL 비용이 ours에 ~1ms 이하만 더함**(500k: off 5.72→on 5.19 · 1.3M: 5.97→7.05). GPU 타이머가 EDL 패스(preRender~postRender) 포함하므로 누락 아님 — EDL이 M4서 싸다. → **직전 우위가 EDL-off 아티팩트가 아님 확인**: 실사용 시각에서도 ours 빠름(5.19↔9.08, ours ~1.75×, ours가 점도 더 많음).
+- **caveat 심화**: ratio가 0.40(off)→0.57(on)로 우위 축소했으나 **EDL 탓 아님** — 이번 Eptium plateau가 400k(직전 600k)로 떨어진 탓(뷰포트 의존). 매칭 오차 25%(ours 500k vs Eptium 400k)·**Eptium plateau run 변동(400~764k)이 이 비교의 최대 약점**.
+- ✅ 방어 톤: "우위 방향(ours GPU 비용 낮음)은 EDL off/on 양쪽서 견고, 크기는 1.75~2.5× 범위로 불확실(Eptium plateau 변동). 실사용 EDL-on서도 ours 우위 유지 — raw-point 아티팩트 아님." 매칭점·단일 ds 한정, 헤드라인 아님.
