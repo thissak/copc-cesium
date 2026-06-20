@@ -1,0 +1,561 @@
+{
+  "ds": "millsite",
+  "msse": 2,
+  "edl": false,
+  "target": 400000,
+  "eptium": {
+    "gl": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+    "finalPts": 5535553,
+    "gpuOk": true,
+    "plateauPts": 400000,
+    "plateauGpuMs": 9.955,
+    "plateauN": 60,
+    "curve": [
+      {
+        "pts": 200000,
+        "gpuMs": 8.222,
+        "n": 16
+      },
+      {
+        "pts": 300000,
+        "gpuMs": 8.4,
+        "n": 9
+      },
+      {
+        "pts": 400000,
+        "gpuMs": 9.955,
+        "n": 60
+      },
+      {
+        "pts": 500000,
+        "gpuMs": 12.293,
+        "n": 12
+      },
+      {
+        "pts": 600000,
+        "gpuMs": 14.63,
+        "n": 13
+      },
+      {
+        "pts": 700000,
+        "gpuMs": 19.156,
+        "n": 11
+      },
+      {
+        "pts": 800000,
+        "gpuMs": 27.992,
+        "n": 5
+      },
+      {
+        "pts": 900000,
+        "gpuMs": 29.978,
+        "n": 7
+      },
+      {
+        "pts": 1000000,
+        "gpuMs": 30.427,
+        "n": 4
+      },
+      {
+        "pts": 1100000,
+        "gpuMs": 30.778,
+        "n": 16
+      },
+      {
+        "pts": 1200000,
+        "gpuMs": 31.983,
+        "n": 10
+      },
+      {
+        "pts": 1300000,
+        "gpuMs": 36.621,
+        "n": 7
+      },
+      {
+        "pts": 1500000,
+        "gpuMs": 38.504,
+        "n": 27
+      },
+      {
+        "pts": 1600000,
+        "gpuMs": 43.759,
+        "n": 8
+      },
+      {
+        "pts": 1700000,
+        "gpuMs": 44.077,
+        "n": 3
+      },
+      {
+        "pts": 1800000,
+        "gpuMs": 42.718,
+        "n": 10
+      },
+      {
+        "pts": 1900000,
+        "gpuMs": 47.267,
+        "n": 14
+      },
+      {
+        "pts": 2000000,
+        "gpuMs": 47.988,
+        "n": 15
+      },
+      {
+        "pts": 2100000,
+        "gpuMs": 46.959,
+        "n": 15
+      },
+      {
+        "pts": 2200000,
+        "gpuMs": 40.966,
+        "n": 5
+      },
+      {
+        "pts": 2300000,
+        "gpuMs": 46.222,
+        "n": 10
+      },
+      {
+        "pts": 2400000,
+        "gpuMs": 43.843,
+        "n": 13
+      },
+      {
+        "pts": 2500000,
+        "gpuMs": 50.773,
+        "n": 9
+      },
+      {
+        "pts": 2600000,
+        "gpuMs": 45.473,
+        "n": 5
+      },
+      {
+        "pts": 2700000,
+        "gpuMs": 49.066,
+        "n": 3
+      },
+      {
+        "pts": 2800000,
+        "gpuMs": 53.273,
+        "n": 20
+      },
+      {
+        "pts": 2900000,
+        "gpuMs": 57.264,
+        "n": 8
+      },
+      {
+        "pts": 3000000,
+        "gpuMs": 46.414,
+        "n": 5
+      },
+      {
+        "pts": 3100000,
+        "gpuMs": 54.727,
+        "n": 21
+      },
+      {
+        "pts": 3200000,
+        "gpuMs": 57.037,
+        "n": 11
+      },
+      {
+        "pts": 3300000,
+        "gpuMs": 58.166,
+        "n": 10
+      },
+      {
+        "pts": 3400000,
+        "gpuMs": 50.142,
+        "n": 5
+      },
+      {
+        "pts": 3500000,
+        "gpuMs": 47.824,
+        "n": 6
+      },
+      {
+        "pts": 3700000,
+        "gpuMs": 50.305,
+        "n": 12
+      },
+      {
+        "pts": 3900000,
+        "gpuMs": 52.359,
+        "n": 21
+      },
+      {
+        "pts": 4000000,
+        "gpuMs": 58.037,
+        "n": 11
+      },
+      {
+        "pts": 4100000,
+        "gpuMs": 62.894,
+        "n": 7
+      },
+      {
+        "pts": 4200000,
+        "gpuMs": 57.671,
+        "n": 21
+      },
+      {
+        "pts": 4300000,
+        "gpuMs": 73.195,
+        "n": 4
+      },
+      {
+        "pts": 4400000,
+        "gpuMs": 56.974,
+        "n": 17
+      },
+      {
+        "pts": 4500000,
+        "gpuMs": 60.483,
+        "n": 7
+      },
+      {
+        "pts": 4600000,
+        "gpuMs": 55.861,
+        "n": 9
+      },
+      {
+        "pts": 4700000,
+        "gpuMs": 58.257,
+        "n": 14
+      },
+      {
+        "pts": 4800000,
+        "gpuMs": 64.127,
+        "n": 11
+      },
+      {
+        "pts": 5000000,
+        "gpuMs": 60.043,
+        "n": 19
+      },
+      {
+        "pts": 5100000,
+        "gpuMs": 60.224,
+        "n": 5
+      },
+      {
+        "pts": 5200000,
+        "gpuMs": 66.782,
+        "n": 6
+      },
+      {
+        "pts": 5300000,
+        "gpuMs": 64.839,
+        "n": 9
+      },
+      {
+        "pts": 5400000,
+        "gpuMs": 67.269,
+        "n": 11
+      },
+      {
+        "pts": 5500000,
+        "gpuMs": 69.555,
+        "n": 18
+      }
+    ]
+  },
+  "oursRuns": [
+    {
+      "mb": 3,
+      "gl": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+      "finalPts": 412726,
+      "gpuOk": true,
+      "plateauPts": 400000,
+      "plateauGpuMs": 4.456,
+      "plateauN": 868,
+      "curve": [
+        {
+          "pts": 100000,
+          "gpuMs": 4.852,
+          "n": 318
+        },
+        {
+          "pts": 200000,
+          "gpuMs": 4.869,
+          "n": 595
+        },
+        {
+          "pts": 300000,
+          "gpuMs": 4.973,
+          "n": 445
+        },
+        {
+          "pts": 400000,
+          "gpuMs": 4.456,
+          "n": 868
+        },
+        {
+          "pts": 500000,
+          "gpuMs": 21.615,
+          "n": 103
+        }
+      ]
+    },
+    {
+      "mb": 4,
+      "gl": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+      "finalPts": 546219,
+      "gpuOk": true,
+      "plateauPts": 500000,
+      "plateauGpuMs": 4.882,
+      "plateauN": 1554,
+      "curve": [
+        {
+          "pts": 200000,
+          "gpuMs": 5.024,
+          "n": 417
+        },
+        {
+          "pts": 300000,
+          "gpuMs": 4.938,
+          "n": 184
+        },
+        {
+          "pts": 400000,
+          "gpuMs": 5.497,
+          "n": 60
+        },
+        {
+          "pts": 500000,
+          "gpuMs": 4.882,
+          "n": 1554
+        }
+      ]
+    },
+    {
+      "mb": 6,
+      "gl": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+      "finalPts": 637806,
+      "gpuOk": true,
+      "plateauPts": 800000,
+      "plateauGpuMs": 4.823,
+      "plateauN": 1714,
+      "curve": [
+        {
+          "pts": 100000,
+          "gpuMs": 4.892,
+          "n": 358
+        },
+        {
+          "pts": 200000,
+          "gpuMs": 4.888,
+          "n": 446
+        },
+        {
+          "pts": 300000,
+          "gpuMs": 5.191,
+          "n": 251
+        },
+        {
+          "pts": 400000,
+          "gpuMs": 5.314,
+          "n": 252
+        },
+        {
+          "pts": 500000,
+          "gpuMs": 29.451,
+          "n": 11
+        },
+        {
+          "pts": 600000,
+          "gpuMs": 4.527,
+          "n": 826
+        },
+        {
+          "pts": 700000,
+          "gpuMs": 4.866,
+          "n": 781
+        },
+        {
+          "pts": 800000,
+          "gpuMs": 4.823,
+          "n": 1714
+        }
+      ]
+    },
+    {
+      "mb": 8,
+      "gl": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+      "finalPts": 971249,
+      "gpuOk": true,
+      "plateauPts": 1000000,
+      "plateauGpuMs": 4.828,
+      "plateauN": 2875,
+      "curve": [
+        {
+          "pts": 100000,
+          "gpuMs": 4.967,
+          "n": 388
+        },
+        {
+          "pts": 200000,
+          "gpuMs": 5.091,
+          "n": 622
+        },
+        {
+          "pts": 300000,
+          "gpuMs": 5.074,
+          "n": 333
+        },
+        {
+          "pts": 400000,
+          "gpuMs": 5.14,
+          "n": 72
+        },
+        {
+          "pts": 500000,
+          "gpuMs": 22.071,
+          "n": 95
+        },
+        {
+          "pts": 600000,
+          "gpuMs": 28.251,
+          "n": 17
+        },
+        {
+          "pts": 700000,
+          "gpuMs": 28.332,
+          "n": 5
+        },
+        {
+          "pts": 800000,
+          "gpuMs": 23.062,
+          "n": 13
+        },
+        {
+          "pts": 900000,
+          "gpuMs": 22.611,
+          "n": 866
+        },
+        {
+          "pts": 1000000,
+          "gpuMs": 4.828,
+          "n": 2875
+        },
+        {
+          "pts": 1100000,
+          "gpuMs": 4.89,
+          "n": 336
+        }
+      ]
+    },
+    {
+      "mb": 10,
+      "gl": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+      "finalPts": 1317354,
+      "gpuOk": true,
+      "plateauPts": 1300000,
+      "plateauGpuMs": 5.484,
+      "plateauN": 3362,
+      "curve": [
+        {
+          "pts": 100000,
+          "gpuMs": 5.041,
+          "n": 313
+        },
+        {
+          "pts": 200000,
+          "gpuMs": 4.837,
+          "n": 154
+        },
+        {
+          "pts": 300000,
+          "gpuMs": 4.835,
+          "n": 483
+        },
+        {
+          "pts": 400000,
+          "gpuMs": 5.088,
+          "n": 146
+        },
+        {
+          "pts": 500000,
+          "gpuMs": 4.981,
+          "n": 145
+        },
+        {
+          "pts": 600000,
+          "gpuMs": 21.581,
+          "n": 60
+        },
+        {
+          "pts": 700000,
+          "gpuMs": 27.773,
+          "n": 96
+        },
+        {
+          "pts": 800000,
+          "gpuMs": 37.796,
+          "n": 44
+        },
+        {
+          "pts": 1000000,
+          "gpuMs": 37.925,
+          "n": 36
+        },
+        {
+          "pts": 1100000,
+          "gpuMs": 37.263,
+          "n": 390
+        },
+        {
+          "pts": 1200000,
+          "gpuMs": 5.483,
+          "n": 844
+        },
+        {
+          "pts": 1300000,
+          "gpuMs": 5.484,
+          "n": 3362
+        }
+      ]
+    }
+  ],
+  "matched": {
+    "mb": 3,
+    "gl": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+    "finalPts": 412726,
+    "gpuOk": true,
+    "plateauPts": 400000,
+    "plateauGpuMs": 4.456,
+    "plateauN": 868,
+    "curve": [
+      {
+        "pts": 100000,
+        "gpuMs": 4.852,
+        "n": 318
+      },
+      {
+        "pts": 200000,
+        "gpuMs": 4.869,
+        "n": 595
+      },
+      {
+        "pts": 300000,
+        "gpuMs": 4.973,
+        "n": 445
+      },
+      {
+        "pts": 400000,
+        "gpuMs": 4.456,
+        "n": 868
+      },
+      {
+        "pts": 500000,
+        "gpuMs": 21.615,
+        "n": 103
+      }
+    ]
+  },
+  "mismatch": 0,
+  "ratio": 0.44761426418884986
+}
