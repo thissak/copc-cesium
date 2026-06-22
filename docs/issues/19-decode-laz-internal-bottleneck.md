@@ -74,8 +74,9 @@ decode 축을 **laz 압축해제 vs getter 추출**로 가름 (norm autzen, 65�
 
 ## 3. Best Practice 조사 (Step 3 — context7 + 실측)
 
-### 조사 결과 (deep-research + laz-perf .wasm 직접 파싱)
-- **laz-perf 0.0.7 = npm 마지막 버전**(2025-02 이후 신버전 없음). shipped `.wasm`은 **스칼라·단일스레드**(SIMD prefix 오탐 수준·SharedArrayBuffer/Atomics 0). upstream 빌드 플래그에 `-msimd128`·`-pthread`·`-O3` **모두 없음**. → SIMD 가속은 **자체 재빌드 필요, 이득 미지**(벤치 부재 + 산술코더는 데이터 의존 분기 多 → SIMD 친화도 낮을 개연).
+### 조사 결과 (deep-research + laz-perf .wasm 직접 파싱 + SIMD 재빌드 실측)
+- **laz-perf 0.0.7 = npm 마지막 버전**(2025-02 이후 신버전 없음). shipped `.wasm`은 **스칼라·단일스레드**(SIMD prefix 오탐 수준·SharedArrayBuffer/Atomics 0). upstream 빌드 플래그에 `-msimd128`·`-pthread`·`-O3` **모두 없음**.
+- **SIMD 재빌드 실측 (이 사이클, emsdk+cmake)**: laz-perf 3.4.0을 동일 소스에서 `-msimd128`(Release) 유무로 두 번 빌드 → **두 `.wasm`이 byte-identical**(`cmp` 통과, 210965 B 동일). `-msimd128`이 FLAGS에 적용됐음에도 emscripten이 SIMD 명령을 0개 방출 = **산술 디코더에 vectorize 가능 루프 없음**. ∴ **SIMD 재빌드 이득 = 0 (추정 아닌 실증).** (수동 SIMD intrinsic 재작성은 laz-perf fork = 스코프 밖·STOP.)
 - **드롭인 가능한 더 빠른 COPC 호환 WASM 디코더 없음**: laz-rs(crate)는 활발하나 SIMD 없음(가속=rayon 멀티스레드)·laz-rs-wasm은 방치(2021)·copc.js `ChunkDecoder.open()+getPoint()` per-point 계약과 비호환(whole-file 디코더).
 - **getter 차원 skip 불가 재확인**: copc.js `include`는 getter 필터만 — 압축해제는 전체 레코드(§2 측정 일치).
 
@@ -97,13 +98,12 @@ decode 축을 **laz 압축해제 vs getter 추출**로 가름 (norm autzen, 65�
 | **decode 84%는 internal-compute 비중 ≠ wall-clock 비중** | (게이트) | 실 S3는 IO(TTFB)가 wall-clock 지배(#14·#02). **착수 전 reproject-fix 이후 레짐서 wall-clock A/B 재측정 필수** |
 | 워커풀 N개 × 2GB heap OOM | 높(메모리) | cap `max(hwConc-1,1)`(Cesium식) + heapMB 모니터(#04 계측 재활용) |
 | 워커풀 ↔ range-coalescing race(#04 재현) | 중(안정성) | 풀-coalescing 경계 분리 + slice 무결성 assert |
-| SIMD 재빌드 후 출력 차이 | 낮(산술코더 결정적) | byte-identical 골든 게이트(#02 운용 중) |
-| SIMD 실이득 ≈ 0 | 이득 미지 | 재빌드 전 `-msimd128` .wasm A/B 측정 선행 |
+| **SIMD 재빌드 이득 = 0** | (실증) | `-msimd128` 재빌드가 stock과 **byte-identical** → 레버 아님 |
 | laz-rs 교체 | 높(정확성·비호환) | **비권장** |
 
 ### 결론 (안전 레버 우선순위 + 정확성 회귀 위험)
 1. **워커풀** — 정확성 회귀 **없음**(디코드 chunk별 결정적 → 출력 byte 불변). 동일 스택 prior art 실재. **단 채택 게이트 2개**: (a) decode-dominant 레짐서 deep-load **wall-clock A/B 재측정**(과거 #02 풀 A/B는 IO-bound 시절이라 무효), (b) cap `max(hwConc-1,1)` + 2GB×N heap 모니터.
-2. **SIMD laz-perf 재빌드** — 위험 **낮음**, 단 **이득 미지** → `-msimd128` A/B + 골든 통과 시에만.
+2. **SIMD laz-perf 재빌드** — **배제(실측)**: `-msimd128` 재빌드가 stock과 byte-identical → 이득 0. (산술 디코더 비-vectorizable; 수동 intrinsic은 laz-perf fork = 스코프 밖.)
 3. **laz-rs 교체** — **비권장**(위험 높음).
 
 **intrinsic 판정**: *단일 chunk 레이턴시*(~452 ms/1M)는 stock 빌드 한 거의 intrinsic. *deep-load 스루풋*은 워커풀로 N배 잠재이나 **실 wall-clock 체감 이득은 IO 레짐에 묶임** — #02 워커풀 revert 논리(IO-bound)가 reproject-fix 이후에도 유효한지 **재측정이 선결**.
@@ -119,7 +119,7 @@ BP(§3)에서 정확성 회귀 없는 레버는 **워커풀**(prior-art 표준) 
 | LOCAL(빠른 IO, 측정) | 1230ms | 84% (1036ms) | 2.71× (−777ms) | 6.33× |
 | **S3(IO-bound, #02 실측 참조)** | **~4800ms** | **~1%** | **1.008×** | 1.01× |
 
-**대회 배포 가정 = S3(일반적 클라우드 오브젝트 스토리지).** 그 레짐서 decode는 wall-clock의 ~1% → 워커풀 net-zero(#02서 동일 이유로 이미 만들었다 revert). 단일 chunk 압축해제는 stock laz-perf 한 **intrinsic**(SIMD 미제공·이득 미지, 대체 디코더 비호환·§3). → **프로덕션 `src/` 무변경.**
+**대회 배포 가정 = S3(일반적 클라우드 오브젝트 스토리지).** 그 레짐서 decode는 wall-clock의 ~1% → 워커풀 net-zero(#02서 동일 이유로 이미 만들었다 revert). 단일 chunk 압축해제는 stock laz-perf 한 **intrinsic**(SIMD `-msimd128` 재빌드 byte-identical=이득 0 실증, 대체 디코더 비호환·§3). → **프로덕션 `src/` 무변경.**
 
 ### 변경 파일 (측정/진단 도구만 — src 무변경)
 | 파일 | 변경 요약 |
@@ -149,8 +149,8 @@ BP(§3)에서 정확성 회귀 없는 레버는 **워커풀**(prior-art 표준) 
 대회 배포(S3/IO-bound) 가정에서 decode 최적화의 유일 안전 레버(워커풀)는 **net-zero**. 실 deep-load wall-clock 레버는 **IO(TTFB round-trip)** 이며 #14(brittle)·#02(coalescing)가 담당 — decode 아님. "decode 84%"는 IO를 로컬로 통제했을 때의 *internal-compute* 비중일 뿐. **measure-first가 #02 워커풀 재구현(net-zero)을 코딩 전에 차단함**(이번 사이클의 성과).
 
 ### 잔여 / 재개 조건
-- 단일 chunk 압축해제는 stock laz-perf(0.0.7·SIMD 미제공) 한 **intrinsic** — 런타임 라이브러리 스코프서 더 못 줄임.
-- **재개 조건**: 배포가 fast-IO(로컬·CDN·웜캐시)로 확정되면 워커풀이 2.71×(N=4) 후보 — prior-art·정확성 안전, cap `max(hwConc-1,1)`+heap 모니터(#04), wall-clock A/B 게이트 재측정 후. SIMD 빌드는 자체 컴파일+`-msimd128` A/B 선행.
+- 단일 chunk 압축해제는 stock laz-perf(0.0.7) 한 **intrinsic** — SIMD 재빌드 실측 0(byte-identical)·대체 디코더 비호환 → 런타임 라이브러리 스코프서 더 못 줄임.
+- **재개 조건**: 배포가 fast-IO(로컬·CDN·웜캐시)로 확정되면 워커풀이 2.71×(N=4) 후보 — prior-art·정확성 안전, cap `max(hwConc-1,1)`+heap 모니터(#04), wall-clock A/B 게이트 재측정 후. (SIMD는 수동 intrinsic 재작성=laz-perf fork라 스코프 밖.)
 
 ---
 스코프: 내부 compute decode(laz) 한정. 네트워크 brittle은 #14, reproject는 #17(해결), GPU/메인스레드 축은 4축 하니스 후속(GPU 미구현).
