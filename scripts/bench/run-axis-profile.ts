@@ -40,8 +40,10 @@ async function main() {
     const label = `${file} · depth≤${maxDepth} · ${keys.length}노드 · ${runs}회median`;
     const md = formatReport(label, rep);
     console.log(md);
-    writeFileSync('docs/bench/axis-autzen-2M.md', md + '\n');
-    writeFileSync('docs/bench/axis-autzen-2M.json', JSON.stringify(rep, null, 2) + '\n');
+    // 산출물 이름을 입력 파일에서 유도 — 입력별로 분리해 raw 측정이 norm 산출물을 덮어쓰지 않게.
+    const stem = file.replace(/^.*[/\\]/, '').replace(/\.copc\.laz$|\.laz$/i, '');
+    writeFileSync(`docs/bench/axis-${stem}.md`, md + '\n');
+    writeFileSync(`docs/bench/axis-${stem}.json`, JSON.stringify(rep, null, 2) + '\n');
   } finally {
     await srv.close();
   }

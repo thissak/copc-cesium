@@ -161,6 +161,9 @@ flowchart LR
 
 reproject가 내부 계산의 **50% → 2%** 로 떨어졌습니다. 그리고 가장 좋은 신호: **병목이 decode로 옮겨갔습니다.**
 
+!!! success "실데이터로 한 번 더 — 정규화도, 합성 점도 결과를 왜곡하지 않았다"
+    측정은 정규화(1/5 decimation) autzen으로, 정확도 검증은 *합성* 균일격자 점으로 했습니다 — 둘 다 의심할 수 있죠. 그래서 **원본 raw autzen(10.65M·비정규화)** 으로 다시 쟀습니다. 4축 비중은 norm과 거의 동일(**decode 84% · reproject 2%**) — 병목은 입력과 무관했습니다. 그리고 격자 bilinear를 **실제 점 6백만 개**(합성 아님)로 검증하니, max 오차가 **합성 worst-case와 정확히 일치(0.329mm)** 하고 ≈88× 가속 — 합성 격자가 오차 상한을 *정직하게* 잡고 있었다는 실증입니다. (`scripts/bench/check-reproject-realpts.ts` · [이슈 #19](../issues/19-decode-laz-internal-bottleneck.md))
+
 !!! quote "도구의 진짜 가치는 '다음'을 가리키는 것"
     한 병목을 없애면 좋은 프로파일러는 **곧바로 다음 병목**을 가리킵니다. 이제 표의 1순위는 decode(laz, 84%)입니다. 추측의 사이클이라면 여기서 멈췄겠지만, 측정의 사이클은 *그냥 도구를 다시 돌리면* 다음 목표가 떠 있습니다. 최적화는 "느낌"이 아니라 **이 표를 반복해서 내려가는 일**이 됩니다.
 
@@ -186,7 +189,7 @@ flowchart LR
 - **도구를 프로덕션과 분리**했기에(`src/` 무수정), 측정이 코드를 오염시키지 않고도 프로덕션과 동일한 프리미티브를 쟀습니다.
 
 !!! info "지금 위치와 다음"
-    reproject 병목은 제거됐고(50%→2%, 54×), 내부 계산은 절반이 됐습니다. 도구가 가리키는 다음 후보는 **decode(laz-perf)** 입니다. 전체 진단 프로토콜은 [PROFILING.md](../PROFILING.md), 이 사이클의 상세 기록은 [이슈 #17](../issues/17-reproject-proj4-internal-bottleneck.md), 측정 산출물은 [4축 분해 결과](../bench/axis-autzen-2M.md)에 있습니다.
+    reproject 병목은 제거됐고(50%→2%, 54×), 내부 계산은 절반이 됐습니다. 도구가 가리키는 다음 후보는 **decode(laz-perf)** 입니다. 전체 진단 프로토콜은 [PROFILING.md](../PROFILING.md), 이 사이클의 상세 기록은 [이슈 #17](../issues/17-reproject-proj4-internal-bottleneck.md), 측정 산출물은 4축 분해 결과([norm](../bench/axis-norm-autzen-2M.md) · [raw](../bench/axis-raw-autzen.md))에 있습니다.
 
 ---
 

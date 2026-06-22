@@ -129,8 +129,19 @@ feat/17-reproject-proj4-internal-bottleneck (close 시 PR/머지)
 
 → **reproject 병목 제거(50%→2%, 54×), 내부 compute 절반.** 격자 bilinear는 sub-mm(lidar 정밀도·렌더 훨씬 아래) + extent/오차 가드로 proj4 정확성 보존.
 
+### 실데이터 사후검증 (2026-06-22 — 합성 점 caveat 해소)
+위 정확도 검증(§1·§3)은 실 autzen CRS·bounds 위 **합성 균일격자 점**이었다(좌표계·extent는 실제, 점 분포는 합성). 원본 raw autzen에서 **실제 점 6M개를 디코드**해(`scripts/bench/check-reproject-realpts.ts`) grid bilinear vs proj4 per-point을 재검증:
+
+| 항목 | 합성 균일격자 (기존) | raw 실제 점 6M (신규) |
+|------|------|------|
+| max 오차 | 0.329mm | **0.329mm** (mean 0.227mm) |
+| 속도 | 54~88× | **≈88×** (proj4 565 → 격자 6.5 ms/1M점) |
+| 경로 | 격자 채택 | **격자 채택 (proj4 폴백 0회)** |
+
+→ 실제 라이다 점 분포(지형·건물 집중)에서 max 오차가 **합성 worst-case와 정확히 일치(0.329mm)** — 합성 균일격자가 오차 상한을 정직하게 잡고 있었음이 실증. 실 점 mean은 0.227mm로 더 낮다. autzen extent에선 가드가 격자를 수락(폴백 불필요). 4축 e2e도 raw 10.65M에서 reproject 2% 동일([#19](19-decode-laz-internal-bottleneck.md) §1 실데이터 확증).
+
 ### 잔여 이슈
-- 새 내부 병목 = **decode(laz, 84%)** — 별건 후속 최적화 후보(laz-perf 디코드).
+- 새 내부 병목 = **decode(laz, 84%)** — 별건 후속 [이슈 #19](19-decode-laz-internal-bottleneck.md)로 등록(laz-perf 디코드).
 - attribute batch 미측정·GPU 축 미구현은 4축 하니스 기존 한계(스코프 외).
 - 격자 reproj 의 per-call `[lon,lat]` 할당은 잔여(동시성 안전 위해 유지) — 추가 가속 시 batch 형태 가능(현재도 54× 충분).
 
