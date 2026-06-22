@@ -13,9 +13,13 @@ export async function loadNodesToDepth(
   maxDepth: number,
 ): Promise<Hierarchy.Node.Map> {
   const all: Hierarchy.Node.Map = {};
+  const visited = new Set<string>(); // 중복 페이지 재fetch 방어 — IO 측정 왜곡 방지
   const queue: Hierarchy.Page[] = [copc.info.rootHierarchyPage];
   while (queue.length) {
     const page = queue.shift()!;
+    const pk = `${page.pageOffset}-${page.pageLength}`;
+    if (visited.has(pk)) continue;
+    visited.add(pk);
     const { nodes, pages } = await Copc.loadHierarchyPage(getter, page);
     Object.assign(all, nodes);
     for (const [key, ref] of Object.entries(pages)) {
@@ -93,7 +97,10 @@ async function main() {
       const ax = await measureNode(getter, io, copc, nodes[k]!, toWgs, zUnit, zRange);
       if (ax) out.push(ax);
     }
-    if (run > 0) allRuns.push(out); // run 0 = 워밍업 제외
+    if (run > 0) {
+      if (out.length === 0) { console.error('측정 노드 0개'); process.exit(1); }
+      allRuns.push(out); // run 0 = 워밍업 제외
+    }
   }
   const report = aggregate(allRuns);
   console.log(formatReport(`${url} · depth≤${maxDepth} · ${keys.length}노드 · ${runs}회median`, report));
