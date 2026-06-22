@@ -2,7 +2,7 @@
 // 사용: npx tsx scripts/bench/profile-axes.ts <copcUrl> [maxDepth=3] [runs=5]
 //   copcUrl은 로컬 서버(serve-copc) URL 권장(IO 결정화). S3 URL도 가능.
 import { Copc, type Hierarchy } from 'copc';
-import { resolveCrs } from '../../src/copc-core';
+import { resolveCrs, makeGridReprojector } from '../../src/copc-core';
 import { makeTimedGetter } from './axis-getter';
 import { measureNode, type NodeAxes } from './axis-measure';
 
@@ -89,6 +89,7 @@ async function main() {
   const copc = await Copc.create(getter);
   const nodes = await loadNodesToDepth(getter, copc, maxDepth);
   const { toWgs, zUnit } = resolveCrs(copc.wkt);
+  const reproj = makeGridReprojector(toWgs, copc.header.min, copc.header.max);
   const zRange: [number, number] = [copc.header.min[2] * zUnit, copc.header.max[2] * zUnit];
   const keys = selectNodes(nodes as any, maxDepth);
   if (!keys.length) { console.error('선택된 노드 0개'); process.exit(1); }
@@ -98,7 +99,7 @@ async function main() {
     const out: NodeAxes[] = [];
     for (const k of keys) {
       io.length = 0;
-      const ax = await measureNode(getter, io, copc, nodes[k]!, toWgs, zUnit, zRange);
+      const ax = await measureNode(getter, io, copc, nodes[k]!, reproj, zUnit, zRange);
       if (ax) out.push(ax);
     }
     if (run > 0) {

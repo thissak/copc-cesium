@@ -1,6 +1,6 @@
 // scripts/bench/check-axis-measure.ts — autzen(실 S3)로 축 분리·IO 독립성 검증.
 import { Copc } from 'copc';
-import { resolveCrs } from '../../src/copc-core';
+import { resolveCrs, makeGridReprojector } from '../../src/copc-core';
 import { makeTimedGetter } from './axis-getter';
 import { measureNode } from './axis-measure';
 
@@ -12,10 +12,11 @@ async function firstNode(fetchImpl?: typeof fetch) {
   const copc = await Copc.create(getter);
   const { nodes } = await Copc.loadHierarchyPage(getter, copc.info.rootHierarchyPage);
   const { toWgs, zUnit } = resolveCrs(copc.wkt);
+  const reproj = makeGridReprojector(toWgs, copc.header.min, copc.header.max);
   const zRange: [number, number] = [copc.header.min[2] * zUnit, copc.header.max[2] * zUnit];
   const key = Object.keys(nodes).filter((k) => nodes[k] && nodes[k]!.pointDataLength)[0];
   io.length = 0; // 노드 측정 직전 IO 버퍼 초기화
-  const ax = await measureNode(getter, io, copc, nodes[key]!, toWgs, zUnit, zRange);
+  const ax = await measureNode(getter, io, copc, nodes[key]!, reproj, zUnit, zRange);
   return ax!;
 }
 

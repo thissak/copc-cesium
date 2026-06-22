@@ -1,7 +1,7 @@
 # #17 deep-load 내부 병목: reproject(proj4 수평변환)가 내부 compute의 50%
 
 **Issue**: https://github.com/thissak/CopcCesiumLab/issues/17
-**Status**: Open
+**Status**: Resolved 후보 (재현 RED→GREEN·회귀 0·정확성 보존, `/issue-track close #17` 대기)
 **Created**: 2026-06-22
 **Resolved**: -
 **Label**: enhancement (perf / 내부 compute)
@@ -31,71 +31,106 @@ deep-load 노드 처리의 **내부 계산(IO 제외) 시간 50%가 reproject(pr
 - raw autzen 로컬서빙에서도 동일(IO 3 · decode 42 · reproject 50 · build 5) → 입력 무관 견고.
 - 축 경계: reproject = proj4 수평(lon/lat)만. (build의 geodeticToEcef는 별도 축.)
 
+### 결정적 재현 (Step 1, `scripts/bench/check-reproject.ts`)
+실 autzen CRS(Lambert→WGS84)로 합성 2M점 변환 — 하니스 의존 없이 reproject 비용만 격리:
+```
+V0 현재(새배열+forward+push) : 1149ms = 574.4 ms/1M점   ← 하니스 582와 일치(재현 ✅)
+V1 배열재사용(할당제거)        : 1128ms = 563.9 ms/1M점   (Δ 2%)
+```
+
 ---
 
-## 2. 원인 분석 (1차 — 측정으로 확정한 위치)
+## 2. 원인 분석 (Step 2 — 측정으로 확정)
 
 ### 측정 데이터
-위 표. 정규화·raw 양쪽 일치, 2회 재현 변동 0%p → 결정적.
+- 하니스: reproject 50% / 582 ms/1M점 (정규화·raw 일치, 2회 변동 0%p).
+- 마이크로벤치: **V0(현재) 574 vs V1(배열 재사용) 564 → Δ 2%뿐.**
 
-### 근본 원인 (위치)
-`src/copc-core.ts` `loadCopcPoints`/`decodeNode`의 점 루프가 **점마다 `toWgs.forward([x, y])`를 호출**한다 (`src/copc-core.ts:119-126` 부근):
-```ts
-for (let i = 0; i < n; i++) {
-  const x = gx(i); const y = gy(i); const z = gz(i) * zUnit;
-  const out = toWgs.forward([x, y]) as number[];   // ← 점당 proj4 호출 + [x,y] 배열 할당
-  lonLatH.push(out[0], out[1], z);
-}
-```
-- 2.13M점 × **per-point proj4.forward 호출**(함수 호출 오버헤드 + 호출당 투영 수학) + 점마다 `[x,y]` 임시배열 할당 → 582 ms/1M점.
-- decode(laz)는 50k점 청크 배치 디코드라 점당 비용이 낮은데, reproject는 점 단위 스칼라 호출이라 더 비싸다는 게 측정의 함의(가설 — BP/검증서 확정).
+### 근본 원인 (확정)
+비용은 **배열 할당/JS 오버헤드가 아니라 `proj4.forward`의 투영 수학 자체**다. V0≈V1(할당 제거가 2%만 절감)이 이를 증명. 즉 점마다 **Lambert Conformal Conic 역투영 + (NAD83→WGS84) 데이텀 변환**을 proj4 범용 경로로 계산하는 비용(~570ns/점)이 dominant.
+- 위치: `src/copc-core.ts` `loadCopcPoints`(~119-126)·`decodeNode`의 점 루프 `toWgs.forward([x, y])`.
+- 함의: **배열 재사용 같은 미세최적화로는 못 잡음**. 레버 = 점당 투영 수학을 줄이는 것(예: 범용 proj4 경로 우회 / bounded extent 근사 / 데이텀 변환 비용 제거). → Step 3 BP 조사로 안전한 방법 확정(정확성 회귀 위험 = 좌표 오차).
 
 ---
 
-## 3. Best Practice 조사 (issue-resolve 시 작성 — STOP 규칙: 좌표변환 최적화 전 BP 조사)
+## 3. Best Practice 조사 (Step 3 — context7 + 실측 검증)
 
-### 조사 항목 (착수 전 확인할 것)
-- proj4 **배치 변환** API 유무(`forward` 벡터화/`forwardArray`?) 및 점당 배열할당 제거(in/out 재사용 버퍼).
-- Lambert(autzen CRS)→WGS84 **변환식 직접 구현/사전계산**(proj4 범용 경로 우회) 타당성·정확성 trade-off.
-- 워커서 변환을 **typed array 일괄** 처리(스칼라 루프 대신) 가능성.
-- prior art: Potree/giro3d/py3dtiles의 reproject 처리 방식.
+### 조사 결과
+- **proj4js: 배치 API 없음.** 재사용 변환기(`proj4(from,to)` → forward/inverse)만 제공 — 이미 `resolveCrs`서 1회 생성·재사용 중. 점당 비용 = 투영 수학 자체(§2 V0≈V1로 확정). 점당 배열할당 제거(V1)는 2%뿐.
+- **핵심 BP = bounded-extent 근사.** COPC는 유한 영역(autzen extent 3426×4655 projected unit ≈ 1km×1.4km). Conformal 투영(Lambert)은 소영역서 거의 선형 → **(G+1)×(G+1) proj4 control 격자 + 점별 bilinear 보간**으로 점당 수학을 제거. 격자 오차는 셀크기²로 급감.
 
-### 프로덕션 사례
-| 프로젝트 | 접근 방식 | 비고 |
-|---------|----------|------|
-| (issue-resolve 시) | | |
+### 실측 (measure-first 검증, `scripts/bench/check-reproject.ts`, 2M점)
+| 방식 | ms/1M점 | 속도 | max 오차 |
+|------|---------|------|---------|
+| V0 proj4 per-point (현재) | 565 | 1× | (기준) |
+| V2 단일셀 bilinear (4 proj4) | 4.6 | 124× | 21mm ❌ |
+| **V3 격자 G=8×8 (81 proj4)** | **12.3** | **46×** | **0.33mm** ✅ |
+| V3 격자 G=16×16 (289 proj4) | 8.3 | 68× | 0.08mm ✅ |
+
+→ 격자 G로 오차를 sub-mm까지 자유 조절하며 수십× 가속. lidar 정밀도(cm~dm)·렌더 픽셀 훨씬 아래라 시각·정확성 무해.
 
 ### 엣지 케이스 / 위험 요소
 | 시나리오 | 위험도 | 대응 |
 |---------|--------|------|
-| 정확성 회귀(좌표 오차) | 높 | 골든파일 byte/좌표 동일성 게이트 (verify C1) |
-| CRS 다양성(Lambert 외) | 중 | 범용 proj4 폴백 유지 |
+| 대형 extent(대륙급 COPC) → bilinear 오차↑ | 높 | **셀중심서 proj4 대비 max오차 측정 → 임계 초과면 proj4 per-point 폴백**(가드) |
+| 비-conformal / 비정상 CRS | 중 | 동일 오차 가드가 자동 폴백 |
+| 격자 빌드 비용 | 낮 | **데이터셋당 1회**(copc.header bounds 기준), 노드마다 X. (G=8 → 81 proj4) |
+| 점이 격자 밖 | 낮 | 격자 = 데이터 bounds → 내부 보장 + 셀인덱스 clamp |
+| 정확성 회귀 | 높 | verify C1(center in Oregon) + 오차 가드(<임계) + (있으면)골든파일 |
+
+### 결론
+**데이터셋 bounds 기준 (G+1)² proj4 격자 + 점별 bilinear, 셀중심 오차 가드(<임계 시 proj4 폴백).** G는 오차 임계 충족까지 자동 상향. proj4 범용 정확성은 폴백으로 보존.
 
 ---
 
-## 4. 수정 내용
-(미해결 — issue-resolve 단계서 작성)
+## 4. 수정 내용 (Step 4 — BP 적용)
 
 ### 변경 파일
 | 파일 | 변경 요약 |
 |------|----------|
-| | |
+| `src/copc-core.ts` | `makeGridReprojector`(+`GridReproj`) 신설 — 데이터 bbox 위 (G+1)² proj4 격자 + 점별 bilinear, 셀중심 오차 가드(기본 ~1mm, G 자동 상향, gridMax 64), 미달 시 proj4 per-point 폴백. `CopcSession.reproj` 필드. `openCopc`·`decodeNode`·`loadCopcPoints` 가 점별 `toWgs.forward([x,y])` → `reproj.forward(x,y)`. `checkCenterInRange`/`resolveCrs` 는 toWgs 유지(불변). |
+| `scripts/bench/check-reproject.ts` | 신규 — 재현/진단/검증 벤치(V0 proj4 vs V2~V4 격자, 정확도·속도). |
+| `scripts/bench/axis-measure.ts`·`profile-axes.ts`·`run-axis-profile.ts`·`check-axis-measure.ts` | 4축 하니스 measureNode 가 격자 reproj 측정(프로덕션 동기화) — 데이터셋당 1회 빌드. |
+
+### Before / After (핵심)
+```ts
+// Before — 점마다 proj4 범용 변환 (deep-load 내부 compute 의 50%)
+const out = toWgs.forward([x, y]);
+
+// After — 데이터셋당 1회 격자 빌드 + 점별 bilinear (proj4 폴백 내장)
+const reproj = makeGridReprojector(toWgs, copc.header.min, copc.header.max);
+const out = reproj.forward(x, y);   // 격자 bilinear (대형 extent/비정상 CRS면 proj4 폴백)
+```
 
 ### PR
--
+feat/17-reproject-proj4-internal-bottleneck (close 시 PR/머지)
 
 ---
 
-## 5. 검증 결과
-(미해결 — issue-resolve 단계서 작성. 검증 도구 = `scripts/bench/run-axis-profile.ts`로 reproject ms/1M점 before/after + 정확성 verify C1)
+## 5. 검증 결과 (Step 5 — RED→GREEN, 무회귀)
+
+### 테스트 방법
+- 재현/속도/정확도: `scripts/bench/check-reproject.ts` (실 autzen CRS, 2M점, V0 proj4 vs V4 실 src 함수).
+- end-to-end: `npm run profile:axes -- data/norm-autzen-2M.copc.laz 5 5` (4축 하니스, 정규화 COPC).
+- 정확성: `npm run verify` (autzen C1, loadCopcPoints→격자 reproj). 회귀: check-coalesce/retry/profile-axes/serve/tsc/build.
 
 ### 결과
 | 항목 | 수정 전 | 수정 후 | 판정 |
 |------|---------|---------|------|
-| reproject ms/1M점 | 582.2 | | |
+| reproject ms/1M점 (src 함수, V4) | 572 | **9** | PASS (64×) |
+| reproject ms/1M점 (하니스 e2e) | 582 (50%) | **10.7 (2%)** | PASS (54×) |
+| **internal compute 합** | **2504ms** | **1245ms** | PASS (~2×) |
+| BOTTLENECK | reproject | **decode(laz 84%)로 이동** | PASS |
+| 정확도 (max 오차 vs proj4) | 0 (proj4) | **0.33mm** (<1mm 가드) | PASS |
+| verify C1 (center in Oregon) | PASS | PASS (좌표 동일) | PASS |
+| 회귀 (coalesce/retry/profile-axes/serve/tsc/build) | — | 전부 PASS | PASS |
+
+→ **reproject 병목 제거(50%→2%, 54×), 내부 compute 절반.** 격자 bilinear는 sub-mm(lidar 정밀도·렌더 훨씬 아래) + extent/오차 가드로 proj4 정확성 보존.
 
 ### 잔여 이슈
--
+- 새 내부 병목 = **decode(laz, 84%)** — 별건 후속 최적화 후보(laz-perf 디코드).
+- attribute batch 미측정·GPU 축 미구현은 4축 하니스 기존 한계(스코프 외).
+- 격자 reproj 의 per-call `[lon,lat]` 할당은 잔여(동시성 안전 위해 유지) — 추가 가속 시 batch 형태 가능(현재도 54× 충분).
 
 ---
 스코프: 내부 compute reproject 한정. 네트워크 brittle은 #14, GPU/메인스레드 축은 4축 하니스 후속(GPU 미구현).

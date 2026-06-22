@@ -6,8 +6,8 @@ import { Copc } from 'copc';
 import { heightColors } from '../../src/colors';
 import { buildQuantizedPnts } from '../../src/pnts-quantized';
 import type { IoRec } from './axis-getter';
+import type { GridReproj } from '../../src/copc-core';
 
-type Reproj = { forward: (xy: number[]) => number[] };
 export type NodeAxes = { points: number; ioMs: number; decodeMs: number; reprojectMs: number; buildMs: number };
 
 export async function measureNode(
@@ -15,7 +15,7 @@ export async function measureNode(
   io: IoRec[],
   copc: Awaited<ReturnType<typeof Copc.create>>,
   node: { pointDataOffset: number; pointDataLength: number },
-  toWgs: Reproj,
+  reproj: GridReproj, // 이슈 #17: 격자 reproj (production decodeNode 와 동일 경로 측정)
   zUnit: number,
   zRange: [number, number],
 ): Promise<NodeAxes | null> {
@@ -37,7 +37,7 @@ export async function measureNode(
   const zVals: number[] = new Array(n);
   for (let i = 0; i < n; i++) {
     const z = zs[i] * zUnit;
-    const out = toWgs.forward([xs[i], ys[i]]);
+    const out = reproj.forward(xs[i], ys[i]);
     lonLatH[i * 3] = out[0]; lonLatH[i * 3 + 1] = out[1]; lonLatH[i * 3 + 2] = z;
     zVals[i] = z;
   }

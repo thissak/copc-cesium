@@ -2,7 +2,7 @@
 // 사용: npx tsx scripts/bench/run-axis-profile.ts [data/norm-autzen-2M.copc.laz] [maxDepth=3] [runs=5]
 import { writeFileSync, existsSync } from 'node:fs';
 import { Copc } from 'copc';
-import { resolveCrs } from '../../src/copc-core';
+import { resolveCrs, makeGridReprojector } from '../../src/copc-core';
 import { startCopcServer } from './serve-copc';
 import { makeTimedGetter } from './axis-getter';
 import { measureNode, type NodeAxes } from './axis-measure';
@@ -22,6 +22,7 @@ async function main() {
     const copc = await Copc.create(getter);
     const nodes = await loadNodesToDepth(getter, copc, maxDepth);
     const { toWgs, zUnit } = resolveCrs(copc.wkt);
+    const reproj = makeGridReprojector(toWgs, copc.header.min, copc.header.max);
     const zRange: [number, number] = [copc.header.min[2] * zUnit, copc.header.max[2] * zUnit];
     const keys = selectNodes(nodes as any, maxDepth);
     if (!keys.length) { console.error('선택된 노드 0개'); process.exit(1); }
@@ -29,7 +30,7 @@ async function main() {
     const allRuns: NodeAxes[][] = [];
     for (let r = 0; r < runs + 1; r++) {
       const out: NodeAxes[] = [];
-      for (const k of keys) { io.length = 0; const ax = await measureNode(getter, io, copc, nodes[k]!, toWgs, zUnit, zRange); if (ax) out.push(ax); }
+      for (const k of keys) { io.length = 0; const ax = await measureNode(getter, io, copc, nodes[k]!, reproj, zUnit, zRange); if (ax) out.push(ax); }
       if (r > 0) {
         if (out.length === 0) { console.error('측정 노드 0개 — 빈 결과 기록 방지'); process.exit(1); }
         allRuns.push(out);
