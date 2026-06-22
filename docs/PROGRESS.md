@@ -92,6 +92,7 @@
 - [x] **결정적 4축 병목 분해 하니스 (PR #16)** — 내부 compute를 IO/decode/reproject/build로 반복가능하게 분리. 세 독립 부품(PDAL 정규화 COPC·로컬 정적 서버·Node 하니스), 프로덕션 `src/` 무수정으로 동일 프리미티브 경계 타이머, K회 median+워밍업 제외+ms/1M점 정규화(축% 변동 0%p). `npm run profile:axes`. 첫 발견=reproject 50%. (spec `docs/superpowers/specs/2026-06-22-deterministic-axis-profiler-design.md`)
 - [x] **[이슈 #17] reproject 내부병목 제거 — 격자 bilinear 54×↓ (50%→2%, PR #18).** 측정으로 진단: 내부 compute의 50%가 reproject(582 ms/1M점)이고, 비용은 배열 할당이 아니라 proj4 투영 수학 자체(V0≈V1 Δ2%로 확정). BP=bounded-extent 근사 → 데이터셋당 1회 (G+1)² proj4 격자 + 점별 bilinear, 셀당 다점 오차 가드(<1mm) + proj4 폴백. 결과: reproject 582→10.7 ms/1M점(54×)·internal 2504→1245ms(~2×)·BOTTLENECK이 decode(laz 84%)로 이동·max오차 0.33mm·verify C1 좌표 동일·회귀 0. (`src/copc-core.ts` `makeGridReprojector`, [이슈 #17](issues/17-reproject-proj4-internal-bottleneck.md))
 - [x] **학습 사이트 챕터 신설(learn/08)** — 프로파일러·병목 사냥 한 사이클을 학습용 서사로 정리 + index/07/PROFILING 배선.
+- [x] **실데이터(raw autzen 원본 10.65M·비정규화) 사후검증 + decode 후속 [이슈 #19](issues/19-decode-laz-internal-bottleneck.md) 등록(Open).** 정규화·합성 의심 차단: raw 원본 4축이 norm과 거의 동일(**decode 84%·reproject 2%**, `docs/bench/axis-raw-autzen.*`)·입력 무관 견고. 격자 bilinear는 **실제 점 6M**로 재검증(max 0.329mm=합성 worst-case 일치·≈88×·격자 채택, `scripts/bench/check-reproject-realpts.ts`) → 합성 점 caveat 해소(#17 §5). **새 내부병목=decode(laz 84%)** → #19(Open, laz-perf 디코드).
 
 ## Phase 3 — 평가 / 입상 판정 🔒
 대용량 실데이터에서 60fps / 메모리 / UX 측정 → 입상 가능성 데이터로 판정.
