@@ -2,7 +2,7 @@
 slug: decode-in-worker
 title: 디코드는 어디서 도는가 — Web Worker (메인스레드 밖)
 status: active
-last_verified: 2026-06-18
+last_verified: 2026-06-22
 owner: copc-cesium
 projects: [CopcCesiumLab]
 ---
@@ -67,7 +67,7 @@ flowchart LR
 
 - 워커 위임 + zero-copy 전달: `src/copc-tileset.ts` (`installHandler`, `getWorkerApi` — comlink wrap)
 - 워커 본체(laz-perf web + 디코드 + 양자화 pnts): `src/decode.worker.ts` (`DecodeApi.decode`)
-- 디코드 루프(WASM 게터 + proj4 재투영 + 선택 속성 읽기): `src/copc-core.ts` (`decodeNode`)
+- 디코드 루프(WASM 게터 + 격자 reproject(점별 proj4가 내부 50%라 데이터셋당 1회 격자+bilinear로 근사·임계 초과 시 proj4 폴백) + 선택 속성 읽기): `src/copc-core.ts` (`decodeNode`, `makeGridReprojector`) — [[crs-georeferencing]]
 - 속성 해석(LAS dim → batch-table 타입 스펙): `src/attributes.ts` (`resolveAttributes`)
 - 양자화 pnts 빌드(+선택 BATCH_TABLE·BATCH_ID): `src/pnts-quantized.ts` (`buildQuantizedPnts`)
 - fetch 가로채기 + MessageChannel 라우팅: `public/copc-sw.js` (`/__copc-real/*`)
