@@ -72,7 +72,7 @@ V1 배열재사용(할당제거)        : 1128ms = 563.9 ms/1M점   (Δ 2%)
 ### 엣지 케이스 / 위험 요소
 | 시나리오 | 위험도 | 대응 |
 |---------|--------|------|
-| 대형 extent(대륙급 COPC) → bilinear 오차↑ | 높 | **셀중심서 proj4 대비 max오차 측정 → 임계 초과면 proj4 per-point 폴백**(가드) |
+| 대형 extent(대륙급 COPC) → bilinear 오차↑ | 높 | **셀당 다점(중심+모서리중점)서 proj4 대비 max오차 측정 → 임계 초과면 proj4 per-point 폴백**(가드) |
 | 비-conformal / 비정상 CRS | 중 | 동일 오차 가드가 자동 폴백 |
 | 격자 빌드 비용 | 낮 | **데이터셋당 1회**(copc.header bounds 기준), 노드마다 X. (G=8 → 81 proj4) |
 | 점이 격자 밖 | 낮 | 격자 = 데이터 bounds → 내부 보장 + 셀인덱스 clamp |
