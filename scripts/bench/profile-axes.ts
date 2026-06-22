@@ -9,7 +9,7 @@ import { measureNode, type NodeAxes } from './axis-measure';
 export function selectNodes(nodes: Record<string, { pointDataLength: number } | undefined>, maxDepth: number): string[] {
   return Object.keys(nodes)
     .filter((k) => nodes[k] && nodes[k]!.pointDataLength > 0 && Number(k.split('-')[0]) <= maxDepth)
-    .sort((a, b) => Number(a.split('-')[0]) - Number(b.split('-')[0]));
+    .sort((a, b) => Number(a.split('-')[0]) - Number(b.split('-')[0]) || (a < b ? -1 : a > b ? 1 : 0));
 }
 
 export type AxisStat = { ms: number; pct: number; msPerM: number };
@@ -36,14 +36,14 @@ export function formatReport(label: string, r: AxisReport): string {
   const rows: Array<[string, AxisStat]> = [['IO(local)', r.io], ['decode(laz)', r.decode], ['reproject(proj4)', r.reproject], ['build(pnts)', r.build]];
   const top = rows.reduce((m, x) => (x[1].ms > m[1].ms ? x : m));
   const line = (name: string, s: AxisStat) =>
-    `| ${name.padEnd(16)} | ${s.ms.toFixed(1).padStart(8)} | ${s.pct.toFixed(0).padStart(3)}% | ${s.msPerM.toFixed(1).padStart(8)} |${name === top[0] ? ' BOTTLENECK' : ''}`;
+    `| ${name.padEnd(16)} | ${s.ms.toFixed(1).padStart(8)} | ${s.pct.toFixed(0).padStart(3)}% | ${s.msPerM.toFixed(1).padStart(8)} |`;
   return [
     `### 4축 분해 — ${label} (${(r.points / 1e6).toFixed(2)}M점)`,
     '',
     '| 축 | ms | % | ms/1M점 |',
     '|----|----|---|---------|',
     ...rows.map(([n, s]) => line(n, s)),
-    `| **internal** | **${r.totalMs.toFixed(1)}** | 100% | | |`,
+    `| **internal** | **${r.totalMs.toFixed(1)}** | 100% | — |`,
     '',
     `**BOTTLENECK: ${top[0]}** (${top[1].pct.toFixed(0)}%, ${top[1].msPerM.toFixed(1)} ms/1M점)`,
   ].join('\n');
