@@ -16,5 +16,7 @@ assert(res.status === 206, 'range 요청은 206');
 const buf = new Uint8Array(await res.arrayBuffer());
 assert(JSON.stringify([...buf]) === JSON.stringify([2,3,4]), 'range 바이트 정확(2-4)');
 assert(res.headers.get('content-range') === 'bytes 2-4/10', 'Content-Range 헤더 정확');
+const notFound = await fetch(`http://localhost:${new URL(srv.url).port}/wrong`);
+assert(notFound.status === 404, '선언된 경로(/copc) 외 요청은 404');
 await srv.close();
 console.log('SERVE PASS ✅');

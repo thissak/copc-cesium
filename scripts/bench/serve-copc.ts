@@ -8,6 +8,7 @@ export async function startCopcServer(
 ): Promise<{ url: string; close: () => Promise<void> }> {
   const size = statSync(filePath).size;
   const server = createServer((req, res) => {
+    if (req.url !== '/copc') { res.writeHead(404); res.end('not found'); return; }
     const range = req.headers.range;
     if (range) {
       const m = /bytes=(\d+)-(\d+)?/.exec(range);
