@@ -1,10 +1,30 @@
 // scripts/bench/profile-axes.ts — 정규화 COPC의 내부 계산 4축(IO/decode/reproject/build) 분해.
 // 사용: npx tsx scripts/bench/profile-axes.ts <copcUrl> [maxDepth=3] [runs=5]
 //   copcUrl은 로컬 서버(serve-copc) URL 권장(IO 결정화). S3 URL도 가능.
-import { Copc } from 'copc';
+import { Copc, type Hierarchy } from 'copc';
 import { resolveCrs } from '../../src/copc-core';
 import { makeTimedGetter } from './axis-getter';
 import { measureNode, type NodeAxes } from './axis-measure';
+
+// 계층 페이지를 maxDepth 까지 BFS 병합 — root 페이지만 보면 큰 COPC서 깊은 노드 누락(서브페이지 뒤).
+export async function loadNodesToDepth(
+  getter: (b: number, e: number) => Promise<Uint8Array>,
+  copc: Awaited<ReturnType<typeof Copc.create>>,
+  maxDepth: number,
+): Promise<Hierarchy.Node.Map> {
+  const all: Hierarchy.Node.Map = {};
+  const queue: Hierarchy.Page[] = [copc.info.rootHierarchyPage];
+  while (queue.length) {
+    const page = queue.shift()!;
+    const { nodes, pages } = await Copc.loadHierarchyPage(getter, page);
+    Object.assign(all, nodes);
+    for (const [key, ref] of Object.entries(pages)) {
+      // 서브페이지 root depth ≤ maxDepth 면 그 안에 측정대상 노드 있음 → 로드(더 깊은 페이지는 스킵).
+      if (ref !== undefined && Number(key.split('-')[0]) <= maxDepth) queue.push(ref);
+    }
+  }
+  return all;
+}
 
 export function selectNodes(nodes: Record<string, { pointDataLength: number } | undefined>, maxDepth: number): string[] {
   return Object.keys(nodes)
@@ -59,7 +79,7 @@ async function main() {
 
   const { getter, io } = makeTimedGetter(url);
   const copc = await Copc.create(getter);
-  const { nodes } = await Copc.loadHierarchyPage(getter, copc.info.rootHierarchyPage);
+  const nodes = await loadNodesToDepth(getter, copc, maxDepth);
   const { toWgs, zUnit } = resolveCrs(copc.wkt);
   const zRange: [number, number] = [copc.header.min[2] * zUnit, copc.header.max[2] * zUnit];
   const keys = selectNodes(nodes as any, maxDepth);

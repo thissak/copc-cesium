@@ -6,7 +6,7 @@ import { resolveCrs } from '../../src/copc-core';
 import { startCopcServer } from './serve-copc';
 import { makeTimedGetter } from './axis-getter';
 import { measureNode, type NodeAxes } from './axis-measure';
-import { selectNodes, aggregate, formatReport } from './profile-axes';
+import { selectNodes, aggregate, formatReport, loadNodesToDepth } from './profile-axes';
 
 async function main() {
   const file = process.argv[2] || 'data/norm-autzen-2M.copc.laz';
@@ -18,16 +18,20 @@ async function main() {
   try {
     const { getter, io } = makeTimedGetter(srv.url);
     const copc = await Copc.create(getter);
-    const { nodes } = await Copc.loadHierarchyPage(getter, copc.info.rootHierarchyPage);
+    const nodes = await loadNodesToDepth(getter, copc, maxDepth);
     const { toWgs, zUnit } = resolveCrs(copc.wkt);
     const zRange: [number, number] = [copc.header.min[2] * zUnit, copc.header.max[2] * zUnit];
     const keys = selectNodes(nodes as any, maxDepth);
+    if (!keys.length) { console.error('선택된 노드 0개'); process.exit(1); }
 
     const allRuns: NodeAxes[][] = [];
     for (let r = 0; r < runs + 1; r++) {
       const out: NodeAxes[] = [];
       for (const k of keys) { io.length = 0; const ax = await measureNode(getter, io, copc, nodes[k]!, toWgs, zUnit, zRange); if (ax) out.push(ax); }
-      if (r > 0) allRuns.push(out);
+      if (r > 0) {
+        if (out.length === 0) { console.error('측정 노드 0개 — 빈 결과 기록 방지'); process.exit(1); }
+        allRuns.push(out);
+      }
     }
     const rep = aggregate(allRuns);
     const label = `${file} · depth≤${maxDepth} · ${keys.length}노드 · ${runs}회median`;
@@ -39,4 +43,4 @@ async function main() {
     await srv.close();
   }
 }
-main();
+main().catch((e) => { console.error(e); process.exit(1); });
