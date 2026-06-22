@@ -136,25 +136,37 @@ async function main() {
     if (dl > err4) err4 = dl; if (da > err4) err4 = da;
   }
   console.log(`V4 src makeGridReprojector (실프로덕션) : ${ms1m(v4)} ms/1M점 (${(v0 / v4).toFixed(0)}×)  max오차 ${(err4 * 111320 * 1000).toFixed(3)}mm`);
-  const pass = v4 < v0 * 0.1 && err4 * 111320 < 0.01; // 10×↑ 빠르고 <1cm
-  // 가드 건전성 회귀 (dual-review #18 R1): LCC 20km extent — 셀중심-only 가드면 51mm 통과(FAIL).
-  // 건전 가드(다점 샘플)면 G 상향/폴백으로 실제 max 오차 < 1mm 유지해야.
-  const lcc = proj4('+proj=lcc +lat_1=33 +lat_2=45 +lat_0=39 +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs', proj4.WGS84) as unknown as { forward: (c: number[]) => number[] };
-  const grL = makeGridReprojector(lcc, [0, 0, 0], [20000, 20000, 0]);
-  let errL = 0;
-  const S = 150;
-  for (let iy = 0; iy <= S; iy++) for (let ix = 0; ix <= S; ix++) {
-    const px = (ix / S) * 20000, py = (iy / S) * 20000;
-    const g = grL.forward(px, py), tr = lcc.forward([px, py]);
-    errL = Math.max(errL, Math.abs(g[0] - tr[0]), Math.abs(g[1] - tr[1]));
-  }
-  const errLmm = errL * 111320 * 1000;
-  const lccOk = errLmm < 1; // 건전 가드면 <1mm (셀중심-only 였으면 ~51mm)
-  console.log(`LCC 20km 가드 건전성: 실제 max 오차 ${errLmm.toFixed(3)}mm  ${lccOk ? '✅ (<1mm)' : '❌ (가드가 cm 통과시킴)'}`);
+  const pass = v4 < v0 * 0.1 && err4 * 111320 < 1; // 10×↑ 빠르고 <1mm (주장과 일치, dual-review #18 R2)
 
-  const allOk = pass && lccOk;
-  console.log(allOk ? 'REPROJECT FIX PASS ✅ (src ≥10×·<1cm + LCC20km 가드 건전)' : 'FAIL ❌');
-  console.log(`\n해석: V0≈V1 → 비용은 proj4 math. 격자 bilinear(src) 가 수십× + sub-mm. 가드는 다점 샘플로 saddle/방향성 곡률서도 건전(LCC20km).`);
+  // 가드 건전성 회귀 (dual-review #18 R1·R2): 셀중심-only 가드면 LCC saddle 곡률서 cm 통과.
+  // 두 경로 분리 검증 — (a) 격자 채택 extent: 격자 path 자체가 <1mm(R1 실패모드=가드가 격자 잘못 수락), (b) 폴백.
+  const lccDef = '+proj=lcc +lat_1=33 +lat_2=45 +lat_0=39 +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs';
+  function lccCase(extentM: number) {
+    let n = 0;
+    const raw = proj4(lccDef, proj4.WGS84) as unknown as { forward: (c: number[]) => number[] };
+    const counting = { forward: (c: number[]) => { n++; return raw.forward(c); } };
+    const gr = makeGridReprojector(counting, [0, 0, 0], [extentM, extentM, 0]);
+    const built = n; // 빌드(격자+가드) proj4 호출
+    let err = 0;
+    const M = 4000;
+    for (let i = 0; i < M; i++) {
+      const px = ((i % 200) / 199) * extentM, py = (Math.floor(i / 200) / 19) * extentM;
+      const g = gr.forward(px, py), tr = raw.forward([px, py]);
+      err = Math.max(err, Math.abs(g[0] - tr[0]), Math.abs(g[1] - tr[1]));
+    }
+    const fwdCalls = n - built - M; // forward 중 proj4 호출(격자=0, 폴백=M; raw.forward(tr) M회는 별도 빼야)
+    return { mm: err * 111320 * 1000, gridPath: fwdCalls <= 0, M };
+  }
+  const c8 = lccCase(8000);    // 격자 채택 예상
+  const c20 = lccCase(20000);  // 폴백 예상
+  const lccGridOk = c8.gridPath && c8.mm < 1; // 격자 path 자체가 sub-mm (R1 핵심)
+  const lccFbOk = c20.mm < 1;                 // 폴백(또는 격자) <1mm
+  console.log(`LCC 8km : ${c8.mm.toFixed(3)}mm, ${c8.gridPath ? '격자 path' : '폴백'} ${lccGridOk ? '✅ 격자<1mm' : '❌'}`);
+  console.log(`LCC 20km: ${c20.mm.toFixed(3)}mm, ${c20.gridPath ? '격자' : '폴백'} ${lccFbOk ? '✅ <1mm' : '❌'}`);
+
+  const allOk = pass && lccGridOk && lccFbOk;
+  console.log(allOk ? 'REPROJECT FIX PASS ✅ (src ≥10×·<1mm + LCC 격자/폴백 가드 건전)' : 'FAIL ❌');
+  console.log(`\n해석: 비용=proj4 math. 격자 bilinear 수십×+sub-mm. 다점 가드는 격자 채택 시 <1mm(8km) 보장, 큰 extent는 proj4 폴백(20km).`);
   process.exit(allOk ? 0 : 1);
 }
 main().catch((e) => { console.error(e); process.exit(1); });

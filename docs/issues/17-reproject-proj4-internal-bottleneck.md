@@ -1,10 +1,12 @@
 # #17 deep-load 내부 병목: reproject(proj4 수평변환)가 내부 compute의 50%
 
 **Issue**: https://github.com/thissak/CopcCesiumLab/issues/17
-**Status**: Resolved 후보 (재현 RED→GREEN·회귀 0·정확성 보존, `/issue-track close #17` 대기)
+**Status**: Resolved (PR #18 머지, dual-review 2R 통과)
 **Created**: 2026-06-22
-**Resolved**: -
+**Resolved**: 2026-06-22
 **Label**: enhancement (perf / 내부 compute)
+
+> 검증 보강(dual-review PR #18): R1서 오차 가드가 셀중심 1점만 샘플 → bilinear 최대오차(saddle/방향성 곡률)를 놓쳐 LCC서 cm 통과하던 결함을 **셀당 다점(중심+4 모서리중점)**으로 건전화. R2서 양쪽(Red/Blue) 독립 확인(실 proj4 32구성 false-pass 0) + 회귀에 **LCC 8km 격자-채택 케이스**(격자 path 자체 <1mm) 추가, V4 게이트 1cm→1mm 정정.
 
 > 발견 경로: 4축 병목 분해 하니스(이슈 #14 후속, `scripts/bench/profile-axes`·`run-axis-profile`, PR #16)로 내부 계산을 IO/decode/CPU 분해 측정 중 발견. 네트워크(IO=TTFB) 축은 #14, 본 건은 *내부 compute* 축 1순위.
 
