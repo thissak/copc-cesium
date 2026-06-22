@@ -1,9 +1,9 @@
 # #19 deep-load 내부 병목: laz 디코드(압축해제+XYZ 추출)가 파이프라인의 84%
 
 **Issue**: https://github.com/thissak/CopcCesiumLab/issues/19
-**Status**: Won't-fix 후보 (분석 완료 — 대회 S3/IO-bound 레짐서 워커풀 net-zero)
+**Status**: Closed — Won't-fix (분석 완료, not planned)
 **Created**: 2026-06-22
-**Resolved**: -
+**Resolved**: 2026-06-22 (won't-fix — decode intrinsic·대회 S3 레짐서 워커풀 net-zero·SIMD 실측 0)
 **Label**: enhancement (perf / 내부 compute)
 
 > 발견 경로: 4축 병목 분해 하니스(`scripts/bench/profile-axes`·`run-axis-profile`, PR #16)로 내부 계산을 IO/decode/reproject/build 분해 측정. #17(reproject 50%→2%, PR #18)로 reproject 병목을 제거한 직후 **decode가 단일 최대 축(84%)으로 이동** — #17 검증 §5에서 "새 내부 병목 = decode(laz)" 로 예고된 후속 건.
