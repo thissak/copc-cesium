@@ -27,7 +27,7 @@ export async function measureNode(
   const xs = new Float64Array(n), ys = new Float64Array(n), zs = new Float64Array(n);
   for (let i = 0; i < n; i++) { xs[i] = gx(i); ys[i] = gy(i); zs[i] = gz(i); } // 강제 materialize
   const ioMs = io.slice(ioStart).reduce((a, r) => a + r.ms, 0);
-  const decodeMs = performance.now() - tDec - ioMs;
+  const decodeMs = Math.max(0, performance.now() - tDec - ioMs); // 다중 fetch/retry 시 ioMs 합이 wall 초과 가능 → 음수 방지
 
   // --- reproject: proj4 forward + zUnit (이미 materialize 된 배열에만) ---
   const tRep = performance.now();

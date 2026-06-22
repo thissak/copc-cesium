@@ -31,6 +31,7 @@ const delayed = await firstNode((async (u: string, o: { headers?: Record<string,
   return fetch(u, o as RequestInit);
 }) as unknown as typeof fetch);
 assert(delayed.ioMs >= 200, `주입한 200ms 지연이 ioMs 에 반영(절대 하한, got ${delayed.ioMs.toFixed(0)})`);
+// within(measured, reference): reference(base) 값 기준 ±40% (비대칭 — 인수 순서 주의)
 const within = (a: number, b: number) => Math.abs(a - b) <= b * 0.4 + 2;
 assert(within(delayed.decodeMs, base.decodeMs), `decode 는 IO 지연에 불변(${base.decodeMs.toFixed(1)} vs ${delayed.decodeMs.toFixed(1)})`);
 console.log('MEASURE PASS ✅  축 분리·IO 독립 확인');
