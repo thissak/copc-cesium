@@ -74,15 +74,17 @@
 
 ```
 === 4축 분해 (norm-autzen-2M · depth≤D · N노드 · M점 · 5회 median) ===
-축          ms      %     ms/1M점
-IO(local)    8     2%      4
-decode     340    57%    170   ◄ BOTTLENECK
-reproject   95    16%     48
-build       70    12%     35
-(GPU)        —     —       —     ← 후속(브라우저)
-─────────────────────────────
-internal   513   100%
+축                    ms      %     ms/1M점
+IO(local)              8     2%      4
+decode(laz+xyz추출)  340    57%    170   ◄ BOTTLENECK
+reproject(proj4 수평) 95    16%     48
+build(ecef+양자화+pack) 70  12%     35
+(GPU)                  —     —       —     ← 후속(브라우저)
+─────────────────────────────────────────
+internal             513   100%
 ```
+
+> **노트**: build 축은 `buildQuantizedPnts` 전체(geodeticToEcef 고도→ECEF 삼각변환 포함)를 측정하므로, "build 병목"은 ECEF 좌표변환+패킹 합산이다. 또한 production이 넘기는 attribute batch 없이 측정되므로 속성 데이터 부분은 과소 측정.
 - **점수 정규화(ms/1M점)** 병기 → 노드집합/데이터 바꿔도 축 비중 비교 가능.
 - JSON(기계) + md(사람) 산출 — 기존 `docs/bench/` 패턴.
 
@@ -96,7 +98,7 @@ internal   513   100%
 - [ ] **정규화 COPC 결정적**: PDAL 스크립트 2회 생성 → 점수·bounds·속성 동일.
 - [ ] **4축 분리 출력**: IO/decode/reproject/build 4개 ms 분리, 합 ≈ 노드 총처리시간 ±5%.
 - [ ] **결정성**: 동일 입력 5회 median의 축% 변동 < 5%p.
-- [ ] **decode↔IO 분리 정확성**: 인위적 지연 getter로 IO만 부풀려도 decode/reproject/build ms 불변(±5%).
+- [ ] **decode↔IO 분리 정확성**: 인위적 지연 getter로 IO만 부풀려도 decode ms 불변(cross-run JIT·머신 변동 감안 ±40% — ±5%는 비현실적).
 - [ ] **점수 정규화**: ms/1M점 출력 → 노드집합(depth D) 바꿔도 축 비중 안정.
 - [ ] **프로덕션 무수정**: `src/` diff 0 (하니스 `scripts/bench/` + PDAL 스크립트만 추가).
 

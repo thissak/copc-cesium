@@ -1,5 +1,7 @@
 // scripts/bench/axis-measure.ts — 한 노드를 디코드하며 IO/decode/reproject/build 축을 분리 측정.
 // 프로덕션 프리미티브를 경계 타이머로 복제(src 무수정). eager/lazy 무관하게 decode 구간서 X/Y/Z 강제 materialize.
+//
+// 축 경계(측정 명확화): IO=fetch ms · decode=laz압축해제+XYZ getter 전체추출(materialize) · reproject=proj4 수평변환만 · build=buildQuantizedPnts(내부 geodeticToEcef 고도→ECEF + 양자화 + pnts패킹; production의 attribute batch는 미측정). production decodeNode는 materialize+reproject를 한 루프로 융합하나, 여기선 축 분리 위해 분리 측정.
 import { Copc } from 'copc';
 import { heightColors } from '../../src/colors';
 import { buildQuantizedPnts } from '../../src/pnts-quantized';

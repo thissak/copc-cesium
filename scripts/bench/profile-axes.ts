@@ -33,7 +33,7 @@ export function aggregate(runs: NodeAxes[][]): AxisReport {
 }
 
 export function formatReport(label: string, r: AxisReport): string {
-  const rows: Array<[string, AxisStat]> = [['IO(local)', r.io], ['decode(laz)', r.decode], ['reproject(proj4)', r.reproject], ['build(pnts)', r.build]];
+  const rows: Array<[string, AxisStat]> = [['IO(local)', r.io], ['decode(laz+xyz추출)', r.decode], ['reproject(proj4 수평)', r.reproject], ['build(ecef+양자화+pack)', r.build]];
   const top = rows.reduce((m, x) => (x[1].ms > m[1].ms ? x : m));
   const line = (name: string, s: AxisStat) =>
     `| ${name.padEnd(16)} | ${s.ms.toFixed(1).padStart(8)} | ${s.pct.toFixed(0).padStart(3)}% | ${s.msPerM.toFixed(1).padStart(8)} |`;
@@ -46,6 +46,8 @@ export function formatReport(label: string, r: AxisReport): string {
     `| **internal** | **${r.totalMs.toFixed(1)}** | 100% | — |`,
     '',
     `**BOTTLENECK: ${top[0]}** (${top[1].pct.toFixed(0)}%, ${top[1].msPerM.toFixed(1)} ms/1M점)`,
+    '',
+    '> 축 경계: decode=laz압축해제+XYZ추출 · reproject=proj4 수평(lon/lat)만 · build=geodeticToEcef(고도→ECEF 삼각변환)+양자화+pnts패킹(속성 batch 미포함)',
   ].join('\n');
 }
 

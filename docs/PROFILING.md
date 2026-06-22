@@ -46,3 +46,4 @@
 ## 4축 병목 하니스 (결정적, Node)
 - 정규화 COPC 생성(PDAL 필요): `bash scripts/bench/gen-norm-copc.sh`
 - 로컬 서버+측정: Task 6 의 `npm run profile:axes` 참조.
+- 축 경계: build은 ECEF 좌표변환(고도)을 포함하므로 'build 병목'은 ECEF+패킹 합산임(profile-axes 범례 참조).
