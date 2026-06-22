@@ -1,0 +1,5 @@
+[
+  { "type": "readers.copc", "filename": "https://s3.amazonaws.com/hobu-lidar/autzen-classified.copc.laz" },
+  { "type": "filters.decimation", "step": 5 },
+  { "type": "writers.copc", "filename": "data/norm-autzen-2M.copc.laz" }
+]

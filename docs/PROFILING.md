@@ -42,3 +42,7 @@
 - point size ↓ → FPS 급등이면 ④ fill-rate(overdraw) 바운드
 - 카메라 정지 시에도 느림 → 렌더(③④) / 움직일 때만 느림 → 로딩·디코드(①②)
 - 로컬 파일 vs 원격 차이 큼 → ① 확정
+
+## 4축 병목 하니스 (결정적, Node)
+- 정규화 COPC 생성(PDAL 필요): `bash scripts/bench/gen-norm-copc.sh`
+- 로컬 서버+측정: Task 6 의 `npm run profile:axes` 참조.
