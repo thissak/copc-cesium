@@ -14,6 +14,7 @@
 | [[range-coalescing]] | 인접 노드 range를 1회 GET으로 묶어 round-trip을 줄인다 (deep-load 레버) | active |
 | [[coalescing-inflight-race]] | 진행 중 묶음은 "받아온 범위"로 잘라야 한다 (in-flight/rebuild 레이스·디버깅 교훈) | active |
 | [[crs-georeferencing]] | WKT로 지구 위 제자리에 놓되, 없으면 조용히 틀리지 말고 fail-loud + override | active |
+| [[reproject-grid-approximation]] | 점별 proj4가 비싸 — 앵커 격자 + bilinear로 어림하고 위험하면 폴백 (amortization) | active |
 
 ## 작성 예정 (stub — 의도된 미작성)
 

@@ -61,7 +61,7 @@ flowchart LR
   - **그 IO 병목 자체는 이후 [[range-coalescing]] 로 좁혔다**: 디코드를 더 병렬화하는 대신, 워커에 들어오기 *전* getter 단계에서 인접 노드의 range를 연속 1회 GET으로 병합·캐시해 round-trip 수를 줄였다. 동시연결 천장은 그대로 두고 그 천장을 *덜 두드리게* 만든 것 — deep-load의 진짜 레버는 디코드 스레드 수가 아니라 round-trip 수였고, 그래서 격차가 Eptium 동급까지 좁혀졌다. (이슈 #02 해결)
 - **laz-perf 빌드 주의**: 기본이 node 빌드라, 워커에선 web 빌드 + wasm URL 주입이 필요(번들러 문맥).
 
-연결: [[range-coalescing]] · [[service-worker-tile-interception]] · [[copc-octree-lod-streaming]]
+연결: [[reproject-grid-approximation]](디코드 경로의 점별 reproject를 격자로 어림) · [[range-coalescing]] · [[service-worker-tile-interception]] · [[copc-octree-lod-streaming]]
 
 ## 참고 (RAW 인용)
 

@@ -33,7 +33,7 @@ happy path는 의외로 견고하다 — 변환 엔진(proj4)이 WKT를 받아 �
 
 ## 변환 비용 — 점별 proj4가 내부 계산의 절반이었다 (격자로 근사)
 
-happy path는 정확성에선 견고하지만, 성능에선 좌표변환이 비쌌다 — 측정해 보니 reproject가 **내부 계산(IO 제외)의 절반**을 먹었다(디코드보다 컸다). 원인은 JS 오버헤드가 아니라 점마다 도는 proj4 투영 수학 자체(투영 역변환 + 데이텀 변환)다 — 배열 재사용 같은 미세최적화로는 안 잡혔다. COPC는 유한한 영역을 담고 conformal 투영은 소영역에선 거의 선형이므로, 데이터셋 bounds 위에 듬성한 proj4 control 격자를 **딱 한 번** 깔고 점마다는 그 격자에서 bilinear로 보간하면 점당 proj4 호출이 사라져 수십 배 빨라진다. 근사가 위험한 영역(대륙급 extent·비정상 CRS)은 격자를 만들 때 셀당 여러 점에서 proj4 대비 실제 오차를 재고, 임계(sub-mm)를 넘으면 격자를 촘촘히 하거나 proj4 점별 변환으로 폴백한다 — 정확성은 근사로 타협하지 않고, 근사가 안전할 때만 켠다. 측정·진단 한 사이클은 learn/08·이슈 #17.
+happy path는 정확성에선 견고하지만, 성능에선 좌표변환이 비쌌다 — 측정해 보니 reproject가 **내부 계산(IO 제외)의 절반**을 먹었다(디코드보다 컸다). 원인은 JS 오버헤드가 아니라 점마다 도는 proj4 투영 수학 자체(투영 역변환 + 데이텀 변환)다 — 배열 재사용 같은 미세최적화로는 안 잡혔다. COPC는 유한한 영역을 담고 conformal 투영은 소영역에선 거의 선형이므로, 데이터셋 bounds 위에 듬성한 proj4 control 격자를 **딱 한 번** 깔고 점마다는 그 격자에서 bilinear로 보간하면 점당 proj4 호출이 사라져 수십 배 빨라진다. 근사가 위험한 영역(대륙급 extent·비정상 CRS)은 격자를 만들 때 셀당 여러 점에서 proj4 대비 실제 오차를 재고, 임계(sub-mm)를 넘으면 격자를 촘촘히 하거나 proj4 점별 변환으로 폴백한다 — 정확성은 근사로 타협하지 않고, 근사가 안전할 때만 켠다. 이 격자 근사의 원리(앵커 vs 점·왜 싼가=amortization·오차 모델)는 [[reproject-grid-approximation]] 에 따로 정리했다. 측정·진단 한 사이클은 learn/08·이슈 #17.
 
 ## 약점·경계 (안 하는 것)
 
@@ -41,7 +41,7 @@ happy path는 정확성에선 견고하지만, 성능에선 좌표변환이 비�
 - **EPSG 코드 override는 흔한 것(UTM·WGS84·WebMercator)만** 내장으로 풀린다. 그 외 EPSG는 proj4 string이나 WKT로 줘야 한다.
 - **수직 datum(geoid)을 보정하지 않는다.** 높이는 타원체고(ellipsoidal)로 취급한다 — 모든 web-viewer의 norm이고, 정사고(orthometric) 입력은 수십 m 수직 오프셋이 생길 수 있다.
 
-연결: [[decode-in-worker]](reproject가 도는 디코드 경로) · [[range-coalescing]](같은 source 계층의 IO 레버)
+연결: [[reproject-grid-approximation]](reproject를 싸게 만드는 격자 근사) · [[decode-in-worker]](reproject가 도는 디코드 경로) · [[range-coalescing]](같은 source 계층의 IO 레버)
 
 ## 참고 (RAW 인용)
 
