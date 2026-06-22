@@ -30,6 +30,7 @@ flowchart LR
 | 05 | [통합과 LOD 스트리밍](05-copc-cesium-integration.md) | 둘을 잇는 진짜 문제 |
 | 06 | [실제로 만든 것](06-streaming-engine-and-production-core.md) | 스트리밍 엔진 + 상용 코어로 가는 길 |
 | 07 | [패키징과 외부 환경 검증](07-packaging-and-verification.md) | 남이 설치해 쓰게 + 측정으로 리뷰 반증 |
+| 08 | [병목을 측정으로 사냥하기](08-profiling-and-bottleneck-hunting.md) | 결정적 4축 프로파일러 + reproject 50% 제거(54×) |
 
 ## 이 문서들과 작업 문서의 관계
 

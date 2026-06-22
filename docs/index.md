@@ -95,7 +95,7 @@ flowchart TD
 
 - **개념부터** → [학습 커리큘럼](learn/index.md) (포인트클라우드 · COPC · CesiumJS · 좌표계 · 통합)
 - **무엇을 푸나** → [문제 정의](PROBLEM.md) · [경쟁 전략](STRATEGY.md)
-- **무엇을 쟀나** → [측정 결과](RESULTS.md) · [4축 진단법](PROFILING.md)
+- **무엇을 쟀나** → [측정 결과](RESULTS.md) · [4축 진단법](PROFILING.md) · [병목 사냥기(프로파일러 + reproject 54×)](learn/08-profiling-and-bottleneck-hunting.md)
 - **왜 그렇게 정했나** → [ADR-001](adr/001-provider-plugin-architecture-A.md) · [prior art 지도](REFERENCES.md)
 - **어디까지 왔나** → [진행 상태](PROGRESS.md)
 

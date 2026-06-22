@@ -88,6 +88,11 @@
 - [x] **진짜 발견(measure-first): point budget 부재** — msse 스윕서 Eptium 764k 고정(점 예산)↔ours 무제한 SSE refine(10M+). 깊은 줌 ours ~58fps↔Eptium ~120fps. → **이슈 #08** `docs/issues/08-point-budget.md`, `docs/bench/FINDINGS.md §2026-06-20`, handoff `docs/handoff/fair-compare-and-point-budget-handoff.md`.
 - [x] **이슈 #08 point budget ✅ (PR #9)**: measure-first 게이트로 BP→구현→검증. Cesium 네이티브 `cacheBytes`로 근사 캡(손코딩 0) — `pointBudget` 옵션(기본 200만)→`cacheBytes=overflow=pointBudget×8B`. 검증(실 GPU): 깊은 줌 9.29M/16fps→2.10M/89fps·품질 동일(여분점=sub-pixel noise)·정상뷰 회귀 0(≤~2.1M 헤드룸 미작동). dual review 후 기본 2M 회귀 전수검증(msse=8 × 3데이터셋). `docs/issues/08-point-budget.md` §3~5.
 
+### 결정적 4축 프로파일러 + reproject 내부병목 제거 (2026-06-22 · feat/axis-profiler PR#16 · feat/17 PR#18)
+- [x] **결정적 4축 병목 분해 하니스 (PR #16)** — 내부 compute를 IO/decode/reproject/build로 반복가능하게 분리. 세 독립 부품(PDAL 정규화 COPC·로컬 정적 서버·Node 하니스), 프로덕션 `src/` 무수정으로 동일 프리미티브 경계 타이머, K회 median+워밍업 제외+ms/1M점 정규화(축% 변동 0%p). `npm run profile:axes`. 첫 발견=reproject 50%. (spec `docs/superpowers/specs/2026-06-22-deterministic-axis-profiler-design.md`)
+- [x] **[이슈 #17] reproject 내부병목 제거 — 격자 bilinear 54×↓ (50%→2%, PR #18).** 측정으로 진단: 내부 compute의 50%가 reproject(582 ms/1M점)이고, 비용은 배열 할당이 아니라 proj4 투영 수학 자체(V0≈V1 Δ2%로 확정). BP=bounded-extent 근사 → 데이터셋당 1회 (G+1)² proj4 격자 + 점별 bilinear, 셀당 다점 오차 가드(<1mm) + proj4 폴백. 결과: reproject 582→10.7 ms/1M점(54×)·internal 2504→1245ms(~2×)·BOTTLENECK이 decode(laz 84%)로 이동·max오차 0.33mm·verify C1 좌표 동일·회귀 0. (`src/copc-core.ts` `makeGridReprojector`, [이슈 #17](issues/17-reproject-proj4-internal-bottleneck.md))
+- [x] **학습 사이트 챕터 신설(learn/08)** — 프로파일러·병목 사냥 한 사이클을 학습용 서사로 정리 + index/07/PROFILING 배선.
+
 ## Phase 3 — 평가 / 입상 판정 🔒
 대용량 실데이터에서 60fps / 메모리 / UX 측정 → 입상 가능성 데이터로 판정.
 

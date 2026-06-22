@@ -74,4 +74,4 @@ false positive 안에도 배울 건 있었습니다. 가짜 원인(`reg.update` 
 
 ---
 
-← 이전: [06. 스트리밍 엔진과 상용 코어](06-streaming-engine-and-production-core.md) · 처음: [학습 커리큘럼](index.md) · 깊은 내용: [학습 위키](../wiki/index.md) · 결정: [ADR-004](../adr/004-delegate-memory-concurrency-to-cesium.md)
+← 이전: [06. 스트리밍 엔진과 상용 코어](06-streaming-engine-and-production-core.md) · 다음: [08. 병목을 측정으로 사냥하기](08-profiling-and-bottleneck-hunting.md) · 처음: [학습 커리큘럼](index.md) · 결정: [ADR-004](../adr/004-delegate-memory-concurrency-to-cesium.md)

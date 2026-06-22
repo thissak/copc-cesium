@@ -45,5 +45,8 @@
 
 ## 4축 병목 하니스 (결정적, Node)
 - 정규화 COPC 생성(PDAL 필요): `bash scripts/bench/gen-norm-copc.sh`
-- 로컬 서버+측정: Task 6 의 `npm run profile:axes` 참조.
+- 로컬 서버+측정: `npm run profile:axes -- data/norm-autzen-2M.copc.laz 5 5` (depth≤5 · 5회 median).
+- 단일 축 격리 진단(reproject 등): `scripts/bench/check-reproject.ts` (V0 proj4 점별 vs 격자 bilinear, 속도·정확도).
+- `src/` 무수정 — 하니스가 프로덕션과 동일 프리미티브를 경계 타이머로 호출. K회 median + 워밍업 제외 + `ms/1M점` 정규화.
 - 축 경계: build은 ECEF 좌표변환(고도)을 포함하므로 'build 병목'은 ECEF+패킹 합산임(profile-axes 범례 참조).
+- **스토리(학습용)**: 이 도구를 만든 동기·구조·reproject 50%→2%(54×) 사냥 과정은 [learn/08](learn/08-profiling-and-bottleneck-hunting.md), 상세 진단 기록은 [이슈 #17](issues/17-reproject-proj4-internal-bottleneck.md).
