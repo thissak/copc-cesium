@@ -79,7 +79,7 @@ V1 배열재사용(할당제거)        : 1128ms = 563.9 ms/1M점   (Δ 2%)
 | 정확성 회귀 | 높 | verify C1(center in Oregon) + 오차 가드(<임계) + (있으면)골든파일 |
 
 ### 결론
-**데이터셋 bounds 기준 (G+1)² proj4 격자 + 점별 bilinear, 셀중심 오차 가드(<임계 시 proj4 폴백).** G는 오차 임계 충족까지 자동 상향. proj4 범용 정확성은 폴백으로 보존.
+**데이터셋 bounds 기준 (G+1)² proj4 격자 + 점별 bilinear, 셀당 다점 오차 가드(<임계 시 proj4 폴백).** G는 오차 임계 충족까지 자동 상향. proj4 범용 정확성은 폴백으로 보존.
 
 ---
 
@@ -88,7 +88,7 @@ V1 배열재사용(할당제거)        : 1128ms = 563.9 ms/1M점   (Δ 2%)
 ### 변경 파일
 | 파일 | 변경 요약 |
 |------|----------|
-| `src/copc-core.ts` | `makeGridReprojector`(+`GridReproj`) 신설 — 데이터 bbox 위 (G+1)² proj4 격자 + 점별 bilinear, 셀중심 오차 가드(기본 ~1mm, G 자동 상향, gridMax 64), 미달 시 proj4 per-point 폴백. `CopcSession.reproj` 필드. `openCopc`·`decodeNode`·`loadCopcPoints` 가 점별 `toWgs.forward([x,y])` → `reproj.forward(x,y)`. `checkCenterInRange`/`resolveCrs` 는 toWgs 유지(불변). |
+| `src/copc-core.ts` | `makeGridReprojector`(+`GridReproj`) 신설 — 데이터 bbox 위 (G+1)² proj4 격자 + 점별 bilinear, 셀당 다점 오차 가드(기본 ~1mm, G 자동 상향, gridMax 64), 미달 시 proj4 per-point 폴백. `CopcSession.reproj` 필드. `openCopc`·`decodeNode`·`loadCopcPoints` 가 점별 `toWgs.forward([x,y])` → `reproj.forward(x,y)`. `checkCenterInRange`/`resolveCrs` 는 toWgs 유지(불변). |
 | `scripts/bench/check-reproject.ts` | 신규 — 재현/진단/검증 벤치(V0 proj4 vs V2~V4 격자, 정확도·속도). |
 | `scripts/bench/axis-measure.ts`·`profile-axes.ts`·`run-axis-profile.ts`·`check-axis-measure.ts` | 4축 하니스 measureNode 가 격자 reproj 측정(프로덕션 동기화) — 데이터셋당 1회 빌드. |
 

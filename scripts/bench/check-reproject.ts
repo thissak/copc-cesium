@@ -3,6 +3,7 @@
 // 실행: npx tsx scripts/bench/check-reproject.ts [N=2000000]
 import { open } from 'node:fs/promises';
 import { Copc } from 'copc';
+import proj4 from 'proj4';
 import { resolveCrs, makeGridReprojector } from '../../src/copc-core';
 
 const FILE = 'data/norm-autzen-2M.copc.laz';
@@ -136,8 +137,24 @@ async function main() {
   }
   console.log(`V4 src makeGridReprojector (실프로덕션) : ${ms1m(v4)} ms/1M점 (${(v0 / v4).toFixed(0)}×)  max오차 ${(err4 * 111320 * 1000).toFixed(3)}mm`);
   const pass = v4 < v0 * 0.1 && err4 * 111320 < 0.01; // 10×↑ 빠르고 <1cm
-  console.log(pass ? 'REPROJECT FIX PASS ✅ (src 함수 ≥10× + <1cm)' : 'FAIL ❌');
-  console.log(`\n해석: V0≈V1 → 비용은 proj4 math. 격자 bilinear(src) 가 수십× + sub-mm. (extent/오차 가드·proj4 폴백 내장)`);
-  process.exit(pass ? 0 : 1);
+  // 가드 건전성 회귀 (dual-review #18 R1): LCC 20km extent — 셀중심-only 가드면 51mm 통과(FAIL).
+  // 건전 가드(다점 샘플)면 G 상향/폴백으로 실제 max 오차 < 1mm 유지해야.
+  const lcc = proj4('+proj=lcc +lat_1=33 +lat_2=45 +lat_0=39 +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs', proj4.WGS84) as unknown as { forward: (c: number[]) => number[] };
+  const grL = makeGridReprojector(lcc, [0, 0, 0], [20000, 20000, 0]);
+  let errL = 0;
+  const S = 150;
+  for (let iy = 0; iy <= S; iy++) for (let ix = 0; ix <= S; ix++) {
+    const px = (ix / S) * 20000, py = (iy / S) * 20000;
+    const g = grL.forward(px, py), tr = lcc.forward([px, py]);
+    errL = Math.max(errL, Math.abs(g[0] - tr[0]), Math.abs(g[1] - tr[1]));
+  }
+  const errLmm = errL * 111320 * 1000;
+  const lccOk = errLmm < 1; // 건전 가드면 <1mm (셀중심-only 였으면 ~51mm)
+  console.log(`LCC 20km 가드 건전성: 실제 max 오차 ${errLmm.toFixed(3)}mm  ${lccOk ? '✅ (<1mm)' : '❌ (가드가 cm 통과시킴)'}`);
+
+  const allOk = pass && lccOk;
+  console.log(allOk ? 'REPROJECT FIX PASS ✅ (src ≥10×·<1cm + LCC20km 가드 건전)' : 'FAIL ❌');
+  console.log(`\n해석: V0≈V1 → 비용은 proj4 math. 격자 bilinear(src) 가 수십× + sub-mm. 가드는 다점 샘플로 saddle/방향성 곡률서도 건전(LCC20km).`);
+  process.exit(allOk ? 0 : 1);
 }
 main().catch((e) => { console.error(e); process.exit(1); });

@@ -253,18 +253,28 @@ export function makeGridReprojector(
         lonG[k] = o[0];
         latG[k] = o[1];
       }
-    // 셀중심에서 proj4 대비 max 오차 측정 (bilinear 오차 최대점)
+    // 셀당 다점(중심 + 4 모서리중점)서 proj4 대비 max 오차. bilinear 잔차 R~a·(u-u²)+b·(v-v²) 는
+    // 동부호 곡률(a,b 동부호)이면 셀중심(0.5,0.5), 이부호(saddle)면 모서리중점(0.5,0)·(0,0.5)서 최대 →
+    // 셀중심 단일 샘플은 saddle/방향성 곡률(LCC·tmerc)서 최대오차를 놓친다(dual-review #18 R1).
+    const SAMP: ReadonlyArray<readonly [number, number]> = [
+      [0.5, 0.5], [0.5, 0], [0.5, 1], [0, 0.5], [1, 0.5],
+    ];
     let err = 0;
-    for (let cy = 0; cy < G; cy++)
-      for (let cx = 0; cx < G; cx++) {
+    for (let cy = 0; cy < G && err <= maxErrDeg; cy++)
+      for (let cx = 0; cx < G && err <= maxErrDeg; cx++) {
         const i00 = cy * W + cx;
-        const blon = 0.25 * (lonG[i00] + lonG[i00 + 1] + lonG[i00 + W] + lonG[i00 + W + 1]);
-        const blat = 0.25 * (latG[i00] + latG[i00 + 1] + latG[i00 + W] + latG[i00 + W + 1]);
-        const t = toWgs.forward([minx + ((cx + 0.5) / G) * dx, miny + ((cy + 0.5) / G) * dy]);
-        const e = Math.max(Math.abs(blon - t[0]), Math.abs(blat - t[1]));
-        if (e > err) err = e;
+        const l00 = lonG[i00], l10 = lonG[i00 + 1], l01 = lonG[i00 + W], l11 = lonG[i00 + W + 1];
+        const a00 = latG[i00], a10 = latG[i00 + 1], a01 = latG[i00 + W], a11 = latG[i00 + W + 1];
+        for (const [u, v] of SAMP) {
+          const wa = (1 - u) * (1 - v), wb = u * (1 - v), wc = (1 - u) * v, wd = u * v;
+          const blon = wa * l00 + wb * l10 + wc * l01 + wd * l11;
+          const blat = wa * a00 + wb * a10 + wc * a01 + wd * a11;
+          const t = toWgs.forward([minx + ((cx + u) / G) * dx, miny + ((cy + v) / G) * dy]);
+          const e = Math.max(Math.abs(blon - t[0]), Math.abs(blat - t[1]));
+          if (e > err) err = e;
+        }
       }
-    if (err > maxErrDeg) continue; // 임계 초과 → 더 촘촘한 격자로
+    if (err > maxErrDeg) continue; // 임계 초과 → 더 촘촘한 격자로 (또는 gridMax 후 proj4 폴백)
     const Gc = G;
     const Wc = W;
     return {
