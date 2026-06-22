@@ -43,6 +43,7 @@
     "bench:budget": "tsx scripts/bench/probe-budget.ts",
     "prebench:matched": "npm run bench:fair-bundle",
     "bench:matched": "tsx scripts/bench/probe-matched.ts",
+    "profile:axes": "tsx scripts/bench/run-axis-profile.ts",
     "release": "npm run build:lib && set -a && . ./.env && set +a && npm publish"
   },
   "peerDependencies": {
