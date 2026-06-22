@@ -12,6 +12,8 @@ async function main() {
   const file = process.argv[2] || 'data/norm-autzen-2M.copc.laz';
   const maxDepth = Number(process.argv[3] || '3');
   const runs = Number(process.argv[4] || '5');
+  if (!Number.isInteger(runs) || runs < 1) { console.error('runs must be an integer >= 1'); process.exit(1); }
+  if (!Number.isInteger(maxDepth) || maxDepth < 0) { console.error('maxDepth must be an integer >= 0'); process.exit(1); }
   if (!existsSync(file)) { console.error(`없음: ${file} — 먼저 bash scripts/bench/gen-norm-copc.sh`); process.exit(1); }
 
   const srv = await startCopcServer(file);

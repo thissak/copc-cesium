@@ -11,6 +11,7 @@ export async function loadNodesToDepth(
   getter: (b: number, e: number) => Promise<Uint8Array>,
   copc: Awaited<ReturnType<typeof Copc.create>>,
   maxDepth: number,
+  loadPage: (g: (b: number, e: number) => Promise<Uint8Array>, p: Hierarchy.Page) => Promise<{ nodes: Hierarchy.Node.Map; pages: Record<string, Hierarchy.Page | undefined> }> = (g, p) => Copc.loadHierarchyPage(g, p),
 ): Promise<Hierarchy.Node.Map> {
   const all: Hierarchy.Node.Map = {};
   const visited = new Set<string>(); // 중복 페이지 재fetch 방어 — IO 측정 왜곡 방지
@@ -20,7 +21,7 @@ export async function loadNodesToDepth(
     const pk = `${page.pageOffset}-${page.pageLength}`;
     if (visited.has(pk)) continue;
     visited.add(pk);
-    const { nodes, pages } = await Copc.loadHierarchyPage(getter, page);
+    const { nodes, pages } = await loadPage(getter, page);
     Object.assign(all, nodes);
     for (const [key, ref] of Object.entries(pages)) {
       // 서브페이지 root depth ≤ maxDepth 면 그 안에 측정대상 노드 있음 → 로드(더 깊은 페이지는 스킵).
@@ -45,6 +46,7 @@ function median(xs: number[]): number {
 }
 
 export function aggregate(runs: NodeAxes[][]): AxisReport {
+  if (runs.length === 0) throw new Error('aggregate: 빈 runs (측정 0회) — 호출 전 runs>=1 보장 필요');
   const sum = (run: NodeAxes[], k: keyof NodeAxes) => run.reduce((a, x) => a + x[k], 0);
   const io = median(runs.map((r) => sum(r, 'ioMs')));
   const decode = median(runs.map((r) => sum(r, 'decodeMs')));
@@ -80,6 +82,8 @@ async function main() {
   if (!url) { console.error('usage: profile-axes.ts <copcUrl> [maxDepth=3] [runs=5]'); process.exit(1); }
   const maxDepth = Number(process.argv[3] || '3');
   const runs = Number(process.argv[4] || '5');
+  if (!Number.isInteger(runs) || runs < 1) { console.error('runs must be an integer >= 1'); process.exit(1); }
+  if (!Number.isInteger(maxDepth) || maxDepth < 0) { console.error('maxDepth must be an integer >= 0'); process.exit(1); }
 
   const { getter, io } = makeTimedGetter(url);
   const copc = await Copc.create(getter);
