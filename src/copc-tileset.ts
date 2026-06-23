@@ -1,4 +1,5 @@
 import { Cesium3DTileset, Cesium3DTileStyle, RequestScheduler } from 'cesium';
+import type { Scene, Cartesian2 } from 'cesium';
 import * as Comlink from 'comlink';
 import { Copc } from 'copc';
 import { openCopc, loadSubPage, type CopcSession, type CoalesceOpts } from './copc-core';
@@ -6,6 +7,7 @@ import { buildTileset, buildSubtree } from './tileset';
 import type { DecodeApi } from './decode.worker';
 import type { ColorBy } from './colors';
 import type { AttributeRequest } from './attributes';
+import { snapPoint, type SnappedPoint } from './picking';
 
 // 공개 API: COPC URL → 변환 없이 LOD 스트리밍되는 Cesium3DTileset.
 // (TIFFImageryProvider 의 fromUrl 패턴. ADR-001)
@@ -90,6 +92,9 @@ export interface CopcTilesetOptions {
 
 let sidCounter = 0;
 const activeSids = new Set<string>(); // 살아있는 tileset 세션 (생명주기 추적)
+// 진단(이슈 #20): 디코드 요청 누적/완료 카운터. in-flight = started − done.
+// Cesium 이 취소한 타일도 SW→page→worker 가 끝까지 도므로, churn 시 in-flight 가 유계인지 무계 누적인지 측정.
+const decodeStats = { started: 0, done: 0 };
 const pageSessions = new Map<string, CopcSession>(); // sid → 페이지 지오메트리 세션 (서브페이지 lazy 로드)
 const CONTENT_BASE_PATH = '/__copc-real/';
 
@@ -136,11 +141,16 @@ function installHandler() {
         port?.postMessage({ json: await buildPageTileset(sid, key) }); // 서브페이지 → child tileset
       } else {
         const key = rest.replace('.pnts', '');
-        const pnts = await decodeTile(sid, key); // 워커에서 디코드(메인스레드 밖)
-        // null = 빈 노드(0점·전부 노이즈) → SW 가 404 → Cesium missingTilePolicy 로 빈 타일(이슈 #03).
-        // 진짜 누락 노드는 worker 가 throw → 아래 catch → {error} → 500.
-        if (!pnts) return void port?.postMessage({ empty: true });
-        port?.postMessage(pnts, [pnts]); // zero-copy 로 SW 에 전달
+        decodeStats.started++; // 진단(#20): 요청 시점 (취소돼도 여기까진 도달)
+        try {
+          const pnts = await decodeTile(sid, key); // 워커에서 디코드(메인스레드 밖)
+          // null = 빈 노드(0점·전부 노이즈) → SW 가 404 → Cesium missingTilePolicy 로 빈 타일(이슈 #03).
+          // 진짜 누락 노드는 worker 가 throw → 아래 catch → {error} → 500.
+          if (!pnts) return void port?.postMessage({ empty: true });
+          port?.postMessage(pnts, [pnts]); // zero-copy 로 SW 에 전달
+        } finally {
+          decodeStats.done++; // 진단(#20): 완료(성공/빈/예외 무관) — in-flight 감소
+        }
       }
     } catch (err) {
       port?.postMessage({ error: (err as Error)?.message ?? String(err) });
@@ -317,6 +327,36 @@ export const CopcTileset = {
       // 진단(이슈 #02): 워커 디코드 프로파일(per-decode 타이밍 + S3 range fetch resource timing).
       (tileset as unknown as { copcProfile: () => Promise<unknown> }).copcProfile = () =>
         getWorkerApi().getProfile();
+
+      // 옥트리 풀해상도 최근접점 스냅 (이슈 #3-B). pickPosition 씨앗 → 워커 nearestPoint → SnappedPoint.
+      (tileset as unknown as { snapPoint: (scene: Scene, win: Cartesian2) => Promise<SnappedPoint | undefined> }).snapPoint =
+        (scene, win) =>
+          snapPoint(tileset, scene, win, (seed) => {
+            // destroy 가 마지막 세션 워커를 terminate 하면 comlink RPC 가 영영 미해소(hang) → 백스톱 타임아웃(무한 대기
+            // 금지, PR#21 dual-review). warn 으로 표면화([[no-silent-failures]]) + null resolve 로 snapPoint 의
+            // "실패→undefined" 계약 유지(reject 면 소비자 미처리 rejection). 워커 재시도 예산(≈34s)보다 길게 → SW 와 동일 40s.
+            let t: ReturnType<typeof setTimeout> | undefined;
+            return Promise.race([
+              getWorkerApi().nearestPoint(sid, seed),
+              new Promise<null>((resolve) => {
+                t = setTimeout(() => {
+                  console.warn('[copc] snapPoint worker 응답 타임아웃 (40s) — 세션이 snap 중 destroy 됐을 수 있음');
+                  resolve(null);
+                }, 40000);
+              }),
+            ])
+              .catch((e) => {
+                // 워커 throw(예: 비-마지막 tileset destroy 후 '세션 없음')·디코드 오류 → 계약상 undefined 유지
+                // (reject 전파 시 소비자 미처리 rejection). warn 으로 표면화(PR#21 R2, [[no-silent-failures]]).
+                console.warn('[copc] snapPoint query 실패 →', (e as Error)?.message ?? e);
+                return null;
+              })
+              .finally(() => { if (t) clearTimeout(t); });
+          });
+
+      // 진단(이슈 #20): 디코드 요청/완료 누적 + in-flight. churn 시 in-flight 누적 유계성 측정용(취소 미전파 영향).
+      (tileset as unknown as { copcDecodeStats: () => { started: number; done: number; inflight: number } }).copcDecodeStats =
+        () => ({ started: decodeStats.started, done: decodeStats.done, inflight: decodeStats.started - decodeStats.done });
 
       (tileset as unknown as { attributeRange: (name: string) => Promise<[number, number]> }).attributeRange = async (name) => {
         const session = pageSessions.get(sid)!;

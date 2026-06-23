@@ -18,6 +18,7 @@ jobs:
       - run: npm run build # tsc --noEmit + vite (데모 → demo-dist)
       - run: npm run build:lib # tsup 라이브러리 빌드 (dist)
       - run: npm run verify # 헤드리스 정확성(C1) — autzen S3
+      - run: npm run check:snap # 옥트리 최근접점 스냅 정확성(#3-B, 독립 ECEF 오라클) — autzen S3
 
   docs:
     runs-on: ubuntu-latest

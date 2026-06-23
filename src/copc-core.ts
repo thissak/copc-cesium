@@ -212,7 +212,7 @@ export function checkCenterInRange(toWgs: Reproj, cube: number[]): void {
 }
 
 // ── 스트리밍 세션 (Phase 2 본편) ───────────────────────────────────────
-type Reproj = { forward: (coord: number[]) => number[] };
+type Reproj = { forward: (coord: number[]) => number[]; inverse?: (coord: number[]) => number[] };
 
 /**
  * bounded-extent reproject 가속기 (이슈 #17). 점별 proj4 가 deep-load 내부 compute 의 ~50% →
@@ -364,6 +364,112 @@ export async function loadSubPage(s: CopcSession, key: string): Promise<boolean>
   delete s.pages[key]; // 로드 완료 → 더는 미로드 포인터 아님
   // --8<-- [end:loadSubPage]
   return true;
+}
+
+/**
+ * 씨앗(source CRS sx,sy,sz)을 포함하는 가장 깊은 *실재* 옥트리 노드 키 반환 (이슈 #3-B).
+ * 루트부터 octant 로 하강하며 s.nodes 존재 확인, 미로드 서브페이지(s.pages)면 loadSubPage 후 재시도.
+ * 씨앗이 루트 큐브 밖이거나 루트 노드 부재면 undefined.
+ */
+export async function locateDeepestNode(s: CopcSession, sx: number, sy: number, sz: number): Promise<string | undefined> {
+  const c = s.cube; // [minx,miny,minz,maxx,maxy,maxz] (COPC 큐브)
+  const cubeSide = c[3] - c[0];
+  if (!(cubeSide > 0)) return undefined;
+  if (sx < c[0] || sx > c[3] || sy < c[1] || sy > c[4] || sz < c[2] || sz > c[5]) return undefined;
+  if (!s.nodes['0-0-0-0']) return undefined;
+  let best = '0-0-0-0';
+  let d = 0, x = 0, y = 0, z = 0;
+  while (d < 32) {
+    const sideD = cubeSide / 2 ** d; // 현재 노드(depth d) 한 변
+    const half = sideD / 2; // 자식 한 변
+    const ox = c[0] + x * sideD, oy = c[1] + y * sideD, oz = c[2] + z * sideD;
+    const cx = sx >= ox + half ? 1 : 0;
+    const cy = sy >= oy + half ? 1 : 0;
+    const cz = sz >= oz + half ? 1 : 0;
+    const childKey = `${d + 1}-${x * 2 + cx}-${y * 2 + cy}-${z * 2 + cz}`;
+    if (s.pages[childKey]) await loadSubPage(s, childKey); // 미로드 서브페이지 → 로드
+    if (!s.nodes[childKey]) return best; // 더 깊은 실재 노드 없음 → 현재가 가장 깊음
+    best = childKey;
+    d += 1; x = x * 2 + cx; y = y * 2 + cy; z = z * 2 + cz;
+  }
+  return best;
+}
+
+export interface NearestHit {
+  lon: number;
+  lat: number;
+  height: number;
+  dist: number; // 씨앗↔승자 거리(미터)
+  attributes: Record<string, number>;
+}
+
+/**
+ * 노드(key) 안에서 씨앗(source sx,sy,sz)에 3D 최근접인 실제 점을 찾아 정확 좌표+속성 반환 (이슈 #3-B).
+ * 비교는 source 공간(전체 reproject 안 함), 승자 1점만 reproject. hideClass 점은 스킵(렌더와 일관).
+ * X·Y·Z 모두 동일 source 선형단위(zUnit)이므로 raw 차분으로 *등방* 비교(어느 축에도 zUnit 미적용 — 비-미터
+ * CRS(예: 피트)서 수평/수직 가중이 어긋나 오답 선택하던 버그 방지, PR#21 dual-review), 거리만 zUnit 으로 미터 환산.
+ * (투영 CRS 가정: 지리좌표계(수평 도°, 수직 m)면 단위가 달라 비등방 — 거의 모든 COPC 가 투영이라 현 스코프 밖.)
+ * 노드 없음/0점/전부 스킵 → null.
+ */
+export async function nearestPointInNode(
+  s: CopcSession,
+  key: string,
+  sx: number,
+  sy: number,
+  sz: number,
+  attrs: AttributeSpec[] | undefined,
+  hideClass?: ReadonlySet<number>,
+  lazPerf?: LazPerf,
+): Promise<NearestHit | null> {
+  const node = s.nodes[key];
+  if (!node) return null;
+  const view = await Copc.loadPointDataView(s.getter, s.copc, node, lazPerf ? { lazPerf } : undefined);
+  const n = view.pointCount;
+  if (n === 0) return null;
+  const gx = view.getter('X');
+  const gy = view.getter('Y');
+  const gz = view.getter('Z');
+  const gc = hideClass?.size && 'Classification' in view.dimensions ? view.getter('Classification') : null;
+  let best = -1;
+  let bestD2 = Infinity;
+  for (let i = 0; i < n; i++) {
+    if (gc && hideClass!.has(gc(i) | 0)) continue;
+    const dx = gx(i) - sx;
+    const dy = gy(i) - sy;
+    const dz = gz(i) - sz; // 등방: X·Y 와 동일 source 단위(zUnit 미적용)
+    const d2 = dx * dx + dy * dy + dz * dz;
+    if (d2 < bestD2) { bestD2 = d2; best = i; }
+  }
+  if (best < 0) return null;
+  const o = s.reproj ? s.reproj.forward(gx(best), gy(best)) : [gx(best), gy(best)];
+  const attributes: Record<string, number> = {};
+  if (attrs) for (const spec of attrs) attributes[spec.batchName] = view.getter(spec.lasName)(best);
+  return { lon: o[0], lat: o[1], height: gz(best) * s.zUnit, dist: Math.sqrt(bestD2) * s.zUnit, attributes };
+}
+
+/**
+ * WGS84 씨앗(lon°,lat°,height m)에 풀해상도 최근접 실제 점 (이슈 #3-B 합성 진입점).
+ * 수평 역변환(toWgs.inverse)·수직 height/zUnit → source 씨앗 → 가장 깊은 노드 → 노드 내 최근접.
+ * 역변환 불가/큐브 밖/노드 없음 → null.
+ */
+export async function nearestPoint(
+  s: CopcSession,
+  lon: number,
+  lat: number,
+  height: number,
+  attrs: AttributeSpec[] | undefined,
+  hideClass?: ReadonlySet<number>,
+  lazPerf?: LazPerf,
+): Promise<NearestHit | null> {
+  if (!s.toWgs?.inverse) return null;
+  const src = s.toWgs.inverse([lon, lat]);
+  const sx = src[0];
+  const sy = src[1];
+  const sz = height / s.zUnit;
+  if (!Number.isFinite(sx) || !Number.isFinite(sy) || !Number.isFinite(sz)) return null;
+  const key = await locateDeepestNode(s, sx, sy, sz);
+  if (!key) return null;
+  return nearestPointInNode(s, key, sx, sy, sz, attrs, hideClass, lazPerf);
 }
 
 /**

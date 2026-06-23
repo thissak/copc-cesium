@@ -32,6 +32,7 @@
     "build:lib": "tsup",
     "preview": "vite preview",
     "verify": "tsx scripts/verify.ts",
+    "check:snap": "tsx scripts/check-snap.ts",
     "sweep": "tsx scripts/sweep.ts",
     "bench:probe-bundle": "esbuild scripts/bench/probe.ts --bundle --platform=browser --format=iife --global-name=BenchProbe --footer:js=\"window.BenchProbe=BenchProbe;\" --outfile=scripts/bench/probe-bundle.js",
     "prebench:eptium": "npm run bench:probe-bundle",

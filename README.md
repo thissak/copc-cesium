@@ -105,6 +105,17 @@ handler.setInputAction((movement) => {
 
 If the tileset exposes no attributes (`attributes: []`, or a COPC lacking the curated dimensions), `pickPoint` still returns the location with `attributes: {}` (no throw).
 
+### Snap to nearest point (octree, full-resolution)
+
+```ts
+const snapped = await tileset.snapPoint(viewer.scene, windowPosition); // windowPosition: Cartesian2 (e.g. movement.position from a ScreenSpaceEventHandler)
+// → { position, cartographic, attributes, distanceM } | undefined
+// pickPosition 씨앗 위치에서 COPC 옥트리의 가장 깊은 노드를 디코드해 *실제* 최근접 점으로 스냅.
+// 빈틈/하늘 클릭(pickPosition 미가용) → undefined.
+```
+
+> Note: searches the nearest point **within the deepest node containing the seed** (no neighbor-node search). A click hugging a node boundary may miss the true global nearest by up to ~node spacing (~0.14 m on autzen) — a *local full-resolution approximate snap*, not a guaranteed global nearest. Neighbor search is a planned enhancement. Assumes a projected CRS (X/Y/Z share one linear unit).
+
 `rampStyle(name, range)` builds a normalized color-ramp style for any attribute, and `await tileset.attributeRange(name)` samples the root node for `[min, max]`:
 
 ```ts

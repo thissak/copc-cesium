@@ -3,7 +3,7 @@ import { Copc } from 'copc';
 import { LazPerf } from 'laz-perf/lib/web';
 // laz-perf 의 main 은 node 빌드 → web 빌드 + wasm URL(?url)을 워커 번들 문맥에서 해석해 주입.
 import lazPerfWasmUrl from 'laz-perf/lib/web/laz-perf.wasm?url';
-import { openCopc, decodeNode, loadSubPage, type CopcSession, type CoalesceOpts } from './copc-core';
+import { openCopc, decodeNode, loadSubPage, nearestPoint as coreNearestPoint, type CopcSession, type CoalesceOpts } from './copc-core';
 import { buildQuantizedPnts } from './pnts-quantized';
 import type { ColorBy } from './colors';
 import { resolveAttributes, type AttributeRequest, type AttributeSpec } from './attributes';
@@ -105,6 +105,21 @@ const api = {
     const e = sessions.get(sid);
     if (!e) throw new Error(`세션 없음: ${sid}`);
     await loadSubPage(e.session, key);
+  },
+  /** 옥트리 풀해상도 최근접점 (이슈 #3-B). WGS84 씨앗 → 가장 깊은 노드 → 최근접 실제 점. */
+  async nearestPoint(
+    sid: string,
+    seed: { lon: number; lat: number; height: number },
+  ): Promise<{ lon: number; lat: number; height: number; dist: number; attributes: Record<string, number> } | null> {
+    const e = sessions.get(sid);
+    if (!e) throw new Error(`세션 없음: ${sid}`);
+    const lazPerf = await getLazPerf();
+    // 속성 스펙 미해결이면 루트 노드 dimensions 로 해결(decode 와 동일 차원 — 파일 전역 동일).
+    if (!e.attrSpecs && e.session.nodes['0-0-0-0']) {
+      const v = await Copc.loadPointDataView(e.session.getter, e.session.copc, e.session.nodes['0-0-0-0'], { lazPerf });
+      e.attrSpecs = resolveAttributes(Object.keys(v.dimensions), e.attrReq);
+    }
+    return coreNearestPoint(e.session, seed.lon, seed.lat, seed.height, e.attrSpecs, e.hideClass, lazPerf);
   },
   /** 세션 정리 (tileset.destroy 시). */
   async close(sid: string): Promise<void> {

@@ -28,7 +28,9 @@ COPC 창시자 Hobu의 상용 **Eptium**이 *"COPC, COG, EPT data support for Ce
 - **레버리지**: 매우 높음 — **py3dtiles maintainer가 전용 FAQ를 유지**할 만큼 빈발("This issue is so common"). 가장 즉각 "그냥 된다" 데모.
 - **증거**: SO#79257450(py3dtiles maintainer)·gis.se#481090(907뷰 "black space, mirror image")·SO#69606114(1.8m offset)·giro3d#665(옥트리도 변환 필요).
 
-### 3. 옥트리 피킹 / 최근접점 / 스냅 (picking) — stretch
+### 3. 옥트리 피킹 / 최근접점 / 스냅 (picking) — stretch — **#3-A ✅·#3-B ✅ 출하**
+- **#3-A ✅**(2026-06-20, PR#7): 클릭→점 정보 조회 `pickPoint()`.
+- **#3-B ✅**(2026-06-23, PR#21): 옥트리 풀해상도 최근접점 스냅 `tileset.snapPoint()` — 가장 깊은 노드 디코드→실제 최근접 점. dual-review 2R(비등방 메트릭 정정+독립 ECEF 오라클; 단일-노드 한계 공개). **한계**: 로컬 노드 내 최근접(전역 보장 아님·경계 ~0.14m·이웃검색=후속)·투영 CRS 가정. renderer-shaped 리스크는 스냅=데이터쿼리라 미발생. 측정 도구(거리/면적)·시각화=후속.
 - **실해**: Cesium pick이 포인트클라우드에서 globe로 빠짐·최근접점 검색 없음·측정 스냅 안 됨.
 - **우리-영역성**: COPC 옥트리 = 공간 인덱스 → `.pnts` tileset엔 없는 구조적 우위로 pick API 한계 돌파.
 - **복잡도**: 진짜 hard + 부분적으로 renderer-shaped(리스크↑).
@@ -37,11 +39,11 @@ COPC 창시자 Hobu의 상용 **Eptium**이 *"COPC, COG, EPT data support for Ce
 
 ## Tier 2 — 완성도/견고성 (실해 있음 · 헤드라인 아님 · 해야 함)
 
-### 4. 취소 / 백프레셔 전파 (Codex #2)
-- **코드 확정 완성도 갭**: Cesium이 XHR 취소(`cancelFunction`/`priorityFunction`)해도 SW(`copc-sw.js`)가 `e.request.signal`을 안 보고, worker `decode()`에 abort 인자 없음, copc-core fetch는 내부 8s 타임아웃만 → **불필요해진 타일의 fetch/decode가 끝까지 돌아 동시성 슬롯·워커 점유**.
+### 4. 취소 / 백프레셔 전파 (Codex #2) — **WON'T-FIX (이슈 #20, 2026-06-23)**
+- **결론**: measure-first 로 착수했으나 **Phase 0 게이트 FAIL** — 우리 SW-인터셉트 아키텍처에서 취소 신호의 유일 진입점인 SW `event.request.signal` 이 클라이언트 abort 시 **미발화**(실측, w3c/ServiceWorker #1544). 클린 수정 불가(fragile Cesium-내부 monkey-patch 만 가능). 실해 측정서도 in-flight 디코드 ≤2·self-heal(유계). Tier2 비헤드라인 → won't-fix. 상세 [이슈 #20](issues/20-cancel-backpressure-propagation.md).
+- **코드 확정 완성도 갭**: Cesium이 XHR 취소(`cancelFunction`→`xhr.abort()`)해도 SW(`copc-sw.js`)가 `e.request.signal`을 안 보고(보려 해도 미발화), worker `decode()`에 abort 인자 없음, copc-core fetch는 내부 8s 타임아웃만 → 불필요해진 타일의 fetch/decode가 끝까지 돌아 워커 점유.
 - **커뮤니티 corroborate**: giro3d#677 "cancel-in-flight" critical.
-- **복잡도**: 높음(Cesium Request → SW `signal` → worker abort → copc fetch + laz-perf, 세션/워커 consistency).
-- **판정**: "진짜 스트리밍 엔진" 완성도 — 단 사용자가 *직접* "취소 안 됨"으로 호소하진 않아 **헤드라인 차별화는 약함**. 완성도 별도 트랙.
+- **재개 조건**: Cesium 이 SW-가시 취소 채널 제공 시, 또는 헤드 실GPU서 새-영역 지속 churn 의 무계 누적·실 UX 저하 실증 시 → 비-취소 완화책(워커 큐 유계화→503 재요청) 재검토.
 
 ### 5. CORS / range 정직성 + small-range 약속
 - S3 403/206 불일치·`Range: bytes=0-`로 전체 받는 함정(giro3d#636). 명확 에러 + "COPC 올바로 호스팅" 문서.

@@ -82,6 +82,9 @@
 ### Tier1 #3-A 점 피킹 정보 조회 (2026-06-20 · feat/point-picking)
 - [x] **클릭→점 경위도·고도 + LAS 속성 조회.** `pickPoint()` free 함수(Cesium pick/pickPosition + #1 getProperty, 렌더러 손코딩 0) + 데모 패널. 소유권 `picked.primitive===tileset`(globe/하늘/타 tileset→undefined). check-picking 4케이스·autzen 브라우저 스모크·verify C1·기존 check-* 회귀 0. 범위 B(옥트리 최근접점·측정 스냅)=별도.
 
+### Tier1 #3-B 옥트리 풀해상도 최근접점 스냅 (2026-06-23 · feat/3b-octree-nearest-point-snap · PR #21)
+- [x] **`tileset.snapPoint(scene, win)` — 클릭→옥트리 *가장 깊은 노드* 디코드→실제 최근접 점 정확좌표+속성+distanceM.** 순수 math(`locateDeepestNode`/`nearestPointInNode`/`nearestPoint`)=copc-core(Cesium-free·Node 결정적), 디코드=워커 재사용, Cesium=page만, 렌더러 손코딩 0·신규 의존성 0. **subagent-driven 6 task TDD + dual-review 2R**(R1 비등방 메트릭+순환 오라클→등방화+독립 WGS84→ECEF 오라클; R2 단일-노드≠전역 최근접 한계 공개+계약누수 catch; R3 OK-to-merge). 검증: `check:snap`(ECEF 오라클·N2 등방 변별)·verify C1·헤드리스 스모크·CI 배선. **한계**: 로컬 노드 내 최근접(전역 보장 아님·경계 ~0.14m, 이웃검색=후속)·투영 CRS 가정·측정도구/시각화=별도. [[math-correctness-suffices-when-imperceptible]]·over-headline 금지.
+
 ### 공정 비교 도구(fair-compare) + point budget 약점 발견 (2026-06-20 · feat/fair-engine-bench, 미머지)
 - [x] **공정 엔진 비교 도구 작성** — `scripts/bench/fair-compare.ts`(+probe/types/report). 5대 통제(config 정규화·고정 시점·**GPU 타이머 GPU ms**·로딩 곡선 샘플링·ours-vs-ours 영실험). vsync 플래그 macOS Metal 미작동→GPU 타이머 피벗, settle 비현실적(단조 로딩 60s+)→곡선 샘플링 피벗(둘 다 스파이크/진단으로 확정). 설계/계획 `docs/superpowers/{specs,plans}/2026-06-20-fair-engine-bench*`.
 - [x] **E2E(sofi): 도구가 verdict 거부(정직)** — `nullOk=false(floor 62.9%)·overlap=2 → 2/4 게이트 FAIL → 신뢰불가`. 가짜 숫자 0. 단일 공정 verdict 불가가 결론.
@@ -93,6 +96,9 @@
 - [x] **[이슈 #17] reproject 내부병목 제거 — 격자 bilinear 54×↓ (50%→2%, PR #18).** 측정으로 진단: 내부 compute의 50%가 reproject(582 ms/1M점)이고, 비용은 배열 할당이 아니라 proj4 투영 수학 자체(V0≈V1 Δ2%로 확정). BP=bounded-extent 근사 → 데이터셋당 1회 (G+1)² proj4 격자 + 점별 bilinear, 셀당 다점 오차 가드(<1mm) + proj4 폴백. 결과: reproject 582→10.7 ms/1M점(54×)·internal 2504→1245ms(~2×)·BOTTLENECK이 decode(laz 84%)로 이동·max오차 0.33mm·verify C1 좌표 동일·회귀 0. (`src/copc-core.ts` `makeGridReprojector`, [이슈 #17](issues/17-reproject-proj4-internal-bottleneck.md))
 - [x] **학습 사이트 챕터 신설(learn/08)** — 프로파일러·병목 사냥 한 사이클을 학습용 서사로 정리 + index/07/PROFILING 배선.
 - [x] **실데이터(raw autzen 원본 10.65M·비정규화) 사후검증 + decode 후속 [이슈 #19](issues/19-decode-laz-internal-bottleneck.md) 등록(Open).** 정규화·합성 의심 차단: raw 원본 4축이 norm과 거의 동일(**decode 84%·reproject 2%**, `docs/bench/axis-raw-autzen.*`)·입력 무관 견고. 격자 bilinear는 **실제 점 6M**로 재검증(max 0.329mm=합성 worst-case 일치·≈88×·격자 채택, `scripts/bench/check-reproject-realpts.ts`) → 합성 점 caveat 해소(#17 §5). **새 내부병목=decode(laz 84%)** → #19(Open, laz-perf 디코드).
+
+### 취소/백프레셔 전파 조사 — WON'T-FIX (2026-06-23 · 이슈 #20)
+- [x] **IMPROVEMENTS Tier2 #4 착수 → measure-first 로 won't-fix 확정.** 재현 RED(`check-cancel.ts`: getter 외부취소 미수신)·BP 조사(deep-research+context7) 후 **Phase 0 게이트(빌드 전 실측)**: SW `event.request.signal` 이 클라이언트 abort 시 미발화(`probe-sw-cancel.ts`, w3c/ServiceWorker #1544) = 클린 수정 불가(진입 채널 없음). 실해 측정(`repro-20.ts`+`copcDecodeStats` 훅): churn 시 in-flight 디코드 ≤2·self-heal(유계). 클린 차단+유계+Tier2 → won't-fix(fragile monkey-patch 만 가능, STOP 비정당). build·verify C1 회귀 0. ([이슈 #20](issues/20-cancel-backpressure-propagation.md))
 
 ## Phase 3 — 평가 / 입상 판정 🔒
 대용량 실데이터에서 60fps / 메모리 / UX 측정 → 입상 가능성 데이터로 판정.
