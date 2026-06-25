@@ -9,6 +9,7 @@ COPC 포인트클라우드를 사전 변환 없이 CesiumJS에 직접 렌더하�
 npm install
 npm run dev      # 개발 서버 (http://localhost:5173)
 npm run build    # tsc + 프로덕션 번들
+npm test         # 헤드리스 테스트 (오프라인 unit · test:integration=S3 통합 · test:all)
 npm run verify   # 헤드리스 정확성·timings 검증 (Node)
 npm run sweep    # 데이터축 성능 스윕 (Node)
 npm run preview  # 빌드 결과 미리보기

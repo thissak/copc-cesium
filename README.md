@@ -142,10 +142,14 @@ This repository started as a competition lab (KOSSA OSSP / Gaia3D task — *"COP
 
 ```bash
 npm install
-npm run dev        # demo at http://localhost:5173
-npm run build:lib  # build the library to dist/
-npm run verify     # headless correctness check
+npm run dev              # demo at http://localhost:5173
+npm run build:lib        # build the library to dist/
+npm test                 # headless unit checks (offline, deterministic)
+npm run test:integration # full pipeline checks (fetch real COPC over S3 range)
+npm run test:all         # both suites
 ```
+
+`npm test` runs the offline, deterministic checks (CRS resolution, ECEF math, picking, batch tables, styling) — no network, so it reproduces anywhere. `npm run test:integration` additionally streams real COPC files over S3 range requests to verify the end-to-end pipeline (georeferencing, hierarchy paging, range coalescing, retry, attribute decode, octree snap). Each check is also runnable on its own via `npm run check:<name>`.
 
 ## License
 
