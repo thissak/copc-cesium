@@ -2,7 +2,7 @@
 // 실행: npx tsx scripts/check-paging.ts [url]   (기본 millsite — 서브페이지 141개)
 import { openCopc, loadSubPage, decodeNode } from '../src/copc-core';
 
-const url = process.argv[2] ?? 'https://s3.amazonaws.com/data.entwine.io/millsite.copc.laz';
+const url = process.argv[2] ?? 'https://s3.amazonaws.com/hobu-lidar/millsite.copc.laz';
 const s = await openCopc(url);
 const rootNodes = Object.keys(s.nodes).length;
 const pageKeys = Object.keys(s.pages);
