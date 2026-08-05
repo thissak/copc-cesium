@@ -97,3 +97,11 @@
 
 ### 잔여 이슈
 - 사용자 정의 고주파 투영은 유한 경계 샘플링으로 수학적 완전 보증하지 않음. proj4 실용 투영은 부드러운 변환이므로 현재 8구간을 출하 값으로 채택.
+
+### PR #28 Dual Review 보강
+
+- 1차 Blue 리뷰에서 `zUnit` 의미 분리 후 기존 snap metric이 수평 단위 대신 수직 단위를
+  계속 사용한 회귀를 확인했다. `horizontalUnit`을 세션 계약에 추가하고 Z 차분 정규화 및
+  거리 환산을 분리했다.
+- geographic compound WKT 수평 추출과 proj string `+vunits`도 추가했다.
+- 혼합단위 픽스처는 3ft 수평 후보와 1m 수직 후보의 올바른 argmin 및 미터 거리를 고정한다.

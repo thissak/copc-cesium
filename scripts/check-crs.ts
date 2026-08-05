@@ -1,6 +1,6 @@
 // CRS 해소·가드 단위 테스트 (헤드리스, Node).
 // 실행: npx tsx scripts/check-crs.ts
-import { resolveCrs, checkCenterInRange, horizontalSpanMeters } from '../src/copc-core';
+import { resolveCrs, checkCenterInRange, horizontalSpanMeters, sourceMetricSquared } from '../src/copc-core';
 import { buildTileset } from '../src/tileset';
 import type { CopcSession } from '../src/copc-core';
 
@@ -27,6 +27,10 @@ const MIXED_UNITS_WKT = `COMPD_CS["UTM feet + metric height",
     PARAMETER["false_easting",1640416.6667],PARAMETER["false_northing",0],
     UNIT["US survey foot",0.3048006096012192]],
   VERT_CS["Ellipsoidal height",VERT_DATUM["Ellipsoid",2002],UNIT["metre",1],AXIS["Up",UP]]]`;
+const GEOGRAPHIC_COMPOUND_WKT = `COMPD_CS["NAD83 + NAVD88",
+  GEOGCS["NAD83",DATUM["North_American_Datum_1983",SPHEROID["GRS 1980",6378137,298.257222101]],
+    PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]],
+  VERT_CS["NAVD88 height",VERT_DATUM["NAVD88",2005],UNIT["metre",1],AXIS["Up",UP]]]`;
 
 // --- resolveCrs ---
 // no-CRS → throw (silent 지구밖 방지)
@@ -42,8 +46,28 @@ throws(() => resolveCrs(undefined), 'no WKT + no opts → throw');
 
 // compound CRS의 수직 단위는 수평 PROJCS 단위와 독립적이다.
 {
-  const { zUnit } = resolveCrs(MIXED_UNITS_WKT, {});
+  const { horizontalUnit, zUnit } = resolveCrs(MIXED_UNITS_WKT, {});
+  ok(Math.abs(horizontalUnit - 0.3048006096012192) < 1e-12, `mixed units: horizontal foot preserved (${horizontalUnit})`);
   ok(Math.abs(zUnit - 1) < 1e-12, `mixed units: vertical metre preserved (zUnit=${zUnit})`);
+  const horizontalCandidate = sourceMetricSquared(3, 0, 0, horizontalUnit, zUnit);
+  const verticalCandidate = sourceMetricSquared(0, 0, 1, horizontalUnit, zUnit);
+  ok(horizontalCandidate < verticalCandidate,
+    'mixed units: snap chooses 3ft horizontal over 1m vertical distance');
+  const metric = Math.sqrt(sourceMetricSquared(3, 0, 1, horizontalUnit, zUnit)) * horizontalUnit;
+  ok(Math.abs(metric - Math.hypot(3 * horizontalUnit, 1)) < 1e-12,
+    'mixed units: snap distance remains isotropic in metres');
+}
+
+{
+  const { toWgs, zUnit } = resolveCrs(GEOGRAPHIC_COMPOUND_WKT, {});
+  const [lon, lat] = toWgs.forward([-123, 44]);
+  ok(Math.abs(lon + 123) < 1e-9 && Math.abs(lat - 44) < 1e-9 && zUnit === 1,
+    'geographic compound CRS extracts horizontal GEOGCS');
+}
+
+{
+  const { zUnit } = resolveCrs(undefined, { crs: '+proj=utm +zone=10 +datum=WGS84 +units=m +vunits=ft' });
+  ok(Math.abs(zUnit - 0.3048) < 1e-12, `proj string vertical units preserved (${zUnit})`);
 }
 
 // crs(force) 가 header 를 덮는다 — 같은 입력좌표가 다른 zone 으로 다른 lon
@@ -93,6 +117,7 @@ function fakeSession(toWgs: { forward: (xy: number[]) => number[] }, cube: numbe
     pageLoads: new Map(),
     toWgs,
     zUnit,
+    horizontalUnit: 1,
     cube,
     spacing: 1,
     horizontalSpanM: horizontalSpanMeters(toWgs, cube),

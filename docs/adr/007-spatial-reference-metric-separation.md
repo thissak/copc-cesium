@@ -31,3 +31,11 @@ COPC의 수평 CRS는 미터·피트·각도 단위를 쓸 수 있고 compound C
 - **(−)** 세션 open 시 root 경계 측정, tileset JSON 생성 시 tile당 고정 샘플링 비용이 추가된다.
 - **(−)** 경계 샘플링은 유한 표본이므로 임의의 고주파 사용자 정의 투영을 수학적으로
   완전 보증하지는 않지만, proj4가 지원하는 실용 투영의 부드러운 변형에 비례적인 안전장치다.
+
+## Dual Review 보강 (PR #28)
+
+- 세션은 `horizontalUnit`과 `zUnit`을 별도로 보존한다. 스냅 최근접 비교는 Z 차분을
+  `zUnit / horizontalUnit`으로 수평 source 단위계에 정규화하고 최종 거리는
+  `horizontalUnit`으로 미터 환산한다. 수평 피트·수직 미터에서도 argmin과 `distanceM`이 등방이다.
+- compound CRS의 수평 부분은 projected뿐 아니라 geographic WKT도 추출한다.
+- proj string override의 `+vunits`/`+vto_meter`도 수직 단위 계약에 포함한다.

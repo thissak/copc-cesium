@@ -159,18 +159,24 @@ function lastLinearUnit(def: string): number | undefined {
 }
 
 function projStringUnit(def: string): number | undefined {
-  const units = /(?:^|\s)\+units=([^\s]+)/.exec(def)?.[1];
+  return namedProjStringUnit(def, 'units', 'to_meter');
+}
+
+function namedProjStringUnit(def: string, unitsKey: string, factorKey: string): number | undefined {
+  const units = new RegExp(`(?:^|\\s)\\+${unitsKey}=([^\\s]+)`).exec(def)?.[1];
   if (units === 'm') return 1;
   if (units === 'ft') return 0.3048;
   if (units === 'us-ft') return 1200 / 3937;
-  const toMeter = /(?:^|\s)\+to_meter=([0-9.eE+-]+)/.exec(def)?.[1];
+  const toMeter = new RegExp(`(?:^|\\s)\\+${factorKey}=([0-9.eE+-]+)`).exec(def)?.[1];
   return toMeter ? Number(toMeter) : undefined;
 }
 
 export function extractHorizontalCrs(wkt: string): { proj: string; linearUnit: number } {
   let proj = wkt;
   const projected = extractBracketed(wkt, ['PROJCS', 'PROJCRS']);
-  if (projected && /^(?:COMPD_CS|COMPOUNDCRS)\[/.test(wkt)) proj = projected;
+  const geographic = extractBracketed(wkt, ['GEOGCS', 'GEOGCRS', 'GEOGRAPHICCRS']);
+  const horizontal = projected ?? geographic;
+  if (horizontal && /^(?:COMPD_CS|COMPOUNDCRS)\[/.test(wkt)) proj = horizontal;
   const linearUnit = (projected ? lastLinearUnit(projected) : projStringUnit(proj)) ?? 1;
   return { proj, linearUnit };
 }
@@ -178,7 +184,8 @@ export function extractHorizontalCrs(wkt: string): { proj: string; linearUnit: n
 /** Compound CRS의 수직 CRS 단위를 우선하고, 없으면 수평 선형단위를 폴백한다. */
 export function extractVerticalUnit(wkt: string, horizontalUnit: number): number {
   const vertical = extractBracketed(wkt, ['VERT_CS', 'VERTCRS', 'VERTICALCRS']);
-  return (vertical ? lastLinearUnit(vertical) : undefined) ?? horizontalUnit;
+  return (vertical ? lastLinearUnit(vertical) : undefined) ??
+    namedProjStringUnit(wkt, 'vunits', 'vto_meter') ?? horizontalUnit;
 }
 
 export type CrsOpts = { crs?: string; defaultCrs?: string };
@@ -190,7 +197,7 @@ export type CrsOpts = { crs?: string; defaultCrs?: string };
  * 높이(Z)는 선형단위만 보정한 ellipsoidal(HAE)로 취급 — geoid/정사고(orthometric) 보정 안 함
  * (web-viewer 업계 norm: Potree·giro3d·py3dtiles 동일). orthometric 입력은 수십 m 수직 오프셋 가능.
  */
-export function resolveCrs(wkt: string | undefined, opts: CrsOpts = {}): { toWgs: Reproj; zUnit: number } {
+export function resolveCrs(wkt: string | undefined, opts: CrsOpts = {}): { toWgs: Reproj; horizontalUnit: number; zUnit: number } {
   const def = opts.crs ?? wkt ?? opts.defaultCrs;
   if (!def) {
     throw new Error(
@@ -209,7 +216,7 @@ export function resolveCrs(wkt: string | undefined, opts: CrsOpts = {}): { toWgs
         `via the \`crs\` option. (${(e as Error).message})`,
     );
   }
-  return { toWgs, zUnit: extractVerticalUnit(def, horiz.linearUnit) };
+  return { toWgs, horizontalUnit: horiz.linearUnit, zUnit: extractVerticalUnit(def, horiz.linearUnit) };
 }
 
 /**
@@ -333,6 +340,8 @@ export interface CopcSession {
   /** reproject 가속기 (이슈 #17: 격자 bilinear, proj4 폴백). toWgs 있을 때만 설정. */
   reproj?: GridReproj;
   zUnit: number;
+  /** 투영 source X/Y 선형단위의 미터 환산값. */
+  horizontalUnit: number;
   cube: number[]; // [minx,miny,minz,maxx,maxy,maxz] (root, 큐브)
   spacing: number;
   /** root 수평 extent의 WGS84 경계 실측 미터 폭. 3D Tiles geometricError 단위용. */
@@ -381,7 +390,7 @@ export async function openCopc(url: string, opts?: { coalesce?: CoalesceOpts } &
   const base = httpGetterWithRetry(url);
   const copc = await Copc.create(base); // 헤더는 base 로(비-노드)
   const { nodes, pages } = await Copc.loadHierarchyPage(base, copc.info.rootHierarchyPage); // 루트 hierarchy 도 base
-  const { toWgs, zUnit } = resolveCrs(copc.wkt, { crs: opts?.crs, defaultCrs: opts?.defaultCrs });
+  const { toWgs, horizontalUnit, zUnit } = resolveCrs(copc.wkt, { crs: opts?.crs, defaultCrs: opts?.defaultCrs });
   checkCenterInRange(toWgs, copc.info.cube);
   const session: CopcSession = {
     copc,
@@ -392,6 +401,7 @@ export async function openCopc(url: string, opts?: { coalesce?: CoalesceOpts } &
     toWgs,
     reproj: makeGridReprojector(toWgs, copc.header.min, copc.header.max),
     zUnit,
+    horizontalUnit,
     cube: copc.info.cube,
     spacing: copc.info.spacing,
     horizontalSpanM: horizontalSpanMeters(toWgs, copc.info.cube),
@@ -474,11 +484,23 @@ export interface NearestHit {
   attributes: Record<string, number>;
 }
 
+/** source 축 차분을 수평 source 단위계의 등방 거리 제곱으로 정규화한다. */
+export function sourceMetricSquared(
+  dx: number,
+  dy: number,
+  dz: number,
+  horizontalUnit: number,
+  zUnit: number,
+): number {
+  const normalizedZ = dz * (zUnit / horizontalUnit);
+  return dx * dx + dy * dy + normalizedZ * normalizedZ;
+}
+
 /**
  * 노드(key) 안에서 씨앗(source sx,sy,sz)에 3D 최근접인 실제 점을 찾아 정확 좌표+속성 반환 (이슈 #3-B).
  * 비교는 source 공간(전체 reproject 안 함), 승자 1점만 reproject. hideClass 점은 스킵(렌더와 일관).
- * X·Y·Z 모두 동일 source 선형단위(zUnit)이므로 raw 차분으로 *등방* 비교(어느 축에도 zUnit 미적용 — 비-미터
- * CRS(예: 피트)서 수평/수직 가중이 어긋나 오답 선택하던 버그 방지, PR#21 dual-review), 거리만 zUnit 으로 미터 환산.
+ * 비교 단위는 source 수평단위다. Z 차분은 zUnit/horizontalUnit으로 정규화해 수평·수직 단위가
+ * 다른 compound CRS에서도 등방 미터 거리를 유지하고, 최종 거리는 horizontalUnit으로 미터 환산한다.
  * (투영 CRS 가정: 지리좌표계(수평 도°, 수직 m)면 단위가 달라 비등방 — 거의 모든 COPC 가 투영이라 현 스코프 밖.)
  * 노드 없음/0점/전부 스킵 → null.
  */
@@ -507,15 +529,15 @@ export async function nearestPointInNode(
     if (gc && hideClass!.has(gc(i) | 0)) continue;
     const dx = gx(i) - sx;
     const dy = gy(i) - sy;
-    const dz = gz(i) - sz; // 등방: X·Y 와 동일 source 단위(zUnit 미적용)
-    const d2 = dx * dx + dy * dy + dz * dz;
+    const dz = gz(i) - sz;
+    const d2 = sourceMetricSquared(dx, dy, dz, s.horizontalUnit, s.zUnit);
     if (d2 < bestD2) { bestD2 = d2; best = i; }
   }
   if (best < 0) return null;
   const o = s.reproj ? s.reproj.forward(gx(best), gy(best)) : [gx(best), gy(best)];
   const attributes: Record<string, number> = {};
   if (attrs) for (const spec of attrs) attributes[spec.batchName] = view.getter(spec.lasName)(best);
-  return { lon: o[0], lat: o[1], height: gz(best) * s.zUnit, dist: Math.sqrt(bestD2) * s.zUnit, attributes };
+  return { lon: o[0], lat: o[1], height: gz(best) * s.zUnit, dist: Math.sqrt(bestD2) * s.horizontalUnit, attributes };
 }
 
 /**

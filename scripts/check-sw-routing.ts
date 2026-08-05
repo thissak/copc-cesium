@@ -3,6 +3,7 @@ import vm from 'node:vm';
 
 let fetchHandler: ((event: { request: Request; clientId: string; respondWith(p: Promise<Response>): void }) => void) | undefined;
 let posted = 0;
+let resolvedClient: typeof realClient | undefined;
 let lastChannel: { port1: { onmessage?: (event: { data: unknown }) => void }; port2: object } | undefined;
 
 class FakeMessageChannel {
@@ -11,7 +12,7 @@ class FakeMessageChannel {
   constructor() { lastChannel = this; }
 }
 
-const fallbackClient = {
+const realClient = {
   postMessage() {
     posted++;
     lastChannel?.port1.onmessage?.({ data: { empty: true } });
@@ -34,8 +35,8 @@ const context = {
     skipWaiting() {},
     clients: {
       claim: async () => {},
-      get: async () => undefined,
-      matchAll: async () => [fallbackClient],
+      get: async (id: string) => id === 'c1' ? resolvedClient : undefined,
+      matchAll: async () => [realClient],
     },
     addEventListener(type: string, handler: unknown) {
       if (type === 'fetch') fetchHandler = handler as typeof fetchHandler;
@@ -54,7 +55,17 @@ fetchHandler({
 });
 
 const response = await responsePromise!;
-const pass = response.status === 503 && posted === 0;
-console.log(`status=${response.status} fallbackPosts=${posted}`);
+const missingPass = response.status === 503 && posted === 0;
+
+resolvedClient = realClient;
+responsePromise = undefined;
+fetchHandler({
+  request: new Request('https://example.test/__copc-real/s1/0-0-0-0.pnts'),
+  clientId: 'c1',
+  respondWith(p) { responsePromise = p; },
+});
+const routedResponse = await responsePromise!;
+const pass = missingPass && routedResponse.status === 404 && posted === 1;
+console.log(`missingStatus=${response.status} routedStatus=${routedResponse.status} posts=${posted}`);
 console.log(pass ? 'SW ROUTING PASS' : 'SW ROUTING FAIL');
 process.exit(pass ? 0 : 1);

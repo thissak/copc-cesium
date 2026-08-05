@@ -3,6 +3,7 @@
 날짜별 변경 내역 + 결정 사유. 최신이 위.
 
 ### 2026-08-06
+- [fix] **[PR #28 dual-review R1] 혼합단위 snap metric 회귀 및 geographic compound CRS 보강.** `horizontalUnit`/`zUnit`을 세션에 함께 보존하고 Z 차분을 수평 단위계로 정규화해 수평 피트·수직 미터에서도 argmin·`distanceM`을 등방 미터로 유지. compound `GEOGCS`와 proj string `+vunits` 파싱, SW 정상 client 양성 테스트, AGENTS 홈 상대경로를 추가. Blue CRITICAL 1·WARNING 2·MINOR 2 대응, CRS·SW·snap·tsc PASS. ([ADR-007](adr/007-spatial-reference-metric-separation.md) 보강)
 - [fix] **[#27] Cesium 최소 호환 버전과 CI 출하 계약 정합화.** npm 배포본 1.120~1.142 대조에서 private empty-tile codec이 1.142부터 존재함을 확인해 peer를 `>=1.142`로 수정. 설치 소스+peer 오프라인 가드와 public type·throttle·SW 검사를 `npm test`에 연결(5→9), CI는 unit 9+integration 9 전체 실행. codec RED→GREEN, unit 9/9·integration 9/9·build·lib·docs strict·pack dry-run PASS. ([ADR-008](adr/008-cesium-compatibility-contract.md))
 - [fix] **[#26] hierarchy 서브페이지 동시 로드를 세션 단위 single-flight로 통합.** 같은 key의 진행 중 Promise를 공유해 렌더·스냅 경합 시 동일 range read를 2회→1회로 줄이고, 실패 시 registry만 비워 pointer 기반 재시도를 보존. `check:paging` RED→GREEN, `tsc`·`build:lib` PASS. ([ADR-003](adr/003-hierarchy-subpage-paging.md) 보강)
 - [fix] **[#25] Service Worker의 `clientId` 부재 시 임의 탭 라우팅 제거.** `clients.matchAll()[0]`으로 다른 탭을 선택해 로컬 sid 충돌 시 잘못된 COPC를 반환할 수 있던 경로를 차단. 정확한 request client가 없으면 postMessage 0회+503 fail-loud. SW VM RED(`404/posts=1`)→GREEN(`503/posts=0`), `tsc`·`build:lib` PASS. ([ADR-002](adr/002-service-worker-tile-interception.md) 보강)
