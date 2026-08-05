@@ -89,3 +89,4 @@
 
 - 부정 경로(clientId 없음→503)뿐 아니라 정상 clientId가 정확한 클라이언트에 1회 전달되고
   empty 응답 404로 이어지는 양성 경로도 VM 회귀 테스트에 추가했다.
+- 2차 리뷰 후 `clientId`는 있으나 client가 만료된 경로도 503·postMessage 0회로 고정했다.

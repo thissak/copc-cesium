@@ -39,3 +39,5 @@ COPC의 수평 CRS는 미터·피트·각도 단위를 쓸 수 있고 compound C
   `horizontalUnit`으로 미터 환산한다. 수평 피트·수직 미터에서도 argmin과 `distanceM`이 등방이다.
 - compound CRS의 수평 부분은 projected뿐 아니라 geographic WKT도 추출한다.
 - proj string override의 `+vunits`/`+vto_meter`도 수직 단위 계약에 포함한다.
+- 2차 리뷰에서 geographic source X/Y가 각도임을 별도 표시하고, 스냅 후보를 WGS84 ECEF
+  미터 공간에서 비교하도록 보강했다. projected 경로는 빠른 source metric을 유지한다.

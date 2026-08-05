@@ -171,14 +171,15 @@ function namedProjStringUnit(def: string, unitsKey: string, factorKey: string): 
   return toMeter ? Number(toMeter) : undefined;
 }
 
-export function extractHorizontalCrs(wkt: string): { proj: string; linearUnit: number } {
+export function extractHorizontalCrs(wkt: string): { proj: string; linearUnit: number; isAngular: boolean } {
   let proj = wkt;
   const projected = extractBracketed(wkt, ['PROJCS', 'PROJCRS']);
   const geographic = extractBracketed(wkt, ['GEOGCS', 'GEOGCRS', 'GEOGRAPHICCRS']);
   const horizontal = projected ?? geographic;
   if (horizontal && /^(?:COMPD_CS|COMPOUNDCRS)\[/.test(wkt)) proj = horizontal;
   const linearUnit = (projected ? lastLinearUnit(projected) : projStringUnit(proj)) ?? 1;
-  return { proj, linearUnit };
+  const isAngular = !projected && (!!geographic || /(?:^|\s)\+proj=(?:longlat|latlong)(?:\s|$)/.test(proj));
+  return { proj, linearUnit, isAngular };
 }
 
 /** Compound CRS의 수직 CRS 단위를 우선하고, 없으면 수평 선형단위를 폴백한다. */
@@ -197,7 +198,12 @@ export type CrsOpts = { crs?: string; defaultCrs?: string };
  * 높이(Z)는 선형단위만 보정한 ellipsoidal(HAE)로 취급 — geoid/정사고(orthometric) 보정 안 함
  * (web-viewer 업계 norm: Potree·giro3d·py3dtiles 동일). orthometric 입력은 수십 m 수직 오프셋 가능.
  */
-export function resolveCrs(wkt: string | undefined, opts: CrsOpts = {}): { toWgs: Reproj; horizontalUnit: number; zUnit: number } {
+export function resolveCrs(wkt: string | undefined, opts: CrsOpts = {}): {
+  toWgs: Reproj;
+  horizontalUnit: number;
+  horizontalIsAngular: boolean;
+  zUnit: number;
+} {
   const def = opts.crs ?? wkt ?? opts.defaultCrs;
   if (!def) {
     throw new Error(
@@ -216,7 +222,12 @@ export function resolveCrs(wkt: string | undefined, opts: CrsOpts = {}): { toWgs
         `via the \`crs\` option. (${(e as Error).message})`,
     );
   }
-  return { toWgs, horizontalUnit: horiz.linearUnit, zUnit: extractVerticalUnit(def, horiz.linearUnit) };
+  return {
+    toWgs,
+    horizontalUnit: horiz.linearUnit,
+    horizontalIsAngular: horiz.isAngular,
+    zUnit: extractVerticalUnit(def, horiz.linearUnit),
+  };
 }
 
 /**
@@ -342,6 +353,8 @@ export interface CopcSession {
   zUnit: number;
   /** 투영 source X/Y 선형단위의 미터 환산값. */
   horizontalUnit: number;
+  /** source X/Y가 선형 투영 단위가 아니라 경도·위도 각도인지 여부. */
+  horizontalIsAngular: boolean;
   cube: number[]; // [minx,miny,minz,maxx,maxy,maxz] (root, 큐브)
   spacing: number;
   /** root 수평 extent의 WGS84 경계 실측 미터 폭. 3D Tiles geometricError 단위용. */
@@ -352,13 +365,17 @@ const GEO_A = 6378137;
 const GEO_F = 1 / 298.257223563;
 const GEO_E2 = GEO_F * (2 - GEO_F);
 
-function surfaceEcef(lonDeg: number, latDeg: number): [number, number, number] {
+function surfaceEcef(lonDeg: number, latDeg: number, heightM = 0): [number, number, number] {
   const lon = lonDeg * Math.PI / 180;
   const lat = latDeg * Math.PI / 180;
   const sinLat = Math.sin(lat);
   const cosLat = Math.cos(lat);
   const n = GEO_A / Math.sqrt(1 - GEO_E2 * sinLat * sinLat);
-  return [n * cosLat * Math.cos(lon), n * cosLat * Math.sin(lon), n * (1 - GEO_E2) * sinLat];
+  return [
+    (n + heightM) * cosLat * Math.cos(lon),
+    (n + heightM) * cosLat * Math.sin(lon),
+    (n * (1 - GEO_E2) + heightM) * sinLat,
+  ];
 }
 
 /** source XY extent의 경계를 WGS84로 변환해 최대 수평 chord 길이(미터)를 구한다. */
@@ -390,7 +407,10 @@ export async function openCopc(url: string, opts?: { coalesce?: CoalesceOpts } &
   const base = httpGetterWithRetry(url);
   const copc = await Copc.create(base); // 헤더는 base 로(비-노드)
   const { nodes, pages } = await Copc.loadHierarchyPage(base, copc.info.rootHierarchyPage); // 루트 hierarchy 도 base
-  const { toWgs, horizontalUnit, zUnit } = resolveCrs(copc.wkt, { crs: opts?.crs, defaultCrs: opts?.defaultCrs });
+  const { toWgs, horizontalUnit, horizontalIsAngular, zUnit } = resolveCrs(
+    copc.wkt,
+    { crs: opts?.crs, defaultCrs: opts?.defaultCrs },
+  );
   checkCenterInRange(toWgs, copc.info.cube);
   const session: CopcSession = {
     copc,
@@ -402,6 +422,7 @@ export async function openCopc(url: string, opts?: { coalesce?: CoalesceOpts } &
     reproj: makeGridReprojector(toWgs, copc.header.min, copc.header.max),
     zUnit,
     horizontalUnit,
+    horizontalIsAngular,
     cube: copc.info.cube,
     spacing: copc.info.spacing,
     horizontalSpanM: horizontalSpanMeters(toWgs, copc.info.cube),
@@ -496,11 +517,43 @@ export function sourceMetricSquared(
   return dx * dx + dy * dy + normalizedZ * normalizedZ;
 }
 
+/** projected source 축 차분의 실제 미터 거리 제곱. */
+export function sourceMetricMetersSquared(
+  dx: number,
+  dy: number,
+  dz: number,
+  horizontalUnit: number,
+  zUnit: number,
+): number {
+  return sourceMetricSquared(dx, dy, dz, horizontalUnit, zUnit) * horizontalUnit * horizontalUnit;
+}
+
+/** geographic source 좌표 두 점의 WGS84 ECEF 실제 미터 거리 제곱. */
+export function geographicMetricMetersSquared(
+  toWgs: Reproj,
+  a: [number, number, number],
+  b: [number, number, number],
+  zUnit: number,
+): number {
+  const ae = geographicSourceEcef(toWgs, a, zUnit);
+  const be = geographicSourceEcef(toWgs, b, zUnit);
+  return (be[0] - ae[0]) ** 2 + (be[1] - ae[1]) ** 2 + (be[2] - ae[2]) ** 2;
+}
+
+function geographicSourceEcef(
+  toWgs: Reproj,
+  point: [number, number, number],
+  zUnit: number,
+): [number, number, number] {
+  const ll = toWgs.forward([point[0], point[1]]);
+  return surfaceEcef(ll[0], ll[1], point[2] * zUnit);
+}
+
 /**
  * 노드(key) 안에서 씨앗(source sx,sy,sz)에 3D 최근접인 실제 점을 찾아 정확 좌표+속성 반환 (이슈 #3-B).
  * 비교는 source 공간(전체 reproject 안 함), 승자 1점만 reproject. hideClass 점은 스킵(렌더와 일관).
- * 비교 단위는 source 수평단위다. Z 차분은 zUnit/horizontalUnit으로 정규화해 수평·수직 단위가
- * 다른 compound CRS에서도 등방 미터 거리를 유지하고, 최종 거리는 horizontalUnit으로 미터 환산한다.
+ * projected CRS는 Z 차분을 zUnit/horizontalUnit으로 정규화한 source metric을 사용한다.
+ * geographic CRS는 각도에 상수 선형 환산을 적용할 수 없으므로 후보를 WGS84 ECEF로 변환해 비교한다.
  * (투영 CRS 가정: 지리좌표계(수평 도°, 수직 m)면 단위가 달라 비등방 — 거의 모든 COPC 가 투영이라 현 스코프 밖.)
  * 노드 없음/0점/전부 스킵 → null.
  */
@@ -525,19 +578,29 @@ export async function nearestPointInNode(
   const gc = hideClass?.size && 'Classification' in view.dimensions ? view.getter('Classification') : null;
   let best = -1;
   let bestD2 = Infinity;
+  const angularSeed = s.horizontalIsAngular
+    ? geographicSourceEcef(s.toWgs!, [sx, sy, sz], s.zUnit)
+    : undefined;
   for (let i = 0; i < n; i++) {
     if (gc && hideClass!.has(gc(i) | 0)) continue;
     const dx = gx(i) - sx;
     const dy = gy(i) - sy;
     const dz = gz(i) - sz;
-    const d2 = sourceMetricSquared(dx, dy, dz, s.horizontalUnit, s.zUnit);
+    let d2: number;
+    if (angularSeed) {
+      const candidate = geographicSourceEcef(s.toWgs!, [gx(i), gy(i), gz(i)], s.zUnit);
+      d2 = (candidate[0] - angularSeed[0]) ** 2 + (candidate[1] - angularSeed[1]) ** 2 +
+        (candidate[2] - angularSeed[2]) ** 2;
+    } else {
+      d2 = sourceMetricMetersSquared(dx, dy, dz, s.horizontalUnit, s.zUnit);
+    }
     if (d2 < bestD2) { bestD2 = d2; best = i; }
   }
   if (best < 0) return null;
   const o = s.reproj ? s.reproj.forward(gx(best), gy(best)) : [gx(best), gy(best)];
   const attributes: Record<string, number> = {};
   if (attrs) for (const spec of attrs) attributes[spec.batchName] = view.getter(spec.lasName)(best);
-  return { lon: o[0], lat: o[1], height: gz(best) * s.zUnit, dist: Math.sqrt(bestD2) * s.horizontalUnit, attributes };
+  return { lon: o[0], lat: o[1], height: gz(best) * s.zUnit, dist: Math.sqrt(bestD2), attributes };
 }
 
 /**

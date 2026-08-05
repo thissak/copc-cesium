@@ -1,6 +1,12 @@
 // CRS 해소·가드 단위 테스트 (헤드리스, Node).
 // 실행: npx tsx scripts/check-crs.ts
-import { resolveCrs, checkCenterInRange, horizontalSpanMeters, sourceMetricSquared } from '../src/copc-core';
+import {
+  resolveCrs,
+  checkCenterInRange,
+  geographicMetricMetersSquared,
+  horizontalSpanMeters,
+  sourceMetricMetersSquared,
+} from '../src/copc-core';
 import { buildTileset } from '../src/tileset';
 import type { CopcSession } from '../src/copc-core';
 
@@ -49,20 +55,24 @@ throws(() => resolveCrs(undefined), 'no WKT + no opts → throw');
   const { horizontalUnit, zUnit } = resolveCrs(MIXED_UNITS_WKT, {});
   ok(Math.abs(horizontalUnit - 0.3048006096012192) < 1e-12, `mixed units: horizontal foot preserved (${horizontalUnit})`);
   ok(Math.abs(zUnit - 1) < 1e-12, `mixed units: vertical metre preserved (zUnit=${zUnit})`);
-  const horizontalCandidate = sourceMetricSquared(3, 0, 0, horizontalUnit, zUnit);
-  const verticalCandidate = sourceMetricSquared(0, 0, 1, horizontalUnit, zUnit);
+  const horizontalCandidate = sourceMetricMetersSquared(3, 0, 0, horizontalUnit, zUnit);
+  const verticalCandidate = sourceMetricMetersSquared(0, 0, 1, horizontalUnit, zUnit);
   ok(horizontalCandidate < verticalCandidate,
     'mixed units: snap chooses 3ft horizontal over 1m vertical distance');
-  const metric = Math.sqrt(sourceMetricSquared(3, 0, 1, horizontalUnit, zUnit)) * horizontalUnit;
+  const metric = Math.sqrt(sourceMetricMetersSquared(3, 0, 1, horizontalUnit, zUnit));
   ok(Math.abs(metric - Math.hypot(3 * horizontalUnit, 1)) < 1e-12,
     'mixed units: snap distance remains isotropic in metres');
 }
 
 {
-  const { toWgs, zUnit } = resolveCrs(GEOGRAPHIC_COMPOUND_WKT, {});
+  const { toWgs, horizontalIsAngular, zUnit } = resolveCrs(GEOGRAPHIC_COMPOUND_WKT, {});
   const [lon, lat] = toWgs.forward([-123, 44]);
-  ok(Math.abs(lon + 123) < 1e-9 && Math.abs(lat - 44) < 1e-9 && zUnit === 1,
+  ok(Math.abs(lon + 123) < 1e-9 && Math.abs(lat - 44) < 1e-9 && horizontalIsAngular && zUnit === 1,
     'geographic compound CRS extracts horizontal GEOGCS');
+  const horizontal80m = geographicMetricMetersSquared(toWgs, [-123, 44, 0], [-122.999, 44, 0], zUnit);
+  const vertical1m = geographicMetricMetersSquared(toWgs, [-123, 44, 0], [-123, 44, 1], zUnit);
+  ok(vertical1m < horizontal80m && Math.abs(Math.sqrt(vertical1m) - 1) < 1e-6,
+    'geographic snap chooses 1m vertical over 0.001° horizontal distance');
 }
 
 {
@@ -118,6 +128,7 @@ function fakeSession(toWgs: { forward: (xy: number[]) => number[] }, cube: numbe
     toWgs,
     zUnit,
     horizontalUnit: 1,
+    horizontalIsAngular: false,
     cube,
     spacing: 1,
     horizontalSpanM: horizontalSpanMeters(toWgs, cube),

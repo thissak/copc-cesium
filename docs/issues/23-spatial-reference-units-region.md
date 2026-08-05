@@ -105,3 +105,6 @@
   거리 환산을 분리했다.
 - geographic compound WKT 수평 추출과 proj string `+vunits`도 추가했다.
 - 혼합단위 픽스처는 3ft 수평 후보와 1m 수직 후보의 올바른 argmin 및 미터 거리를 고정한다.
+- 2차 Red·Blue 교차검증에서 geographic degree를 1m로 오인하는 경로를 확인해
+  `horizontalIsAngular` 분기와 WGS84 ECEF 스냅 metric을 추가했다. 0.001° 수평 후보보다
+  1m 수직 후보를 선택하고 거리를 1m로 반환하는 회귀 계약으로 고정했다.

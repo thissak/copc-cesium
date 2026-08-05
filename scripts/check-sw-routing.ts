@@ -57,6 +57,15 @@ fetchHandler({
 const response = await responsePromise!;
 const missingPass = response.status === 503 && posted === 0;
 
+responsePromise = undefined;
+fetchHandler({
+  request: new Request('https://example.test/__copc-real/s1/0-0-0-0.pnts'),
+  clientId: 'c-gone',
+  respondWith(p) { responsePromise = p; },
+});
+const expiredResponse = await responsePromise!;
+const expiredPass = expiredResponse.status === 503 && posted === 0;
+
 resolvedClient = realClient;
 responsePromise = undefined;
 fetchHandler({
@@ -65,7 +74,7 @@ fetchHandler({
   respondWith(p) { responsePromise = p; },
 });
 const routedResponse = await responsePromise!;
-const pass = missingPass && routedResponse.status === 404 && posted === 1;
-console.log(`missingStatus=${response.status} routedStatus=${routedResponse.status} posts=${posted}`);
+const pass = missingPass && expiredPass && routedResponse.status === 404 && posted === 1;
+console.log(`missingStatus=${response.status} expiredStatus=${expiredResponse.status} routedStatus=${routedResponse.status} posts=${posted}`);
 console.log(pass ? 'SW ROUTING PASS' : 'SW ROUTING FAIL');
 process.exit(pass ? 0 : 1);
