@@ -71,7 +71,7 @@ throws(() => resolveCrs(undefined), 'no WKT + no opts → throw');
   const [lon, lat] = toWgs.forward([-123, 44]);
   ok(Math.abs(lon + 123) < 1e-9 && Math.abs(lat - 44) < 1e-9 && horizontalIsAngular && zUnit === 1,
     'geographic compound CRS extracts horizontal GEOGCS');
-  const geographicSession = fakeSession(toWgs, [-223, -56, 0, -23, 144, 200], zUnit, true, {
+  const geographicSession = fakeSession(toWgs, [-123.005, 44.05, 0, 76.995, 244.05, 200], zUnit, true, {
     min: [-123.005, 44.05, 0], max: [-122.995, 44.06, 200],
   });
   const sessionHorizontal = sessionMetricMetersSquared(geographicSession, [-123, 44, 0], [-122.999, 44, 0]);
@@ -88,6 +88,10 @@ throws(() => resolveCrs(undefined), 'no WKT + no opts → throw');
   const region = json.root.boundingVolume.region;
   ok(region[1] >= 44.049 * Math.PI / 180 && region[3] <= 44.061 * Math.PI / 180,
     'geographic cube XY is clamped to real header bounds');
+  let centerThrew = false;
+  try { checkCenterInRange(toWgs, [...geographicSession.copc.header.min, ...geographicSession.copc.header.max]); }
+  catch { centerThrew = true; }
+  ok(!centerThrew, 'geographic center guard uses real header bbox, not min-anchored cube');
 }
 
 for (const alias of ['EPSG:4326', 'WGS84']) {
@@ -158,7 +162,10 @@ function fakeSession(
     horizontalIsAngular,
     cube,
     spacing: 1,
-    horizontalSpanM: horizontalSpanMeters(toWgs, [...bounds.min, ...bounds.max]),
+    rootSpanM: Math.max(
+      horizontalSpanMeters(toWgs, [...bounds.min, ...bounds.max]),
+      (bounds.max[2] - bounds.min[2]) * zUnit,
+    ),
   };
 }
 
@@ -167,6 +174,17 @@ function fakeSession(
   const s = fakeSession(resolveCrs('+proj=longlat +datum=WGS84 +no_defs').toWgs, [0, 0, 0, 1, 1, 10]);
   const json = buildTileset(s, '/tiles/') as { root: { geometricError: number } };
   ok(json.root.geometricError > 5000, `geographic CRS: geometricError is metric (${json.root.geometricError})`);
+}
+
+// 동일 XY의 수직 스캔도 Z span으로 양수 GE를 유지해 child refinement가 멈추지 않아야 한다.
+{
+  const toWgs = resolveCrs(UTM10N).toWgs;
+  const s = fakeSession(toWgs, [500000, 4878000, 0, 500200, 4878200, 200], 1, false, {
+    min: [500100, 4878100, 0], max: [500100, 4878100, 200],
+  });
+  const json = buildTileset(s, '/tiles/') as { root: { geometricError: number } };
+  ok(Math.abs(json.root.geometricError - 12.5) < 1e-9,
+    `vertical scan: geometricError preserves 200m Z span (${json.root.geometricError})`);
 }
 
 // 대각선 두 점 사이에서 위도 극값을 갖는 비선형 변환: region이 변 중간 극값까지 포함해야 한다.

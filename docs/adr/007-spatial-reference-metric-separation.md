@@ -19,8 +19,8 @@ COPC의 수평 CRS는 미터·피트·각도 단위를 쓸 수 있고 compound C
    해석하고, 수직 CRS가 없을 때만 수평 선형단위를 사용한다.
 2. root 수평 폭은 source 단위를 곱하지 않고, source extent 경계를 WGS84로
    변환한 후 WGS84 ECEF chord 길이로 한 번 측정한다.
-3. `geometricError(d) = horizontalSpanM / 16 / 2^d`로 계산해 ept-tools의
-   `cube side / 16` 관례를 metric 공간에서 유지한다.
+3. `geometricError(d) = rootSpanM / 16 / 2^d`로 계산한다. `rootSpanM`은 header bbox의
+   WGS84 수평 span과 수직 미터 span 중 큰 값으로, geographic 단위 혼합과 수직형 데이터의 refine을 함께 보존한다.
 4. tile region은 source 사각형의 네 변을 등간격 샘플링해 비선형 투영의
    변 중간 극값과 반자오선 경계를 보수적으로 포함한다.
 
@@ -44,7 +44,11 @@ COPC의 수평 CRS는 미터·피트·각도 단위를 쓸 수 있고 compound C
 - 3차 리뷰에서 문자열 모양 대신 proj4가 해소한 `Proj.projName`으로 angular 여부를 판정해
   `EPSG:4326`·`WGS84` 별칭도 같은 ECEF 경로를 사용하도록 고정했다. 후보 변환은 기존
   sub-mm 격자 reprojector를 재사용한다.
-- 4차 리뷰에서 COPC `info.cube`가 center±단일 radius인 규약 때문에 geographic의 Z(m)가
-  X/Y(°)를 팽창시키는 문제를 확인했다. 수평 span은 header bbox를 사용하고 각 node region은
+- 4차 리뷰에서 COPC `info.cube`의 단일 side 때문에 geographic의 Z(m)가 X/Y(°)를
+  팽창시키는 문제를 확인했다. 수평 span은 header bbox를 사용하고 각 node region은
   header XY와 교집합해 실제 점 경계를 보수적으로 포함한다. geographic metric은 씨앗 ECEF를
   루프 밖에서 한 번 계산하는 팩토리로 구성한다.
+- 5차 리뷰에서 실데이터 cube가 header.min 기준 정육면체임을 확인해 CRS sanity center도
+  header bbox로 변경했다. root GE는 수평·수직 metric span의 최대값을 사용해 보어홀·타워처럼
+  수평 폭이 0이거나 작은 데이터에서도 SSE가 0으로 붕괴하지 않는다. 손상 header bbox로 node
+  교집합이 비는 경우에는 원래 node 범위로 폴백한다.

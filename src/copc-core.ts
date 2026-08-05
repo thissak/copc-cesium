@@ -98,10 +98,10 @@ export async function loadCopcPoints(
     .filter((k) => nodes[k])
     .sort((a, b) => Number(a.split('-')[0]) - Number(b.split('-')[0]));
 
-  // 좌표계: resolveCrs(crs>wkt>defaultCrs) → WGS84 변환. cube 중심 sanity 가드.
+  // 좌표계: resolveCrs(crs>wkt>defaultCrs) → WGS84 변환. 실제 point bbox 중심 sanity 가드.
   const wkt = copc.wkt;
   const { toWgs, zUnit } = resolveCrs(wkt, crsOpts);
-  checkCenterInRange(toWgs, copc.info.cube);
+  checkCenterInRange(toWgs, [...copc.header.min, ...copc.header.max]);
   const reproj = makeGridReprojector(toWgs, copc.header.min, copc.header.max); // 이슈 #17
 
   const lonLatH: number[] = [];
@@ -359,8 +359,8 @@ export interface CopcSession {
   horizontalIsAngular: boolean;
   cube: number[]; // [minx,miny,minz,maxx,maxy,maxz] (root, 큐브)
   spacing: number;
-  /** root 수평 extent의 WGS84 경계 실측 미터 폭. 3D Tiles geometricError 단위용. */
-  horizontalSpanM: number;
+  /** root의 수평 WGS84 span과 수직 미터 span 중 큰 값. 3D Tiles geometricError 단위용. */
+  rootSpanM: number;
 }
 
 const GEO_A = 6378137;
@@ -413,7 +413,9 @@ export async function openCopc(url: string, opts?: { coalesce?: CoalesceOpts } &
     copc.wkt,
     { crs: opts?.crs, defaultCrs: opts?.defaultCrs },
   );
-  checkCenterInRange(toWgs, copc.info.cube);
+  checkCenterInRange(toWgs, [...copc.header.min, ...copc.header.max]);
+  const horizontalSpanM = horizontalSpanMeters(toWgs, [...copc.header.min, ...copc.header.max]);
+  const verticalSpanM = (copc.header.max[2] - copc.header.min[2]) * zUnit;
   const session: CopcSession = {
     copc,
     getter: base,
@@ -427,7 +429,7 @@ export async function openCopc(url: string, opts?: { coalesce?: CoalesceOpts } &
     horizontalIsAngular,
     cube: copc.info.cube,
     spacing: copc.info.spacing,
-    horizontalSpanM: horizontalSpanMeters(toWgs, [...copc.header.min, ...copc.header.max]),
+    rootSpanM: Math.max(horizontalSpanM, verticalSpanM),
   };
   // coalesce 켜면 point 읽기를 병합 getter 로(헤더/hierarchy 는 passthrough). 워커 세션만 사용.
   if (opts?.coalesce) {

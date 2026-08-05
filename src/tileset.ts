@@ -2,7 +2,8 @@ import type { CopcSession } from './copc-core';
 
 // COPC 옥트리 → 3D Tiles tileset.json. 노드 1개 = 타일 1개.
 // boundingVolume 은 region([W,S,E,N,minH,maxH] 라디안/미터) — ECEF 변환 불필요(proj4만).
-// geometricError = cube_size/16 / 2^깊이 (미터, ept-tools 관례). content 는 contentBase/{key}.pnts → SW가 가로채 노드 디코드.
+// geometricError = root metric span/16/2^깊이 (수평 WGS84 span·수직 미터 span의 최대).
+// content 는 contentBase/{key}.pnts → SW가 가로채 노드 디코드.
 
 const D2R = Math.PI / 180;
 
@@ -60,10 +61,13 @@ function nodeRegionAndError(s: CopcSession, key: string): { region: number[]; ge
   const boundedMinY = Math.max(minY, s.copc.header.min[1]);
   const boundedMaxX = Math.min(minX + side, s.copc.header.max[0]);
   const boundedMaxY = Math.min(minY + side, s.copc.header.max[1]);
-  if (!(boundedMaxX >= boundedMinX && boundedMaxY >= boundedMinY))
-    throw new Error(`tile ${key} does not intersect COPC header XY bounds`);
+  const intersectsHeader = boundedMaxX >= boundedMinX && boundedMaxY >= boundedMinY;
   const [west, south, east, north] = horizontalRegion(
-    s, boundedMinX, boundedMinY, boundedMaxX, boundedMaxY,
+    s,
+    intersectsHeader ? boundedMinX : minX,
+    intersectsHeader ? boundedMinY : minY,
+    intersectsHeader ? boundedMaxX : minX + side,
+    intersectsHeader ? boundedMaxY : minY + side,
   );
   // 세로(높이)는 큐브가 과하게 크다 → 실제 데이터 Z 범위와 교집합으로 조임 (SSE 정확도↑ → LOD 일관성↑)
   const cubeMinZ = s.cube[2] + z * side;
@@ -71,7 +75,7 @@ function nodeRegionAndError(s: CopcSession, key: string): { region: number[]; ge
   let maxH = Math.min(cubeMinZ + side, s.copc.header.max[2]) * s.zUnit;
   if (maxH <= minH) maxH = minH + 1;
   // --8<-- [start:geomError]
-  const rootGE = s.horizontalSpanM / 16; // 3D Tiles geometricError는 미터. WGS84 변환 경계에서 실측.
+  const rootGE = s.rootSpanM / 16; // 수평·수직 중 큰 실제 미터 span. 수직형 데이터도 refine 보존.
   return { region: [west, south, east, north, minH, maxH], geomError: rootGE / 2 ** d };
   // --8<-- [end:geomError]
 }
@@ -122,7 +126,7 @@ function buildNode(s: CopcSession, key: string, contentBase: string): object {
 
 /** 옥트리(루트 페이지) → tileset.json. content 는 contentBase + 'D-X-Y-Z.pnts'. */
 export function buildTileset(s: CopcSession, contentBase: string): object {
-  const rootGE = s.horizontalSpanM / 16;
+  const rootGE = s.rootSpanM / 16;
   return {
     asset: { version: '1.0' },
     geometricError: rootGE * 2,

@@ -71,7 +71,7 @@
 
 ### Before / After
 - Before: `cubeSide * zUnit / 16`, 대각선 두 점 region.
-- After: WGS84 경계 실측 `horizontalSpanM / 16`, 네 변 샘플 region.
+- After: 수평 WGS84·수직 미터 최대 `rootSpanM / 16`, 네 변 샘플 region.
 
 ### PR
 - 미생성.
@@ -112,4 +112,7 @@
   `projName` 판정으로 교체하고, 세션 metric 분기 자체를 unit 테스트에 포함했다.
 - 4차 리뷰에서 geographic COPC의 정육면체 `info.cube`가 Z 미터 범위만큼 X/Y 도 범위를
   팽창시키는 실제 open 실패를 확인했다. root span은 header bbox로 측정하고 node region은
-  header XY로 clamp했다. center±radius 200의 재현 cube와 0.01° 실제 bbox를 회귀 테스트로 고정했다.
+  header XY로 clamp했다. side 200의 재현 cube와 0.01° 실제 bbox를 회귀 테스트로 고정했다.
+- 5차 리뷰에서 cube가 center 기준이 아니라 header.min 기준임을 실데이터로 정정했다.
+  sanity guard는 header bbox 중심을 사용하고, root span은 수평/수직 metric 최대값으로 바꿔
+  동일 XY·200m 수직 스캔도 GE=12.5m를 유지하도록 고정했다.
