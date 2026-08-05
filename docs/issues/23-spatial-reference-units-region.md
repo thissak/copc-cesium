@@ -116,3 +116,5 @@
 - 5차 리뷰에서 cube가 center 기준이 아니라 header.min 기준임을 실데이터로 정정했다.
   sanity guard는 header bbox 중심을 사용하고, root span은 수평/수직 metric 최대값으로 바꿔
   동일 XY·200m 수직 스캔도 GE=12.5m를 유지하도록 고정했다.
+- 6차 리뷰에서 ESRI `VERTCS`와 0 bbox의 root GE 폴백 누락을 확인했다. `computeRootSpanM`을
+  프로덕션·테스트가 함께 사용하고, 0 bbox는 cube 수직 4656m를 보존하도록 고정했다.

@@ -62,12 +62,17 @@ function nodeRegionAndError(s: CopcSession, key: string): { region: number[]; ge
   const boundedMaxX = Math.min(minX + side, s.copc.header.max[0]);
   const boundedMaxY = Math.min(minY + side, s.copc.header.max[1]);
   const intersectsHeader = boundedMaxX >= boundedMinX && boundedMaxY >= boundedMinY;
+  const headerValid = s.copc.header.max[0] >= s.copc.header.min[0] &&
+    s.copc.header.max[1] >= s.copc.header.min[1] &&
+    [s.copc.header.min[0], s.copc.header.min[1], s.copc.header.max[0], s.copc.header.max[1]].every(Number.isFinite);
+  if (!intersectsHeader && !headerValid)
+    throw new Error('COPC header XY bounds are invalid and do not intersect the hierarchy node');
   const [west, south, east, north] = horizontalRegion(
     s,
-    intersectsHeader ? boundedMinX : minX,
-    intersectsHeader ? boundedMinY : minY,
-    intersectsHeader ? boundedMaxX : minX + side,
-    intersectsHeader ? boundedMaxY : minY + side,
+    intersectsHeader ? boundedMinX : s.copc.header.min[0],
+    intersectsHeader ? boundedMinY : s.copc.header.min[1],
+    intersectsHeader ? boundedMaxX : s.copc.header.max[0],
+    intersectsHeader ? boundedMaxY : s.copc.header.max[1],
   );
   // 세로(높이)는 큐브가 과하게 크다 → 실제 데이터 Z 범위와 교집합으로 조임 (SSE 정확도↑ → LOD 일관성↑)
   const cubeMinZ = s.cube[2] + z * side;

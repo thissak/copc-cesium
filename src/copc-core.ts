@@ -183,7 +183,7 @@ export function extractHorizontalCrs(wkt: string): { proj: string; linearUnit: n
 
 /** Compound CRS의 수직 CRS 단위를 우선하고, 없으면 수평 선형단위를 폴백한다. */
 export function extractVerticalUnit(wkt: string, horizontalUnit: number): number {
-  const vertical = extractBracketed(wkt, ['VERT_CS', 'VERTCRS', 'VERTICALCRS']);
+  const vertical = extractBracketed(wkt, ['VERT_CS', 'VERTCS', 'VERTCRS', 'VERTICALCRS']);
   return (vertical ? lastLinearUnit(vertical) : undefined) ??
     namedProjStringUnit(wkt, 'vunits', 'vto_meter') ?? horizontalUnit;
 }
@@ -404,6 +404,27 @@ export function horizontalSpanMeters(toWgs: Reproj, bounds: number[], segments =
   return maxDistance;
 }
 
+/** 실제 bbox의 3D metric span. 손상/0 bbox는 옥트리 cube의 수직 span으로 fail-safe한다. */
+export function computeRootSpanM(
+  toWgs: Reproj,
+  headerBounds: number[],
+  cube: number[],
+  zUnit: number,
+): number {
+  let horizontal = 0;
+  try {
+    horizontal = horizontalSpanMeters(toWgs, headerBounds);
+  } catch {
+    horizontal = 0;
+  }
+  const vertical = Math.max(0, headerBounds[5] - headerBounds[2]) * zUnit;
+  const measured = Math.max(horizontal, vertical);
+  if (Number.isFinite(measured) && measured > 0) return measured;
+  const cubeVertical = Math.max(0, cube[5] - cube[2]) * zUnit;
+  if (Number.isFinite(cubeVertical) && cubeVertical > 0) return cubeVertical;
+  throw new Error('COPC metric extent is zero or non-finite; header bbox and hierarchy cube are invalid');
+}
+
 /** COPC 를 열어 헤더 + 옥트리(루트 페이지) + 좌표변환을 준비 (스트리밍 세션). */
 export async function openCopc(url: string, opts?: { coalesce?: CoalesceOpts } & CrsOpts): Promise<CopcSession> {
   const base = httpGetterWithRetry(url);
@@ -414,8 +435,12 @@ export async function openCopc(url: string, opts?: { coalesce?: CoalesceOpts } &
     { crs: opts?.crs, defaultCrs: opts?.defaultCrs },
   );
   checkCenterInRange(toWgs, [...copc.header.min, ...copc.header.max]);
-  const horizontalSpanM = horizontalSpanMeters(toWgs, [...copc.header.min, ...copc.header.max]);
-  const verticalSpanM = (copc.header.max[2] - copc.header.min[2]) * zUnit;
+  const rootSpanM = computeRootSpanM(
+    toWgs,
+    [...copc.header.min, ...copc.header.max],
+    copc.info.cube,
+    zUnit,
+  );
   const session: CopcSession = {
     copc,
     getter: base,
@@ -429,7 +454,7 @@ export async function openCopc(url: string, opts?: { coalesce?: CoalesceOpts } &
     horizontalIsAngular,
     cube: copc.info.cube,
     spacing: copc.info.spacing,
-    rootSpanM: Math.max(horizontalSpanM, verticalSpanM),
+    rootSpanM,
   };
   // coalesce 켜면 point 읽기를 병합 getter 로(헤더/hierarchy 는 passthrough). 워커 세션만 사용.
   if (opts?.coalesce) {

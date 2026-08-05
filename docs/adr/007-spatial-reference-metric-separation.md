@@ -51,4 +51,7 @@ COPC의 수평 CRS는 미터·피트·각도 단위를 쓸 수 있고 compound C
 - 5차 리뷰에서 실데이터 cube가 header.min 기준 정육면체임을 확인해 CRS sanity center도
   header bbox로 변경했다. root GE는 수평·수직 metric span의 최대값을 사용해 보어홀·타워처럼
   수평 폭이 0이거나 작은 데이터에서도 SSE가 0으로 붕괴하지 않는다. 손상 header bbox로 node
-  교집합이 비는 경우에는 원래 node 범위로 폴백한다.
+  교집합이 비는 경우에는 유효한 header bbox 전체로 폴백한다.
+- 6차 리뷰에서 ESRI `VERTCS` 표기도 수직 단위 키워드에 포함했다. `rootSpanM` 계산은 순수
+  함수로 고정하고 header bbox가 0/비유한이면 hierarchy cube의 수직 metric span으로
+  폴백한다. node/header 교집합이 비면 raw geographic cube 대신 유효한 header bbox 전체를 사용한다.

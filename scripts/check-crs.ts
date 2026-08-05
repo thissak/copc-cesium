@@ -3,6 +3,7 @@
 import {
   resolveCrs,
   checkCenterInRange,
+  computeRootSpanM,
   horizontalSpanMeters,
   makeGridReprojector,
   makeSessionMetric,
@@ -39,6 +40,7 @@ const GEOGRAPHIC_COMPOUND_WKT = `COMPD_CS["NAD83 + NAVD88",
   GEOGCS["NAD83",DATUM["North_American_Datum_1983",SPHEROID["GRS 1980",6378137,298.257222101]],
     PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]],
   VERT_CS["NAVD88 height",VERT_DATUM["NAVD88",2005],UNIT["metre",1],AXIS["Up",UP]]]`;
+const ESRI_VERTICAL_WKT = MIXED_UNITS_WKT.replace('VERT_CS[', 'VERTCS[');
 
 // --- resolveCrs ---
 // no-CRS → throw (silent 지구밖 방지)
@@ -104,6 +106,11 @@ for (const alias of ['EPSG:4326', 'WGS84']) {
   ok(Math.abs(zUnit - 0.3048) < 1e-12, `proj string vertical units preserved (${zUnit})`);
 }
 
+{
+  const { zUnit } = resolveCrs(ESRI_VERTICAL_WKT);
+  ok(zUnit === 1, `ESRI VERTCS vertical metre preserved (${zUnit})`);
+}
+
 // crs(force) 가 header 를 덮는다 — 같은 입력좌표가 다른 zone 으로 다른 lon
 {
   const a = resolveCrs(UTM10N, {}).toWgs.forward([500000, 4878000])[0];
@@ -162,11 +169,14 @@ function fakeSession(
     horizontalIsAngular,
     cube,
     spacing: 1,
-    rootSpanM: Math.max(
-      horizontalSpanMeters(toWgs, [...bounds.min, ...bounds.max]),
-      (bounds.max[2] - bounds.min[2]) * zUnit,
-    ),
+    rootSpanM: computeRootSpanM(toWgs, [...bounds.min, ...bounds.max], cube, zUnit),
   };
+}
+
+{
+  const toWgs = resolveCrs(UTM10N).toWgs;
+  const span = computeRootSpanM(toWgs, [0, 0, 0, 0, 0, 0], [0, 0, 0, 4656, 4656, 4656], 1);
+  ok(span === 4656, `zero header bbox falls back to cube vertical span (${span})`);
 }
 
 // EPSG:4326 1° 폭은 약 111km이다. geometric error는 source 단위(도)가 아니라 미터여야 한다.
