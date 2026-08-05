@@ -14,11 +14,28 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
+interface Check {
+  name: string;
+  command?: string;
+  args?: string[];
+}
+const tsx = (name: string): Check => ({ name });
+
 // 오프라인 결정적 — 네트워크 없이 항상 재현 (심사 환경 안전)
-const UNIT = ['check-crs', 'check-ecef', 'check-picking', 'check-pnts-batch', 'check-style'];
+const UNIT: Check[] = [
+  'check-crs',
+  'check-ecef',
+  'check-picking',
+  'check-pnts-batch',
+  'check-style',
+  'check-request-throttle',
+  'check-sw-routing',
+  'check-cesium-codec',
+].map(tsx);
+UNIT.push({ name: 'check-public-types', command: 'npm', args: ['run', 'check:public-types'] });
 
 // S3 range 네트워크 필요 — 전체 파이프라인 통합 검증
-const INTEGRATION = [
+const INTEGRATION: Check[] = [
   'verify',
   'check-attributes',
   'check-attr-pipeline',
@@ -28,9 +45,9 @@ const INTEGRATION = [
   'check-paging',
   'check-retry',
   'check-snap',
-];
+].map(tsx);
 
-const SUITES: Record<string, string[]> = {
+const SUITES: Record<string, Check[]> = {
   unit: UNIT,
   integration: INTEGRATION,
   all: [...UNIT, ...INTEGRATION],
@@ -46,10 +63,12 @@ if (!names) {
 console.log(`\n▶ running "${suiteName}" suite — ${names.length} checks\n`);
 
 const failed: string[] = [];
-for (const name of names) {
-  console.log(`────────────  ${name}  ────────────`);
-  const res = spawnSync('npx', ['tsx', join(here, `${name}.ts`)], { stdio: 'inherit' });
-  if (res.status !== 0) failed.push(name);
+for (const check of names) {
+  console.log(`────────────  ${check.name}  ────────────`);
+  const command = check.command ?? 'npx';
+  const args = check.args ?? ['tsx', join(here, `${check.name}.ts`)];
+  const res = spawnSync(command, args, { stdio: 'inherit' });
+  if (res.status !== 0) failed.push(check.name);
   console.log('');
 }
 

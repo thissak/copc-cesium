@@ -54,7 +54,7 @@ content state 분포        = {UNLOADED:3531, PROCESSING:13, READY:44}  (총 358
 **엣지/위험:**
 | 위험 | 대응 |
 |------|------|
-| `_runtimeContentCodec` 는 private(`_`) API → Cesium 업그레이드 시 변동 | `repro-03.ts`가 회귀 테스트. 방어적 read(`?._runtimeContentCodec?.missingTilePolicy`)라 제거돼도 크래시 아님(고착 재발→테스트가 잡음). peer dep `>=1.120`·핀 1.142 명시. |
+| `_runtimeContentCodec` 는 private(`_`) API → Cesium 업그레이드 시 변동 | `repro-03.ts`와 오프라인 `check:cesium-codec`이 회귀를 검출. npm 배포본 측정상 codec 최초 지원인 peer dep `>=1.142`를 명시. |
 | 404 가 진짜 누락과 충돌 | 404=빈 노드 전용. 진짜 누락 노드는 worker `throw`→handler `{error}`→**500**(FAILED 표면화). range fetch 에러는 worker 내부(별 레이어). |
 | 빈 부모 노드의 자식 refine | `Empty3DTileContent`(hasRenderableContent=false)는 refine-투명 → 자식 정상 스트리밍. |
 | FAILED 대안(404·codec 없음) | tilesLoaded 는 고쳐지나 **빈 노드를 "실패"로 오표기**(console 스팸·tileFailed 오발) → false alarm. missingTilePolicy 가 의미상 정확. |

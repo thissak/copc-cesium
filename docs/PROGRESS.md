@@ -105,7 +105,7 @@ lifecycle: active
 - [x] **IMPROVEMENTS Tier2 #4 착수 → measure-first 로 won't-fix 확정.** 재현 RED(`check-cancel.ts`: getter 외부취소 미수신)·BP 조사(deep-research+context7) 후 **Phase 0 게이트(빌드 전 실측)**: SW `event.request.signal` 이 클라이언트 abort 시 미발화(`probe-sw-cancel.ts`, w3c/ServiceWorker #1544) = 클린 수정 불가(진입 채널 없음). 실해 측정(`repro-20.ts`+`copcDecodeStats` 훅): churn 시 in-flight 디코드 ≤2·self-heal(유계). 클린 차단+유계+Tier2 → won't-fix(fragile monkey-patch 만 가능, STOP 비정당). build·verify C1 회귀 0. ([이슈 #20](issues/20-cancel-backpressure-propagation.md))
 
 ### 테스트 진입점 단일화 (입상 T1 게이트, 2026-06-25 · 미머지)
-- [x] **`npm test`(오프라인 unit)/`test:integration`(S3)/`test:all` + 집계 러너 `scripts/run-checks.ts`.** 흩어진 16개 검증 스크립트(이미 `exit 0/1` 규약)를 단일 진입점으로 묶음 — 프레임워크 도입 없이 얇은 러너(Simplicity). PURE 5(오프라인 결정적·심사 재현)/NET 9 분리, `check-cancel`(#20 재현) 제외, 개별 `check:*` 노출(2→15). 진입점이 millsite URL 누락 2개(entwine 404, 2026-06-18 정리 시 누락분) 즉시 적발→hobu-lidar 정정·동일파일 확증. 검증: unit 5/5·integration 9/9·실패 주입 exit 1·`build` 회귀 0. **DIRECTION 스코어카드 테스트 ❌→✅.**
+- [x] **`npm test`(오프라인 unit)/`test:integration`(S3)/`test:all` + 집계 러너 `scripts/run-checks.ts`.** 오프라인 9(public type·요청 생명주기·SW 라우팅·Cesium codec 포함)/네트워크 9를 CI에 전부 연결. `check-cancel`(#20 재현)은 회귀 가드가 아니므로 제외. 검증: unit 9/9·integration 9/9·`build` 회귀 0. **DIRECTION 스코어카드 테스트 ❌→✅.**
 
 ## Phase 3 — 평가 / 입상 판정 🔒
 대용량 실데이터에서 60fps / 메모리 / UX 측정 → 입상 가능성 데이터로 판정.

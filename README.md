@@ -25,7 +25,8 @@ Showing a large point cloud in CesiumJS normally means **pre-converting** the da
 npm install copc-cesium cesium
 ```
 
-`cesium` is a peer dependency (bring your own version, `>=1.120`).
+`cesium` is a peer dependency (bring your own version, `>=1.142`). The minimum is required
+for the empty-tile `missingTilePolicy` used by the streaming bridge.
 
 ## Service worker setup (required)
 
@@ -149,7 +150,7 @@ npm run test:integration # full pipeline checks (fetch real COPC over S3 range)
 npm run test:all         # both suites
 ```
 
-`npm test` runs the offline, deterministic checks (CRS resolution, ECEF math, picking, batch tables, styling) — no network, so it reproduces anywhere. `npm run test:integration` additionally streams real COPC files over S3 range requests to verify the end-to-end pipeline (georeferencing, hierarchy paging, range coalescing, retry, attribute decode, octree snap). Each check is also runnable on its own via `npm run check:<name>`.
+`npm test` runs the offline, deterministic checks (CRS resolution, ECEF math, picking, batch tables, styling, request lifecycle, service-worker routing, public types, and the Cesium codec contract) — no network, so it reproduces anywhere. `npm run test:integration` additionally streams real COPC files over S3 range requests to verify the end-to-end pipeline (georeferencing, hierarchy paging, range coalescing, retry, attribute decode, octree snap). Each check is also runnable on its own via `npm run check:<name>`.
 
 ## License
 
