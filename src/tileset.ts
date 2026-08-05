@@ -6,6 +6,39 @@ import type { CopcSession } from './copc-core';
 
 const D2R = Math.PI / 180;
 
+function longitudeBounds(values: number[]): [number, number] {
+  const normalized = values.map((v) => ((v + 180) % 360 + 360) % 360 - 180).sort((a, b) => a - b);
+  if (normalized.length === 1) return [normalized[0], normalized[0]];
+  let gapIndex = normalized.length - 1;
+  let largestGap = normalized[0] + 360 - normalized[normalized.length - 1];
+  for (let i = 0; i < normalized.length - 1; i++) {
+    const gap = normalized[i + 1] - normalized[i];
+    if (gap > largestGap) { largestGap = gap; gapIndex = i; }
+  }
+  return [normalized[(gapIndex + 1) % normalized.length], normalized[gapIndex]];
+}
+
+/** source XY 사각형의 변을 샘플링해 비선형 투영에서도 보수적인 WGS84 region을 만든다. */
+function horizontalRegion(s: CopcSession, minX: number, minY: number, side: number): [number, number, number, number] {
+  const lons: number[] = [];
+  const lats: number[] = [];
+  const segments = 8;
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    const x = minX + side * t;
+    const y = minY + side * t;
+    for (const xy of [[x, minY], [x, minY + side], [minX, y], [minX + side, y]]) {
+      const ll = s.toWgs ? s.toWgs.forward(xy) : xy;
+      if (!(Number.isFinite(ll[0]) && Number.isFinite(ll[1]) && ll[1] >= -90 && ll[1] <= 90))
+        throw new Error(`tile region reproject out of range (lon=${ll[0]}, lat=${ll[1]})`);
+      lons.push(ll[0]);
+      lats.push(ll[1]);
+    }
+  }
+  const [west, east] = longitudeBounds(lons);
+  return [west * D2R, Math.min(...lats) * D2R, east * D2R, Math.max(...lats) * D2R];
+}
+
 function nodeRegionAndError(s: CopcSession, key: string): { region: number[]; geomError: number } {
   const parts = key.split('-').map(Number);
   const d = parts[0];
@@ -15,19 +48,14 @@ function nodeRegionAndError(s: CopcSession, key: string): { region: number[]; ge
   const side = (s.cube[3] - s.cube[0]) / 2 ** d; // 루트 큐브 한 변(투영단위)
   const minX = s.cube[0] + x * side;
   const minY = s.cube[1] + y * side;
-  const c1 = s.toWgs ? s.toWgs.forward([minX, minY]) : [minX, minY];
-  const c2 = s.toWgs ? s.toWgs.forward([minX + side, minY + side]) : [minX + side, minY + side];
-  const west = Math.min(c1[0], c2[0]) * D2R;
-  const east = Math.max(c1[0], c2[0]) * D2R;
-  const south = Math.min(c1[1], c2[1]) * D2R;
-  const north = Math.max(c1[1], c2[1]) * D2R;
+  const [west, south, east, north] = horizontalRegion(s, minX, minY, side);
   // 세로(높이)는 큐브가 과하게 크다 → 실제 데이터 Z 범위와 교집합으로 조임 (SSE 정확도↑ → LOD 일관성↑)
   const cubeMinZ = s.cube[2] + z * side;
   let minH = Math.max(cubeMinZ, s.copc.header.min[2]) * s.zUnit;
   let maxH = Math.min(cubeMinZ + side, s.copc.header.max[2]) * s.zUnit;
   if (maxH <= minH) maxH = minH + 1;
   // --8<-- [start:geomError]
-  const rootGE = ((s.cube[3] - s.cube[0]) * s.zUnit) / 16; // ept-tools 관례: cube_size/16 (spacing 아님 — spacing=cube/147이라 9.2× 과소refine)
+  const rootGE = s.horizontalSpanM / 16; // 3D Tiles geometricError는 미터. WGS84 변환 경계에서 실측.
   return { region: [west, south, east, north, minH, maxH], geomError: rootGE / 2 ** d };
   // --8<-- [end:geomError]
 }
@@ -78,7 +106,7 @@ function buildNode(s: CopcSession, key: string, contentBase: string): object {
 
 /** 옥트리(루트 페이지) → tileset.json. content 는 contentBase + 'D-X-Y-Z.pnts'. */
 export function buildTileset(s: CopcSession, contentBase: string): object {
-  const rootGE = ((s.cube[3] - s.cube[0]) * s.zUnit) / 16;
+  const rootGE = s.horizontalSpanM / 16;
   return {
     asset: { version: '1.0' },
     geometricError: rootGE * 2,

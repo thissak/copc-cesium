@@ -3,6 +3,7 @@
 날짜별 변경 내역 + 결정 사유. 최신이 위.
 
 ### 2026-08-06
+- [fix] **[#23] 공간참조 수평·수직 단위와 3D Tiles metric 분리.** compound CRS의 수직 unit을 독립 해석하고 root 수평 폭을 WGS84 ECEF chord로 측정해 EPSG:4326·혼합단위에서도 geometric error를 미터로 보장. tile region은 대각선 2점→네 변 8구간 샘플+반자오선 interval로 바꿔 비선형 투영 culling 위험 차단. RED 3건→GREEN, `tsc`·snap·verify PASS. ([ADR-007](adr/007-spatial-reference-metric-separation.md))
 - [fix] **[#22] 공개 tileset 타입에 `snapPoint`·`attributeRange` 반영.** 런타임에만 주입되고 `fromUrl(): Promise<Cesium3DTileset>` 선언에서 누락돼 README TypeScript 예제가 TS2339로 실패하던 계약 불일치를 `CopcCesiumTileset` 교차 타입으로 해소. 소비자 컴파일 가드 `check:public-types` 추가, `tsc`·`build:lib` PASS.
 - [docs] **Claude Code SSOT→Codex 브릿지 `AGENTS.md` 추가.** 글로벌·프로젝트 `CLAUDE.md`와 `docs/PROGRESS.md`·`docs/CHANGELOG.md` 읽기 순서만 가리키는 얇은 포인터로, 규칙 복제 없이 Claude·Codex가 동일 SSOT를 사용하게 함.
 

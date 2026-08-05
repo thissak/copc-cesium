@@ -1,9 +1,9 @@
 # #23 CRS 수평·수직 단위 혼용과 비보수적 tile region
 
 **Issue**: https://github.com/thissak/CopcCesiumLab/issues/23
-**Status**: Open
+**Status**: Resolved
 **Created**: 2026-08-06
-**Resolved**: -
+**Resolved**: 2026-08-06
 
 ---
 
@@ -18,28 +18,82 @@
 - 비선형 투영에서 사각형 모서리·변의 WGS84 극값이 region에 포함되는지 검사한다.
 
 ### 스크린샷 / 로그
-- Step 1에서 RED 측정값을 추가한다.
+- `check:crs` RED 3건:
+  - 혼합 단위: 수직 metre 대신 수평 foot 계수 `zUnit=0.3048006096012192`.
+  - EPSG:4326 1° extent: root geometric error `0.0625`(도를 미터로 취급).
+  - 비선형 변 극값: 실제 north `3.5°` 대신 대각선 north `1°`.
 
 ---
 
 ## 2. 원인 분석
 
-Step 1 재현 후 작성.
+### 측정 데이터
+- 기존 코드는 PROJCS의 마지막 `UNIT`을 `zUnit`과 geometric error에 동시 사용했다.
+- region은 source 사각형의 최소·최대 대각선 두 점만 WGS84로 변환했다.
+
+### 근본 원인
+- 서로 독립적인 수평 CRS, 수직 CRS, 3D Tiles metric을 하나의 선형 계수로 취급했다.
+- 비선형 투영에서 변경 극값이 모서리 대각선에만 있다고 가정했다.
 
 ---
 
 ## 3. Best Practice 조사
 
-Step 2 원인 확정 후 작성.
+### 조사 항목
+- compound CRS의 수평·수직 구성, 3D Tiles geometric error 단위, region 포함 계약.
+
+### 프로덕션 사례
+| 프로젝트 | 접근 방식 | 비고 |
+|---------|----------|------|
+| OGC WKT CRS | compound CRS를 서로 독립적인 수평·수직 CRS로 구성 | https://docs.ogc.org/is/12-063r5/12-063r5.html |
+| OGC 3D Tiles 1.0 | geometric error는 미터, bounding volume은 기하 전체를 포함 | https://docs.ogc.org/cs/18-053r2/18-053r2.html |
+| Cesium Rectangle | west/east/south/north는 각각 경위도 극값·반자오선 규칙을 따름 | https://cesium.com/learn/cesiumjs/ref-doc/Rectangle.html |
+
+### 엣지 케이스 / 위험 요소
+| 시나리오 | 위험도 | 대응 |
+|---------|--------|------|
+| EPSG:4326 각도 source | 높음 | WGS84 변환 경계의 ECEF chord로 미터 폭 측정 |
+| 혼합 수직 단위 | 높음 | `VERT_CS`/`VERTCRS` 단위 독립 해석 |
+| 반자오선 통과 | 중간 | 최대 원형 gap의 보여집합으로 longitude interval 산출 |
+| 비선형 변 극값 | 중간 | 네 변을 8구간으로 샘플링 |
 
 ---
 
 ## 4. 수정 내용
 
-Step 3 조사 후 작성.
+### 변경 파일
+| 파일 | 변경 요약 |
+|------|----------|
+| `src/copc-core.ts` | 수직 단위 독립 해석, WGS84 경계 metric 폭 측정 |
+| `src/tileset.ts` | metric geometric error, 변 샘플링 region·반자오선 처리 |
+| `scripts/check-crs.ts` | 혼합 단위·EPSG:4326·비선형 region RED→GREEN |
+| `docs/adr/007-spatial-reference-metric-separation.md` | 공간참조 metric 분리 결정 |
+
+### Before / After
+- Before: `cubeSide * zUnit / 16`, 대각선 두 점 region.
+- After: WGS84 경계 실측 `horizontalSpanM / 16`, 네 변 샘플 region.
+
+### PR
+- 미생성.
 
 ---
 
 ## 5. 검증 결과
 
-Step 4 수정 후 작성.
+### 테스트 방법
+- `npm run check:crs`
+- `npx tsc --noEmit`
+- `npm run check:snap`
+- `npm run verify`
+
+### 결과
+| 항목 | 수정 전 | 수정 후 | 판정 |
+|------|---------|---------|------|
+| 혼합 단위 Z | `0.3048006096` | `1` | PASS |
+| EPSG:4326 root GE | `0.0625` | `6957.38m` | PASS |
+| 비선형 region north | `1°` | `3.5°` | PASS |
+| Autzen georef | PASS | PASS | PASS |
+| 스냅 회귀 | PASS | PASS | PASS |
+
+### 잔여 이슈
+- 사용자 정의 고주파 투영은 유한 경계 샘플링으로 수학적 완전 보증하지 않음. proj4 실용 투영은 부드러운 변환이므로 현재 8구간을 출하 값으로 채택.
