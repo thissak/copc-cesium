@@ -48,6 +48,7 @@
     "check:paging": "tsx scripts/check-paging.ts",
     "check:retry": "tsx scripts/check-retry.ts",
     "check:snap": "tsx scripts/check-snap.ts",
+    "check:public-types": "tsc --ignoreConfig --noEmit --target ES2022 --module ESNext --moduleResolution bundler --strict --skipLibCheck --types vite/client scripts/check-public-types.ts",
     "sweep": "tsx scripts/sweep.ts",
     "bench:probe-bundle": "esbuild scripts/bench/probe.ts --bundle --platform=browser --format=iife --global-name=BenchProbe --footer:js=\"window.BenchProbe=BenchProbe;\" --outfile=scripts/bench/probe-bundle.js",
     "prebench:eptium": "npm run bench:probe-bundle",

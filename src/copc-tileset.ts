@@ -90,6 +90,15 @@ export interface CopcTilesetOptions {
   defaultCrs?: string;
 }
 
+/**
+ * `CopcTileset.fromUrl()`이 반환하는 Cesium tileset.
+ * Cesium 기본 인터페이스에 COPC 세션을 필요로 하는 공개 헬퍼를 더한다.
+ */
+export type CopcCesiumTileset = Cesium3DTileset & {
+  snapPoint(scene: Scene, windowPosition: Cartesian2): Promise<SnappedPoint | undefined>;
+  attributeRange(name: string): Promise<[number, number]>;
+};
+
 let sidCounter = 0;
 const activeSids = new Set<string>(); // 살아있는 tileset 세션 (생명주기 추적)
 // 진단(이슈 #20): 디코드 요청 누적/완료 카운터. in-flight = started − done.
@@ -241,7 +250,7 @@ function setContentServerThrottle(maxPerServer: number) {
 
 export const CopcTileset = {
   /** COPC URL → LOD 스트리밍 Cesium3DTileset. viewer.scene.primitives.add(tileset) 로 사용. */
-  async fromUrl(url: string, options: CopcTilesetOptions = {}): Promise<Cesium3DTileset> {
+  async fromUrl(url: string, options: CopcTilesetOptions = {}): Promise<CopcCesiumTileset> {
     await ensureServiceWorker(options.serviceWorkerUrl ?? '/copc-sw.js', options.serviceWorkerScope ?? '/');
     installHandler();
     setContentServerThrottle(options.maxRequestsPerServer ?? 6);
@@ -278,9 +287,9 @@ export const CopcTileset = {
 
       const contentBase = `${location.origin}${CONTENT_BASE_PATH}${sid}/`;
       const tilesetJson = buildTileset(session, contentBase);
-      const tileset = await Cesium3DTileset.fromUrl(
+      const tileset = (await Cesium3DTileset.fromUrl(
         'data:application/json;base64,' + btoa(JSON.stringify(tilesetJson)),
-      );
+      )) as CopcCesiumTileset;
       // 빈 노드(전부 노이즈 → 0점)는 SW 가 404 로 응답한다. Cesium 의 missingTilePolicy(빈 타일 정책)로
       // 404 를 Empty3DTileContent(ready·에러 없음)로 처리 → 0점 pnts 가 Model 로 PROCESSING 에 영구
       // 고착하던 결함(tilesLoaded/allTilesLoaded 가 영영 안 잡힘)을 막는다(이슈 #03). createContent 를
@@ -329,7 +338,7 @@ export const CopcTileset = {
         getWorkerApi().getProfile();
 
       // 옥트리 풀해상도 최근접점 스냅 (이슈 #3-B). pickPosition 씨앗 → 워커 nearestPoint → SnappedPoint.
-      (tileset as unknown as { snapPoint: (scene: Scene, win: Cartesian2) => Promise<SnappedPoint | undefined> }).snapPoint =
+      tileset.snapPoint =
         (scene, win) =>
           snapPoint(tileset, scene, win, (seed) => {
             // destroy 가 마지막 세션 워커를 terminate 하면 comlink RPC 가 영영 미해소(hang) → 백스톱 타임아웃(무한 대기
@@ -358,7 +367,7 @@ export const CopcTileset = {
       (tileset as unknown as { copcDecodeStats: () => { started: number; done: number; inflight: number } }).copcDecodeStats =
         () => ({ started: decodeStats.started, done: decodeStats.done, inflight: decodeStats.started - decodeStats.done });
 
-      (tileset as unknown as { attributeRange: (name: string) => Promise<[number, number]> }).attributeRange = async (name) => {
+      tileset.attributeRange = async (name) => {
         const session = pageSessions.get(sid)!;
         const rootNode = session.nodes['0-0-0-0'];
         if (!rootNode) throw new Error('attributeRange: root node not yet loaded');

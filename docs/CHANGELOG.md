@@ -3,6 +3,7 @@
 날짜별 변경 내역 + 결정 사유. 최신이 위.
 
 ### 2026-08-06
+- [fix] **[#22] 공개 tileset 타입에 `snapPoint`·`attributeRange` 반영.** 런타임에만 주입되고 `fromUrl(): Promise<Cesium3DTileset>` 선언에서 누락돼 README TypeScript 예제가 TS2339로 실패하던 계약 불일치를 `CopcCesiumTileset` 교차 타입으로 해소. 소비자 컴파일 가드 `check:public-types` 추가, `tsc`·`build:lib` PASS.
 - [docs] **Claude Code SSOT→Codex 브릿지 `AGENTS.md` 추가.** 글로벌·프로젝트 `CLAUDE.md`와 `docs/PROGRESS.md`·`docs/CHANGELOG.md` 읽기 순서만 가리키는 얇은 포인터로, 규칙 복제 없이 Claude·Codex가 동일 SSOT를 사용하게 함.
 
 ### 2026-07-12
