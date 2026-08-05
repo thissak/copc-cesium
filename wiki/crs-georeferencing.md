@@ -45,11 +45,11 @@ happy path는 정확성에선 견고하지만, 성능에선 좌표변환이 비�
 
 ## 참고 (RAW 인용)
 
-- 해소·가드: `src/copc-core.ts` — `resolveCrs`(우선순위 `crs`>wkt>`defaultCrs` + proj4 생성 try/catch), `checkCenterInRange`(cube 중심 lon∈[-180,180]·lat∈[-90,90]·NaN), `extractHorizontalCrs`(WKT1 COMPD_CS/PROJCS 슬라이스 + 선형단위).
+- 해소·가드: `src/copc-core.ts` — `resolveCrs`(우선순위 `crs`>wkt>`defaultCrs` + proj4 생성 try/catch), `checkCenterInRange`(실제 header bbox 중심 lon∈[-180,180]·lat∈[-90,90]·NaN), `extractHorizontalCrs`(WKT1/2 projected·geographic compound 슬라이스 + proj string/선형단위).
 - 변환 비용 격자화(#17): `src/copc-core.ts` — `makeGridReprojector`/`GridReproj`(데이터셋 bounds 위 (G+1)² proj4 격자 + 점별 bilinear, 셀당 다점 오차 가드 <1mm·G 자동 상향, 미달 시 proj4 점별 폴백). 측정·진단: 이슈 #17 · `docs/learn/08-profiling-and-bottleneck-hunting.md`.
 - 배선: `crs`/`defaultCrs` 옵션 → `fromUrl` → 페이지·워커 세션 (`src/copc-tileset.ts`, `src/decode.worker.ts`).
 - ECEF 배치: 경위도→ECEF는 `Cartesian3.fromDegrees` 동일 공식 + RTC_CENTER (`src/pnts-quantized.ts` `geodeticToEcef`).
 - 실측(2026-06-19 BP): proj4 2.20.9가 WKT1·WKT2(PROJCRS/GEOGCRS/BOUNDCRS) 파싱(issue #370 실질 해결) · copc.js 0.0.8은 `.wkt`(VLR 2112)만 노출, GeoTIFF GeoKeyDirectory(34735) 미파싱.
-- 단위테스트: `scripts/check-crs.ts` (no-CRS throw·force override·fill-if-missing·garbage throw·center 범위밖/NaN throw — 10/10).
+- 단위테스트: `scripts/check-crs.ts` (no-CRS·override·compound/ESRI 수직단위·geographic/EPSG·metric span·bbox/cube 폴백·region 경계).
 - BP(prior art): py3dtiles `SrsInMissingException`(fail-loud)·`pyproj_always_xy`(축순서) · PDAL `default_srs`(fill) vs `override_srs`(force) 2-mode · giro3d `CoordinateSystem.unknown` · Cesium `Cartesian3.fromDegrees`(lon-first).
 - 배경: IMPROVEMENTS Tier1 #2 · spec/plan `docs/superpowers/{specs,plans}/2026-06-19-crs-auto-placement*` · CHANGELOG 2026-06-19.

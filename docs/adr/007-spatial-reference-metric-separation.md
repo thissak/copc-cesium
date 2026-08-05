@@ -55,3 +55,6 @@ COPC의 수평 CRS는 미터·피트·각도 단위를 쓸 수 있고 compound C
 - 6차 리뷰에서 ESRI `VERTCS` 표기도 수직 단위 키워드에 포함했다. `rootSpanM` 계산은 순수
   함수로 고정하고 header bbox가 0/비유한이면 hierarchy cube의 수직 metric span으로
   폴백한다. node/header 교집합이 비면 raw geographic cube 대신 유효한 header bbox 전체를 사용한다.
+- 7차 리뷰에서 퇴화 header bbox의 위치 폴백을 CRS별로 분리했다. projected는 hierarchy node
+  cube로 region을 복구하고 geographic은 각도 범위를 복원할 근거가 없어 fail-loud한다.
+  header 기반 region 샘플은 sub-mm 격자 reprojector를 사용하며 손상 Z는 node cube Z로 복구한다.

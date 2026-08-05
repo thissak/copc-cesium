@@ -118,3 +118,6 @@
   동일 XY·200m 수직 스캔도 GE=12.5m를 유지하도록 고정했다.
 - 6차 리뷰에서 ESRI `VERTCS`와 0 bbox의 root GE 폴백 누락을 확인했다. `computeRootSpanM`을
   프로덕션·테스트가 함께 사용하고, 0 bbox는 cube 수직 4656m를 보존하도록 고정했다.
+- 7차 리뷰에서 0 bbox가 region을 `(0,0)`으로 붕괴시키는 경로를 확인했다. projected 0 bbox는
+  hierarchy cube 위치로 복구하고, geographic 0 bbox는 명시적으로 실패한다. 비유한 Z는 cube Z,
+  정상 header region 샘플은 격자 reproject를 사용한다.

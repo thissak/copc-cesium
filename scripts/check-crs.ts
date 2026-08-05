@@ -177,6 +177,21 @@ function fakeSession(
   const toWgs = resolveCrs(UTM10N).toWgs;
   const span = computeRootSpanM(toWgs, [0, 0, 0, 0, 0, 0], [0, 0, 0, 4656, 4656, 4656], 1);
   ok(span === 4656, `zero header bbox falls back to cube vertical span (${span})`);
+  const broken = fakeSession(toWgs, [490000, 4870000, 0, 491000, 4871000, 1000], 1, false, {
+    min: [0, 0, 0], max: [0, 0, 0],
+  });
+  const json = buildTileset(broken, '/tiles/') as { root: { boundingVolume: { region: number[] } } };
+  const region = json.root.boundingVolume.region;
+  const center = toWgs.forward([490500, 4870500]);
+  ok(center[0] * Math.PI / 180 >= region[0] && center[0] * Math.PI / 180 <= region[2] &&
+    center[1] * Math.PI / 180 >= region[1] && center[1] * Math.PI / 180 <= region[3],
+    'projected zero bbox region falls back to hierarchy cube');
+}
+
+{
+  const toWgs = resolveCrs('+proj=longlat +datum=WGS84 +no_defs').toWgs;
+  const span = horizontalSpanMeters(toWgs, [0, 0, 0, 1, 1, 0]);
+  ok(span > 110000 && span < 112000, `1° horizontal span remains metric (${span.toFixed(1)}m)`);
 }
 
 // EPSG:4326 1° 폭은 약 111km이다. geometric error는 source 단위(도)가 아니라 미터여야 한다.

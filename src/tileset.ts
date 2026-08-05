@@ -26,6 +26,7 @@ function horizontalRegion(
   minY: number,
   maxX: number,
   maxY: number,
+  useGrid: boolean,
 ): [number, number, number, number] {
   const lons: number[] = [];
   const lats: number[] = [];
@@ -35,7 +36,7 @@ function horizontalRegion(
     const x = minX + (maxX - minX) * t;
     const y = minY + (maxY - minY) * t;
     for (const xy of [[x, minY], [x, maxY], [minX, y], [maxX, y]]) {
-      const ll = s.toWgs ? s.toWgs.forward(xy) : xy;
+      const ll = useGrid && s.reproj ? s.reproj.forward(xy[0], xy[1]) : s.toWgs ? s.toWgs.forward(xy) : xy;
       if (!(Number.isFinite(ll[0]) && Number.isFinite(ll[1]) && ll[1] >= -90 && ll[1] <= 90))
         throw new Error(`tile region reproject out of range (lon=${ll[0]}, lat=${ll[1]})`);
       lons.push(ll[0]);
@@ -64,20 +65,25 @@ function nodeRegionAndError(s: CopcSession, key: string): { region: number[]; ge
   const intersectsHeader = boundedMaxX >= boundedMinX && boundedMaxY >= boundedMinY;
   const headerValid = s.copc.header.max[0] >= s.copc.header.min[0] &&
     s.copc.header.max[1] >= s.copc.header.min[1] &&
+    (s.copc.header.max[0] > s.copc.header.min[0] || s.copc.header.max[1] > s.copc.header.min[1]) &&
     [s.copc.header.min[0], s.copc.header.min[1], s.copc.header.max[0], s.copc.header.max[1]].every(Number.isFinite);
-  if (!intersectsHeader && !headerValid)
-    throw new Error('COPC header XY bounds are invalid and do not intersect the hierarchy node');
+  if (!intersectsHeader && !headerValid && s.horizontalIsAngular)
+    throw new Error('Geographic COPC header XY bounds are degenerate; hierarchy cube cannot recover angular bounds');
+  const useHeader = intersectsHeader || headerValid;
   const [west, south, east, north] = horizontalRegion(
     s,
-    intersectsHeader ? boundedMinX : s.copc.header.min[0],
-    intersectsHeader ? boundedMinY : s.copc.header.min[1],
-    intersectsHeader ? boundedMaxX : s.copc.header.max[0],
-    intersectsHeader ? boundedMaxY : s.copc.header.max[1],
+    intersectsHeader ? boundedMinX : useHeader ? s.copc.header.min[0] : minX,
+    intersectsHeader ? boundedMinY : useHeader ? s.copc.header.min[1] : minY,
+    intersectsHeader ? boundedMaxX : useHeader ? s.copc.header.max[0] : minX + side,
+    intersectsHeader ? boundedMaxY : useHeader ? s.copc.header.max[1] : minY + side,
+    useHeader,
   );
   // 세로(높이)는 큐브가 과하게 크다 → 실제 데이터 Z 범위와 교집합으로 조임 (SSE 정확도↑ → LOD 일관성↑)
   const cubeMinZ = s.cube[2] + z * side;
-  let minH = Math.max(cubeMinZ, s.copc.header.min[2]) * s.zUnit;
-  let maxH = Math.min(cubeMinZ + side, s.copc.header.max[2]) * s.zUnit;
+  const headerZValid = Number.isFinite(s.copc.header.min[2]) && Number.isFinite(s.copc.header.max[2]) &&
+    s.copc.header.max[2] >= s.copc.header.min[2];
+  let minH = (headerZValid ? Math.max(cubeMinZ, s.copc.header.min[2]) : cubeMinZ) * s.zUnit;
+  let maxH = (headerZValid ? Math.min(cubeMinZ + side, s.copc.header.max[2]) : cubeMinZ + side) * s.zUnit;
   if (maxH <= minH) maxH = minH + 1;
   // --8<-- [start:geomError]
   const rootGE = s.rootSpanM / 16; // 수평·수직 중 큰 실제 미터 span. 수직형 데이터도 refine 보존.
