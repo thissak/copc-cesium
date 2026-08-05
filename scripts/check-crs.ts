@@ -41,6 +41,10 @@ const GEOGRAPHIC_COMPOUND_WKT = `COMPD_CS["NAD83 + NAVD88",
     PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]],
   VERT_CS["NAVD88 height",VERT_DATUM["NAVD88",2005],UNIT["metre",1],AXIS["Up",UP]]]`;
 const ESRI_VERTICAL_WKT = MIXED_UNITS_WKT.replace('VERT_CS[', 'VERTCS[');
+const FORMATTED_COMPOUND_WKT = MIXED_UNITS_WKT
+  .replace('COMPD_CS[', 'compd_cs \n [')
+  .replace('PROJCS[', 'projcs \n [')
+  .replace('VERT_CS[', 'vert_cs \n [');
 
 // --- resolveCrs ---
 // no-CRS → throw (silent 지구밖 방지)
@@ -109,6 +113,18 @@ for (const alias of ['EPSG:4326', 'WGS84']) {
 {
   const { zUnit } = resolveCrs(ESRI_VERTICAL_WKT);
   ok(zUnit === 1, `ESRI VERTCS vertical metre preserved (${zUnit})`);
+}
+
+{
+  const { horizontalUnit, zUnit } = resolveCrs(FORMATTED_COMPOUND_WKT);
+  ok(Math.abs(horizontalUnit - 0.3048006096012192) < 1e-12 && zUnit === 1,
+    'compound WKT keywords accept lowercase and whitespace before brackets');
+}
+
+{
+  const { horizontalUnit, zUnit } = resolveCrs('+proj=utm +zone=10 +datum=WGS84 +units=km +no_defs');
+  ok(horizontalUnit === 1000 && zUnit === 1000,
+    `proj4 unit metadata is the linear-unit SSOT (horizontal=${horizontalUnit}, z=${zUnit})`);
 }
 
 // crs(force) 가 header 를 덮는다 — 같은 입력좌표가 다른 zone 으로 다른 lon
@@ -186,6 +202,23 @@ function fakeSession(
   ok(center[0] * Math.PI / 180 >= region[0] && center[0] * Math.PI / 180 <= region[2] &&
     center[1] * Math.PI / 180 >= region[1] && center[1] * Math.PI / 180 <= region[3],
     'projected zero bbox region falls back to hierarchy cube');
+}
+
+// 유효하지만 실제 점보다 좁은 header와 일부만 겹치는 projected node도 cube region을 유지해야 한다.
+{
+  const toWgs = resolveCrs(UTM10N).toWgs;
+  const s = fakeSession(toWgs, [490000, 4870000, 0, 491000, 4871000, 1000], 1, false, {
+    min: [490000, 4870000, 0], max: [490800, 4870800, 1000],
+  });
+  s.nodes['1-1-1-0'] = { pointCount: 1 } as never;
+  const json = buildTileset(s, '/tiles/') as {
+    root: { children: Array<{ boundingVolume: { region: number[] } }> };
+  };
+  const region = json.root.children[0].boundingVolume.region;
+  const childCorner = toWgs.forward([490999, 4870999]);
+  ok(childCorner[0] * Math.PI / 180 >= region[0] && childCorner[0] * Math.PI / 180 <= region[2] &&
+    childCorner[1] * Math.PI / 180 >= region[1] && childCorner[1] * Math.PI / 180 <= region[3],
+    'projected node partially outside stale header keeps its hierarchy cube region');
 }
 
 {

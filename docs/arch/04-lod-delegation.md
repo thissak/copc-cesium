@@ -46,8 +46,7 @@ LOD 로직 대신 우리가 한 일은: ① 01장에서 `geometricError = spacin
 
 ```ts
 // src/tileset.ts — nodeRegionAndError() : 세로를 데이터 범위로 조임
-let minH = Math.max(cubeMinZ, s.copc.header.min[2]) * s.zUnit;
-let maxH = Math.min(cubeMinZ + side, s.copc.header.max[2]) * s.zUnit;
+--8<-- "src/tileset.ts:tileHeight"
 ```
 
 ## refine: ADD — 덮지 않고 더한다

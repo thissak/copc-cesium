@@ -69,22 +69,27 @@ function nodeRegionAndError(s: CopcSession, key: string): { region: number[]; ge
     [s.copc.header.min[0], s.copc.header.min[1], s.copc.header.max[0], s.copc.header.max[1]].every(Number.isFinite);
   if (!intersectsHeader && !headerValid && s.horizontalIsAngular)
     throw new Error('Geographic COPC header XY bounds are degenerate; hierarchy cube cannot recover angular bounds');
-  const useHeader = intersectsHeader || headerValid;
+  // 투영 CRS는 cube의 X/Y/Z가 같은 선형단위라 header clamp가 필요 없다. 오히려
+  // 손상·미갱신 header 밖의 유효 노드를 culling할 수 있으므로 geographic에만 적용한다.
+  const useHeader = s.horizontalIsAngular && (intersectsHeader || headerValid);
+  const useIntersection = useHeader && intersectsHeader;
   const [west, south, east, north] = horizontalRegion(
     s,
-    intersectsHeader ? boundedMinX : useHeader ? s.copc.header.min[0] : minX,
-    intersectsHeader ? boundedMinY : useHeader ? s.copc.header.min[1] : minY,
-    intersectsHeader ? boundedMaxX : useHeader ? s.copc.header.max[0] : minX + side,
-    intersectsHeader ? boundedMaxY : useHeader ? s.copc.header.max[1] : minY + side,
+    useIntersection ? boundedMinX : useHeader ? s.copc.header.min[0] : minX,
+    useIntersection ? boundedMinY : useHeader ? s.copc.header.min[1] : minY,
+    useIntersection ? boundedMaxX : useHeader ? s.copc.header.max[0] : minX + side,
+    useIntersection ? boundedMaxY : useHeader ? s.copc.header.max[1] : minY + side,
     useHeader,
   );
   // 세로(높이)는 큐브가 과하게 크다 → 실제 데이터 Z 범위와 교집합으로 조임 (SSE 정확도↑ → LOD 일관성↑)
+  // --8<-- [start:tileHeight]
   const cubeMinZ = s.cube[2] + z * side;
   const headerZValid = Number.isFinite(s.copc.header.min[2]) && Number.isFinite(s.copc.header.max[2]) &&
     s.copc.header.max[2] >= s.copc.header.min[2];
   let minH = (headerZValid ? Math.max(cubeMinZ, s.copc.header.min[2]) : cubeMinZ) * s.zUnit;
   let maxH = (headerZValid ? Math.min(cubeMinZ + side, s.copc.header.max[2]) : cubeMinZ + side) * s.zUnit;
   if (maxH <= minH) maxH = minH + 1;
+  // --8<-- [end:tileHeight]
   // --8<-- [start:geomError]
   const rootGE = s.rootSpanM / 16; // 수평·수직 중 큰 실제 미터 span. 수직형 데이터도 refine 보존.
   return { region: [west, south, east, north, minH, maxH], geomError: rootGE / 2 ** d };

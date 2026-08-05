@@ -58,3 +58,6 @@ COPC의 수평 CRS는 미터·피트·각도 단위를 쓸 수 있고 compound C
 - 7차 리뷰에서 퇴화 header bbox의 위치 폴백을 CRS별로 분리했다. projected는 hierarchy node
   cube로 region을 복구하고 geographic은 각도 범위를 복원할 근거가 없어 fail-loud한다.
   header 기반 region 샘플은 sub-mm 격자 reprojector를 사용하며 손상 Z는 node cube Z로 복구한다.
+- 8차 리뷰에서 header XY clamp를 geographic 전용으로 제한했다. projected node는 stale header와
+  일부 또는 전혀 겹치지 않아도 hierarchy cube region을 유지한다. compound WKT 토큰은 대소문자와
+  괄호 앞 공백을 허용하며, projected 수평 선형단위는 proj4가 해소한 `to_meter`를 SSOT로 사용한다.

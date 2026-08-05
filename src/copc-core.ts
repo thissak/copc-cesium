@@ -139,22 +139,26 @@ export async function loadCopcPoints(
  */
 function extractBracketed(wkt: string, keywords: string[]): string | undefined {
   let start = -1;
+  let canonicalKeyword = '';
   for (const keyword of keywords) {
-    const i = wkt.indexOf(`${keyword}[`);
-    if (i >= 0 && (start < 0 || i < start)) start = i;
+    const i = new RegExp(`\\b${keyword}\\s*\\[`, 'i').exec(wkt)?.index ?? -1;
+    if (i >= 0 && (start < 0 || i < start)) {
+      start = i;
+      canonicalKeyword = keyword;
+    }
   }
   if (start < 0) return undefined;
   const bracket = wkt.indexOf('[', start);
   let depth = 0;
   for (let i = bracket; i < wkt.length; i++) {
     if (wkt[i] === '[') depth++;
-    else if (wkt[i] === ']' && --depth === 0) return wkt.slice(start, i + 1);
+    else if (wkt[i] === ']' && --depth === 0) return canonicalKeyword + wkt.slice(bracket, i + 1);
   }
   return undefined;
 }
 
 function lastLinearUnit(def: string): number | undefined {
-  const units = [...def.matchAll(/(?:LENGTHUNIT|UNIT)\["[^"]*",\s*([0-9.eE+-]+)/g)];
+  const units = [...def.matchAll(/(?:LENGTHUNIT|UNIT)\s*\["[^"]*",\s*([0-9.eE+-]+)/gi)];
   return units.length ? Number(units[units.length - 1][1]) : undefined;
 }
 
@@ -176,7 +180,7 @@ export function extractHorizontalCrs(wkt: string): { proj: string; linearUnit: n
   const projected = extractBracketed(wkt, ['PROJCS', 'PROJCRS']);
   const geographic = extractBracketed(wkt, ['GEOGCS', 'GEOGCRS', 'GEOGRAPHICCRS']);
   const horizontal = projected ?? geographic;
-  if (horizontal && /^(?:COMPD_CS|COMPOUNDCRS)\[/.test(wkt)) proj = horizontal;
+  if (horizontal && /^\s*(?:COMPD_CS|COMPOUNDCRS)\s*\[/i.test(wkt)) proj = horizontal;
   const linearUnit = (projected ? lastLinearUnit(projected) : projStringUnit(proj)) ?? 1;
   return { proj, linearUnit };
 }
@@ -214,8 +218,13 @@ export function resolveCrs(wkt: string | undefined, opts: CrsOpts = {}): {
   let toWgs: Reproj;
   let horizontalIsAngular: boolean;
   try {
-    const sourceProjection = new proj4.Proj(horiz.proj) as unknown as { projName?: string };
+    const sourceProjection = new proj4.Proj(horiz.proj) as unknown as {
+      projName?: string;
+      to_meter?: number;
+    };
     horizontalIsAngular = sourceProjection.projName === 'longlat';
+    if (!horizontalIsAngular && Number.isFinite(sourceProjection.to_meter))
+      horiz.linearUnit = sourceProjection.to_meter!;
     toWgs = proj4(horiz.proj, proj4.WGS84) as unknown as Reproj;
     if (typeof toWgs.forward !== 'function') throw new Error('no forward()');
   } catch (e) {
