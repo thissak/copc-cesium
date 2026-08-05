@@ -50,6 +50,7 @@
     "check:snap": "tsx scripts/check-snap.ts",
     "check:public-types": "tsc --ignoreConfig --noEmit --target ES2022 --module ESNext --moduleResolution bundler --strict --skipLibCheck --types vite/client scripts/check-public-types.ts",
     "check:request-throttle": "tsx scripts/check-request-throttle.ts",
+    "check:sw-routing": "tsx scripts/check-sw-routing.ts",
     "sweep": "tsx scripts/sweep.ts",
     "bench:probe-bundle": "esbuild scripts/bench/probe.ts --bundle --platform=browser --format=iife --global-name=BenchProbe --footer:js=\"window.BenchProbe=BenchProbe;\" --outfile=scripts/bench/probe-bundle.js",
     "prebench:eptium": "npm run bench:probe-bundle",

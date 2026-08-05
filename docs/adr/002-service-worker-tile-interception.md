@@ -29,3 +29,10 @@ ADR-001은 A안(COPC 옥트리를 동적 `Cesium3DTileset`으로)을 택했으�
   - SW↔페이지 MessageChannel 왕복 비용.
   - **stale SW 제어권 race** — 이전 SW가 제어 중이면 새 코드가 안 먹음 → `register` 전 `getRegistrations().unregister()` 또는 `reg.update()` + `controllerchange` 대기 필요.
 - 검증: `?spike4`(단일 노드), `?spike5`(옥트리 트리), 기본 데모(`CopcTileset.fromUrl`).
+
+## 보강 (2026-08-06): 클라이언트 정체성
+
+SW→페이지 라우팅은 `FetchEvent.clientId`가 가리키는 요청 시작 클라이언트에만 보낸다.
+`clientId`가 없거나 해당 클라이언트가 만료됐을 때 `clients.matchAll()[0]`으로 다른 탭을
+선택하는 폴백은 금지하고 503으로 명확히 실패한다. 탭별 sid가 충돌할 수 있어
+임의 탭 선택은 다른 COPC 콘텐츠를 반환하는 정합성 결함이기 때문이다. ([이슈 #25](../issues/25-service-worker-client-routing.md))
