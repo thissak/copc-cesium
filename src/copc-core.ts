@@ -413,12 +413,14 @@ export function horizontalSpanMeters(toWgs: Reproj, bounds: number[], segments =
   return maxDistance;
 }
 
-/** 실제 bbox의 3D metric span. 손상/0 bbox는 옥트리 cube의 수직 span으로 fail-safe한다. */
+/** 실제 bbox의 3D metric span. 손상/0 bbox는 projected cube의 수평·수직 span으로 fail-safe한다. */
 export function computeRootSpanM(
   toWgs: Reproj,
   headerBounds: number[],
   cube: number[],
   zUnit: number,
+  horizontalUnit = 1,
+  horizontalIsAngular = false,
 ): number {
   let horizontal = 0;
   try {
@@ -429,8 +431,13 @@ export function computeRootSpanM(
   const vertical = Math.max(0, headerBounds[5] - headerBounds[2]) * zUnit;
   const measured = Math.max(horizontal, vertical);
   if (Number.isFinite(measured) && measured > 0) return measured;
+  const cubeHorizontal = horizontalIsAngular ? 0 : Math.max(
+    Math.max(0, cube[3] - cube[0]),
+    Math.max(0, cube[4] - cube[1]),
+  ) * horizontalUnit;
   const cubeVertical = Math.max(0, cube[5] - cube[2]) * zUnit;
-  if (Number.isFinite(cubeVertical) && cubeVertical > 0) return cubeVertical;
+  const cubeMeasured = Math.max(cubeHorizontal, cubeVertical);
+  if (Number.isFinite(cubeMeasured) && cubeMeasured > 0) return cubeMeasured;
   throw new Error('COPC metric extent is zero or non-finite; header bbox and hierarchy cube are invalid');
 }
 
@@ -449,6 +456,8 @@ export async function openCopc(url: string, opts?: { coalesce?: CoalesceOpts } &
     [...copc.header.min, ...copc.header.max],
     copc.info.cube,
     zUnit,
+    horizontalUnit,
+    horizontalIsAngular,
   );
   const session: CopcSession = {
     copc,

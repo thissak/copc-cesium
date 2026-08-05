@@ -1,7 +1,7 @@
 # 04. LOD 위임 — Cesium에게 맡긴다
 
 > 한 줄: **"언제 어느 노드를 더 가져올지"(LOD)를 우리가 손코딩하지 않는다.** [01장에서 심은
-> `geometricError`](01-public-api-and-isomorphism.md#결정적-한-줄--geometricerror--spacing--2깊이) 하나로 Cesium이 알아서 정한다.
+> `geometricError`](01-public-api-and-isomorphism.md) 하나로 Cesium이 알아서 정한다.
 
 [00장](00-big-picture.md)에서 "Cesium이 타일을 요청한다"고 했습니다. 그 **요청을 누가, 어떤 기준으로
 일으키나**가 이 장의 주제입니다.
@@ -33,7 +33,7 @@ flowchart TD
 
 ## 우리가 푼 건 단 두 줄
 
-LOD 로직 대신 우리가 한 일은: ① 01장에서 `geometricError = spacing / 2^깊이`를 심은 것, ② 그리고 노브 하나를
+LOD 로직 대신 우리가 한 일은: ① 01장에서 `geometricError = rootSpanM / 16 / 2^깊이`를 심은 것, ② 그리고 노브 하나를
 넘긴 것뿐입니다.
 
 ```ts

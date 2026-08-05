@@ -43,7 +43,7 @@ COPC는 점을 **옥트리**(공간을 8등분씩 재귀로 나눈 트리)로 �
 | 노드의 공간 범위(큐브) | ↔ | `boundingVolume` |
 | 노드 점 데이터 | ↔ | 타일 `content`(.pnts) |
 | 자식 노드 8개 | ↔ | `children[]` |
-| `spacing / 2^깊이` | ↔ | `geometricError` |
+| `rootSpanM / 16 / 2^깊이` | ↔ | `geometricError` |
 
 이 닮음 덕분에, COPC 노드 하나를 3D Tiles 타일 하나로 그대로 옮겨 적기만 하면 됩니다.
 
@@ -63,7 +63,7 @@ flowchart TD
 --8<-- "src/tileset.ts:childKeys"
 ```
 
-## 결정적 한 줄 — `geometricError = spacing / 2^깊이`
+## 결정적 한 줄 — `geometricError = rootSpanM / 16 / 2^깊이`
 
 표에서 마지막 줄이 이 시스템의 열쇠입니다. **geometricError**는 "이 타일까지만 그리면 화면에 이만큼
 오차가 남는다"를 Cesium에게 알려주는 숫자입니다.

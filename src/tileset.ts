@@ -84,7 +84,7 @@ function nodeRegionAndError(s: CopcSession, key: string): { region: number[]; ge
   // 세로(높이)는 큐브가 과하게 크다 → 실제 데이터 Z 범위와 교집합으로 조임 (SSE 정확도↑ → LOD 일관성↑)
   // --8<-- [start:tileHeight]
   const cubeMinZ = s.cube[2] + z * side;
-  const headerZValid = Number.isFinite(s.copc.header.min[2]) && Number.isFinite(s.copc.header.max[2]) &&
+  const headerZValid = headerValid && Number.isFinite(s.copc.header.min[2]) && Number.isFinite(s.copc.header.max[2]) &&
     s.copc.header.max[2] >= s.copc.header.min[2];
   let minH = (headerZValid ? Math.max(cubeMinZ, s.copc.header.min[2]) : cubeMinZ) * s.zUnit;
   let maxH = (headerZValid ? Math.min(cubeMinZ + side, s.copc.header.max[2]) : cubeMinZ + side) * s.zUnit;

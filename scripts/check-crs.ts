@@ -185,7 +185,7 @@ function fakeSession(
     horizontalIsAngular,
     cube,
     spacing: 1,
-    rootSpanM: computeRootSpanM(toWgs, [...bounds.min, ...bounds.max], cube, zUnit),
+    rootSpanM: computeRootSpanM(toWgs, [...bounds.min, ...bounds.max], cube, zUnit, 1, horizontalIsAngular),
   };
 }
 
@@ -193,6 +193,15 @@ function fakeSession(
   const toWgs = resolveCrs(UTM10N).toWgs;
   const span = computeRootSpanM(toWgs, [0, 0, 0, 0, 0, 0], [0, 0, 0, 4656, 4656, 4656], 1);
   ok(span === 4656, `zero header bbox falls back to cube vertical span (${span})`);
+  const flatSpan = computeRootSpanM(
+    toWgs,
+    [0, 0, 0, 0, 0, 0],
+    [490000, 4870000, 0, 500000, 4880000, 1],
+    1,
+    1,
+    false,
+  );
+  ok(flatSpan === 10000, `zero header bbox preserves wide projected cube XY span (${flatSpan})`);
   const broken = fakeSession(toWgs, [490000, 4870000, 0, 491000, 4871000, 1000], 1, false, {
     min: [0, 0, 0], max: [0, 0, 0],
   });
@@ -202,6 +211,8 @@ function fakeSession(
   ok(center[0] * Math.PI / 180 >= region[0] && center[0] * Math.PI / 180 <= region[2] &&
     center[1] * Math.PI / 180 >= region[1] && center[1] * Math.PI / 180 <= region[3],
     'projected zero bbox region falls back to hierarchy cube');
+  ok(region[5] - region[4] === 1000,
+    `projected zero bbox height falls back to hierarchy cube (${region[4]}..${region[5]})`);
 }
 
 // 유효하지만 실제 점보다 좁은 header와 일부만 겹치는 projected node도 cube region을 유지해야 한다.

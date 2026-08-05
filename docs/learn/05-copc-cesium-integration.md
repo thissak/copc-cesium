@@ -55,11 +55,11 @@ A안이 우아한 이유는 **두 구조가 사실상 동형(isomorphic)**이기
 |------|---|----------|
 | 옥트리 노드 | ↔ | 타일 |
 | 노드 큐브 | ↔ | boundingVolume |
-| `spacing / 2^깊이` | ↔ | `geometricError` |
+| `rootSpanM / 16 / 2^깊이` | ↔ | `geometricError` |
 | 노드 점 데이터(Range) | ↔ | 타일 content(pnts) |
 | 자식 8개 | ↔ | children[] |
 
-특히 **`geometricError = spacing / 2^깊이`** 매핑이 열쇠입니다. COPC의 깊이별 점 간격을 3D Tiles의 기하 오차로 환산해 주면, [03장의 Cesium SSE 순회](03-cesiumjs.md#sse-cesium-lod)가 **"언제 어느 노드"를 알아서 결정**합니다. 즉 질문 2(LOD)를 우리가 손코딩하지 않고 Cesium에 위임할 수 있습니다.
+특히 **`geometricError = rootSpanM / 16 / 2^깊이`** 매핑이 열쇠입니다. 데이터의 수평 WGS84 폭과 수직 미터 폭 중 큰 값을 깊이별 3D Tiles 기하 오차로 환산해 주면, [03장의 Cesium SSE 순회](03-cesiumjs.md#sse-cesium-lod)가 **"언제 어느 노드"를 알아서 결정**합니다. 즉 질문 2(LOD)를 우리가 손코딩하지 않고 Cesium에 위임할 수 있습니다.
 
 ## 파이프라인 단계 ↔ 4축 병목
 

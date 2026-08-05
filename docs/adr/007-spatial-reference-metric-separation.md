@@ -61,3 +61,6 @@ COPC의 수평 CRS는 미터·피트·각도 단위를 쓸 수 있고 compound C
 - 8차 리뷰에서 header XY clamp를 geographic 전용으로 제한했다. projected node는 stale header와
   일부 또는 전혀 겹치지 않아도 hierarchy cube region을 유지한다. compound WKT 토큰은 대소문자와
   괄호 앞 공백을 허용하며, projected 수평 선형단위는 proj4가 해소한 `to_meter`를 SSOT로 사용한다.
+- 9차 리뷰에서 손상 header의 XY·Z 신뢰 판정을 하나로 통일했다. projected root span fallback은
+  hierarchy cube의 수평 폭×`horizontalUnit`과 수직 폭×`zUnit` 중 큰 값을 사용해 넓고 얕은
+  데이터도 refinement를 유지한다. geographic cube의 각도·미터 혼합 폭은 fallback에 사용하지 않는다.
