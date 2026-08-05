@@ -1,4 +1,4 @@
-import type { CopcSession } from './copc-core';
+import { boundsXYValid, type CopcSession } from './copc-core';
 
 // COPC 옥트리 → 3D Tiles tileset.json. 노드 1개 = 타일 1개.
 // boundingVolume 은 region([W,S,E,N,minH,maxH] 라디안/미터) — ECEF 변환 불필요(proj4만).
@@ -63,11 +63,8 @@ function nodeRegionAndError(s: CopcSession, key: string): { region: number[]; ge
   const boundedMaxX = Math.min(minX + side, s.copc.header.max[0]);
   const boundedMaxY = Math.min(minY + side, s.copc.header.max[1]);
   const intersectsHeader = boundedMaxX >= boundedMinX && boundedMaxY >= boundedMinY;
-  const headerValid = s.copc.header.max[0] >= s.copc.header.min[0] &&
-    s.copc.header.max[1] >= s.copc.header.min[1] &&
-    (s.copc.header.max[0] > s.copc.header.min[0] || s.copc.header.max[1] > s.copc.header.min[1]) &&
-    [s.copc.header.min[0], s.copc.header.min[1], s.copc.header.max[0], s.copc.header.max[1]].every(Number.isFinite);
-  if (!intersectsHeader && !headerValid && s.horizontalIsAngular)
+  const headerValid = boundsXYValid([...s.copc.header.min, ...s.copc.header.max]);
+  if (!headerValid && s.horizontalIsAngular)
     throw new Error('Geographic COPC header XY bounds are degenerate; hierarchy cube cannot recover angular bounds');
   // 투영 CRS는 cube의 X/Y/Z가 같은 선형단위라 header clamp가 필요 없다. 오히려
   // 손상·미갱신 header 밖의 유효 노드를 culling할 수 있으므로 geographic에만 적용한다.
@@ -86,8 +83,12 @@ function nodeRegionAndError(s: CopcSession, key: string): { region: number[]; ge
   const cubeMinZ = s.cube[2] + z * side;
   const headerZValid = headerValid && Number.isFinite(s.copc.header.min[2]) && Number.isFinite(s.copc.header.max[2]) &&
     s.copc.header.max[2] >= s.copc.header.min[2];
-  let minH = (headerZValid ? Math.max(cubeMinZ, s.copc.header.min[2]) : cubeMinZ) * s.zUnit;
-  let maxH = (headerZValid ? Math.min(cubeMinZ + side, s.copc.header.max[2]) : cubeMinZ + side) * s.zUnit;
+  const boundedMinZ = Math.max(cubeMinZ, s.copc.header.min[2]);
+  const boundedMaxZ = Math.min(cubeMinZ + side, s.copc.header.max[2]);
+  const intersectsHeaderZ = headerZValid && boundedMaxZ >= boundedMinZ;
+  const useHeaderZ = intersectsHeaderZ || (s.horizontalIsAngular && headerZValid);
+  let minH = (intersectsHeaderZ ? boundedMinZ : useHeaderZ ? s.copc.header.min[2] : cubeMinZ) * s.zUnit;
+  let maxH = (intersectsHeaderZ ? boundedMaxZ : useHeaderZ ? s.copc.header.max[2] : cubeMinZ + side) * s.zUnit;
   if (maxH <= minH) maxH = minH + 1;
   // --8<-- [end:tileHeight]
   // --8<-- [start:geomError]

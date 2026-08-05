@@ -193,15 +193,25 @@ function fakeSession(
   const toWgs = resolveCrs(UTM10N).toWgs;
   const span = computeRootSpanM(toWgs, [0, 0, 0, 0, 0, 0], [0, 0, 0, 4656, 4656, 4656], 1);
   ok(span === 4656, `zero header bbox falls back to cube vertical span (${span})`);
-  const flatSpan = computeRootSpanM(
+  const mixedUnitCubeSpan = computeRootSpanM(
     toWgs,
     [0, 0, 0, 0, 0, 0],
-    [490000, 4870000, 0, 500000, 4880000, 1],
+    [490000, 4870000, 0, 500000, 4880000, 10000],
+    0.3048,
+    1,
+    false,
+  );
+  ok(mixedUnitCubeSpan === 10000,
+    `zero header bbox uses COPC cube side × max(horizontalUnit,zUnit) (${mixedUnitCubeSpan})`);
+  const partialSpan = computeRootSpanM(
+    toWgs,
+    [0, 0, 0, 0, 0, 1],
+    [490000, 4870000, 0, 500000, 4880000, 10000],
     1,
     1,
     false,
   );
-  ok(flatSpan === 10000, `zero header bbox preserves wide projected cube XY span (${flatSpan})`);
+  ok(partialSpan === 10000, `degenerate XY ignores shallow header Z and uses metric cube (${partialSpan})`);
   const broken = fakeSession(toWgs, [490000, 4870000, 0, 491000, 4871000, 1000], 1, false, {
     min: [0, 0, 0], max: [0, 0, 0],
   });
@@ -213,6 +223,28 @@ function fakeSession(
     'projected zero bbox region falls back to hierarchy cube');
   ok(region[5] - region[4] === 1000,
     `projected zero bbox height falls back to hierarchy cube (${region[4]}..${region[5]})`);
+}
+
+// stale projected header Z와 겹치지 않는 node는 1m 슬래브가 아니라 자기 cube Z를 유지한다.
+{
+  const toWgs = resolveCrs(UTM10N).toWgs;
+  const s = fakeSession(toWgs, [490000, 4870000, 0, 490800, 4870800, 800], 1, false, {
+    min: [490000, 4870000, 0], max: [490800, 4870800, 100],
+  });
+  s.nodes['1-0-0-1'] = { pointCount: 1 } as never;
+  const json = buildTileset(s, '/tiles/') as {
+    root: { children: Array<{ boundingVolume: { region: number[] } }> };
+  };
+  const region = json.root.children[0].boundingVolume.region;
+  ok(region[4] === 400 && region[5] === 800,
+    `projected node outside stale header Z keeps cube height (${region[4]}..${region[5]})`);
+}
+
+// geographic의 퇴화 header는 cube와 우연히 겹쳐도 mixed-unit cube로 복구하지 않는다.
+{
+  const toWgs = resolveCrs('+proj=longlat +datum=WGS84 +no_defs').toWgs;
+  throws(() => computeRootSpanM(toWgs, [0, 0, 0, 0, 0, 0], [-50, -20, 0, 150, 180, 200], 1, 1, true),
+    'geographic degenerate header fails loud independently of cube intersection');
 }
 
 // 유효하지만 실제 점보다 좁은 header와 일부만 겹치는 projected node도 cube region을 유지해야 한다.
