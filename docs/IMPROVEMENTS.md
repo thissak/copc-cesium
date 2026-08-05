@@ -30,7 +30,7 @@ COPC 창시자 Hobu의 상용 **Eptium**이 *"COPC, COG, EPT data support for Ce
 
 ### 3. 옥트리 피킹 / 최근접점 / 스냅 (picking) — stretch — **#3-A ✅·#3-B ✅ 출하**
 - **#3-A ✅**(2026-06-20, PR#7): 클릭→점 정보 조회 `pickPoint()`.
-- **#3-B ✅**(2026-06-23, PR#21): 옥트리 풀해상도 최근접점 스냅 `tileset.snapPoint()` — 가장 깊은 노드 디코드→실제 최근접 점. dual-review 2R(비등방 메트릭 정정+독립 ECEF 오라클; 단일-노드 한계 공개). **한계**: 로컬 노드 내 최근접(전역 보장 아님·경계 ~0.14m·이웃검색=후속)·투영 CRS 가정. renderer-shaped 리스크는 스냅=데이터쿼리라 미발생. 측정 도구(거리/면적)·시각화=후속.
+- **#3-B ✅**(2026-06-23, PR#21; PR#28 metric 보강): 옥트리 풀해상도 최근접점 스냅 `tileset.snapPoint()` — 가장 깊은 노드 디코드→실제 최근접 점. projected 혼합단위와 geographic ECEF metric 지원. **한계**: 로컬 노드 내 최근접(전역 보장 아님·경계 ~0.14m·이웃검색=후속). renderer-shaped 리스크는 스냅=데이터쿼리라 미발생. 측정 도구(거리/면적)·시각화=후속.
 - **실해**: Cesium pick이 포인트클라우드에서 globe로 빠짐·최근접점 검색 없음·측정 스냅 안 됨.
 - **우리-영역성**: COPC 옥트리 = 공간 인덱스 → `.pnts` tileset엔 없는 구조적 우위로 pick API 한계 돌파.
 - **복잡도**: 진짜 hard + 부분적으로 renderer-shaped(리스크↑).

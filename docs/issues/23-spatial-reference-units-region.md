@@ -108,3 +108,5 @@
 - 2차 Red·Blue 교차검증에서 geographic degree를 1m로 오인하는 경로를 확인해
   `horizontalIsAngular` 분기와 WGS84 ECEF 스냅 metric을 추가했다. 0.001° 수평 후보보다
   1m 수직 후보를 선택하고 거리를 1m로 반환하는 회귀 계약으로 고정했다.
+- 3차 리뷰에서 `EPSG:4326`/`WGS84` 별칭이 문자열 판정을 우회함을 확인해 proj4의 해소된
+  `projName` 판정으로 교체하고, 세션 metric 분기 자체를 unit 테스트에 포함했다.

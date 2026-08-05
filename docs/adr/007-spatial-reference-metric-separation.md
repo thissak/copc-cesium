@@ -41,3 +41,6 @@ COPC의 수평 CRS는 미터·피트·각도 단위를 쓸 수 있고 compound C
 - proj string override의 `+vunits`/`+vto_meter`도 수직 단위 계약에 포함한다.
 - 2차 리뷰에서 geographic source X/Y가 각도임을 별도 표시하고, 스냅 후보를 WGS84 ECEF
   미터 공간에서 비교하도록 보강했다. projected 경로는 빠른 source metric을 유지한다.
+- 3차 리뷰에서 문자열 모양 대신 proj4가 해소한 `Proj.projName`으로 angular 여부를 판정해
+  `EPSG:4326`·`WGS84` 별칭도 같은 ECEF 경로를 사용하도록 고정했다. 후보 변환은 기존
+  sub-mm 격자 reprojector를 재사용한다.

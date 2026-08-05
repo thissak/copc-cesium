@@ -5,6 +5,7 @@ import {
   checkCenterInRange,
   geographicMetricMetersSquared,
   horizontalSpanMeters,
+  sessionMetricMetersSquared,
   sourceMetricMetersSquared,
 } from '../src/copc-core';
 import { buildTileset } from '../src/tileset';
@@ -73,6 +74,16 @@ throws(() => resolveCrs(undefined), 'no WKT + no opts → throw');
   const vertical1m = geographicMetricMetersSquared(toWgs, [-123, 44, 0], [-123, 44, 1], zUnit);
   ok(vertical1m < horizontal80m && Math.abs(Math.sqrt(vertical1m) - 1) < 1e-6,
     'geographic snap chooses 1m vertical over 0.001° horizontal distance');
+  const geographicSession = fakeSession(toWgs, [-124, 43, 0, -122, 45, 10], zUnit, true);
+  const sessionHorizontal = sessionMetricMetersSquared(geographicSession, [-123, 44, 0], [-122.999, 44, 0]);
+  const sessionVertical = sessionMetricMetersSquared(geographicSession, [-123, 44, 0], [-123, 44, 1]);
+  ok(sessionVertical < sessionHorizontal && Math.abs(Math.sqrt(sessionVertical) - 1) < 1e-6,
+    'geographic session metric takes ECEF branch');
+}
+
+for (const alias of ['EPSG:4326', 'WGS84']) {
+  const { horizontalIsAngular } = resolveCrs(undefined, { crs: alias });
+  ok(horizontalIsAngular, `${alias} resolves as angular CRS`);
 }
 
 {
@@ -118,7 +129,12 @@ const UTM10N_cube = [490000, 4870000, 0, 510000, 4886000, 500]; // Autzen UTM10N
   throws(() => checkCenterInRange(nanReproj, UTM10N_cube), 'NaN reproject → throw');
 }
 
-function fakeSession(toWgs: { forward: (xy: number[]) => number[] }, cube: number[], zUnit = 1): CopcSession {
+function fakeSession(
+  toWgs: { forward: (xy: number[]) => number[] },
+  cube: number[],
+  zUnit = 1,
+  horizontalIsAngular = false,
+): CopcSession {
   return {
     copc: { header: { min: cube.slice(0, 3), max: cube.slice(3) } } as never,
     getter: (() => Promise.resolve(new Uint8Array())) as never,
@@ -128,7 +144,7 @@ function fakeSession(toWgs: { forward: (xy: number[]) => number[] }, cube: numbe
     toWgs,
     zUnit,
     horizontalUnit: 1,
-    horizontalIsAngular: false,
+    horizontalIsAngular,
     cube,
     spacing: 1,
     horizontalSpanM: horizontalSpanMeters(toWgs, cube),

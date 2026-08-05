@@ -171,15 +171,14 @@ function namedProjStringUnit(def: string, unitsKey: string, factorKey: string): 
   return toMeter ? Number(toMeter) : undefined;
 }
 
-export function extractHorizontalCrs(wkt: string): { proj: string; linearUnit: number; isAngular: boolean } {
+export function extractHorizontalCrs(wkt: string): { proj: string; linearUnit: number } {
   let proj = wkt;
   const projected = extractBracketed(wkt, ['PROJCS', 'PROJCRS']);
   const geographic = extractBracketed(wkt, ['GEOGCS', 'GEOGCRS', 'GEOGRAPHICCRS']);
   const horizontal = projected ?? geographic;
   if (horizontal && /^(?:COMPD_CS|COMPOUNDCRS)\[/.test(wkt)) proj = horizontal;
   const linearUnit = (projected ? lastLinearUnit(projected) : projStringUnit(proj)) ?? 1;
-  const isAngular = !projected && (!!geographic || /(?:^|\s)\+proj=(?:longlat|latlong)(?:\s|$)/.test(proj));
-  return { proj, linearUnit, isAngular };
+  return { proj, linearUnit };
 }
 
 /** Compound CRS의 수직 CRS 단위를 우선하고, 없으면 수평 선형단위를 폴백한다. */
@@ -213,7 +212,10 @@ export function resolveCrs(wkt: string | undefined, opts: CrsOpts = {}): {
   }
   const horiz = extractHorizontalCrs(def);
   let toWgs: Reproj;
+  let horizontalIsAngular: boolean;
   try {
+    const sourceProjection = new proj4.Proj(horiz.proj) as unknown as { projName?: string };
+    horizontalIsAngular = sourceProjection.projName === 'longlat';
     toWgs = proj4(horiz.proj, proj4.WGS84) as unknown as Reproj;
     if (typeof toWgs.forward !== 'function') throw new Error('no forward()');
   } catch (e) {
@@ -225,7 +227,7 @@ export function resolveCrs(wkt: string | undefined, opts: CrsOpts = {}): {
   return {
     toWgs,
     horizontalUnit: horiz.linearUnit,
-    horizontalIsAngular: horiz.isAngular,
+    horizontalIsAngular,
     zUnit: extractVerticalUnit(def, horiz.linearUnit),
   };
 }
@@ -528,6 +530,30 @@ export function sourceMetricMetersSquared(
   return sourceMetricSquared(dx, dy, dz, horizontalUnit, zUnit) * horizontalUnit * horizontalUnit;
 }
 
+/** 세션 CRS 종류에 따라 projected source metric 또는 geographic ECEF metric을 선택한다. */
+export function sessionMetricMetersSquared(
+  s: CopcSession,
+  a: [number, number, number],
+  b: [number, number, number],
+): number {
+  if (!s.horizontalIsAngular) {
+    return sourceMetricMetersSquared(
+      b[0] - a[0],
+      b[1] - a[1],
+      b[2] - a[2],
+      s.horizontalUnit,
+      s.zUnit,
+    );
+  }
+  const forward = (point: [number, number, number]): [number, number, number] => {
+    const ll = s.reproj ? s.reproj.forward(point[0], point[1]) : s.toWgs!.forward([point[0], point[1]]);
+    return surfaceEcef(ll[0], ll[1], point[2] * s.zUnit);
+  };
+  const ae = forward(a);
+  const be = forward(b);
+  return (be[0] - ae[0]) ** 2 + (be[1] - ae[1]) ** 2 + (be[2] - ae[2]) ** 2;
+}
+
 /** geographic source 좌표 두 점의 WGS84 ECEF 실제 미터 거리 제곱. */
 export function geographicMetricMetersSquared(
   toWgs: Reproj,
@@ -551,10 +577,10 @@ function geographicSourceEcef(
 
 /**
  * 노드(key) 안에서 씨앗(source sx,sy,sz)에 3D 최근접인 실제 점을 찾아 정확 좌표+속성 반환 (이슈 #3-B).
- * 비교는 source 공간(전체 reproject 안 함), 승자 1점만 reproject. hideClass 점은 스킵(렌더와 일관).
+ * projected는 source metric, geographic은 후보별 격자 reproject→ECEF metric으로 비교한다.
+ * hideClass 점은 스킵(렌더와 일관).
  * projected CRS는 Z 차분을 zUnit/horizontalUnit으로 정규화한 source metric을 사용한다.
  * geographic CRS는 각도에 상수 선형 환산을 적용할 수 없으므로 후보를 WGS84 ECEF로 변환해 비교한다.
- * (투영 CRS 가정: 지리좌표계(수평 도°, 수직 m)면 단위가 달라 비등방 — 거의 모든 COPC 가 투영이라 현 스코프 밖.)
  * 노드 없음/0점/전부 스킵 → null.
  */
 export async function nearestPointInNode(
@@ -578,22 +604,9 @@ export async function nearestPointInNode(
   const gc = hideClass?.size && 'Classification' in view.dimensions ? view.getter('Classification') : null;
   let best = -1;
   let bestD2 = Infinity;
-  const angularSeed = s.horizontalIsAngular
-    ? geographicSourceEcef(s.toWgs!, [sx, sy, sz], s.zUnit)
-    : undefined;
   for (let i = 0; i < n; i++) {
     if (gc && hideClass!.has(gc(i) | 0)) continue;
-    const dx = gx(i) - sx;
-    const dy = gy(i) - sy;
-    const dz = gz(i) - sz;
-    let d2: number;
-    if (angularSeed) {
-      const candidate = geographicSourceEcef(s.toWgs!, [gx(i), gy(i), gz(i)], s.zUnit);
-      d2 = (candidate[0] - angularSeed[0]) ** 2 + (candidate[1] - angularSeed[1]) ** 2 +
-        (candidate[2] - angularSeed[2]) ** 2;
-    } else {
-      d2 = sourceMetricMetersSquared(dx, dy, dz, s.horizontalUnit, s.zUnit);
-    }
+    const d2 = sessionMetricMetersSquared(s, [sx, sy, sz], [gx(i), gy(i), gz(i)]);
     if (d2 < bestD2) { bestD2 = d2; best = i; }
   }
   if (best < 0) return null;

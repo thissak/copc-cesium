@@ -115,7 +115,7 @@ const snapped = await tileset.snapPoint(viewer.scene, windowPosition); // window
 // 빈틈/하늘 클릭(pickPosition 미가용) → undefined.
 ```
 
-> Note: searches the nearest point **within the deepest node containing the seed** (no neighbor-node search). A click hugging a node boundary may miss the true global nearest by up to ~node spacing (~0.14 m on autzen) — a *local full-resolution approximate snap*, not a guaranteed global nearest. Neighbor search is a planned enhancement. Assumes a projected CRS (X/Y/Z share one linear unit).
+> Note: searches the nearest point **within the deepest node containing the seed** (no neighbor-node search). A click hugging a node boundary may miss the true global nearest by up to ~node spacing (~0.14 m on autzen) — a *local full-resolution approximate snap*, not a guaranteed global nearest. Neighbor search is a planned enhancement. Projected mixed-unit and geographic CRS metrics are normalized to metres.
 
 `rampStyle(name, range)` builds a normalized color-ramp style for any attribute, and `await tileset.attributeRange(name)` samples the root node for `[min, max]`:
 
