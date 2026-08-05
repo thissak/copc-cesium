@@ -26,6 +26,14 @@
 - **(−)** 페이지당 fetch 는 페이지·워커 2회(현 dual-openCopc 와 동일 패턴, 경량·세션 캐시).
 - 검증: Node `check-paging`(서브페이지 88노드·23,359점 디코드) + 브라우저 millsite(서브페이지 노드 `.pnts` 500→200, `page/K.json` 200·유효 child tileset).
 
+### 보강 (2026-08-06): 세션 내 동시 로드 single-flight
+
+페이지 측 세션이나 워커 세션 각각에서 같은 key를 동시에 요청하면 진행 중 Promise를 공유한다.
+완료 결과를 영구 캐시하지 않고 in-flight 동안만 공유하며, 성공 시에만 page pointer를 지운다.
+실패한 Promise는 즉시 registry에서 제거하므로 다음 호출이 원래 pointer로 재시도할 수 있다.
+페이지와 워커가 각자 한 번 읽는 dual-session 구조는 그대로이며 세션 내부 중복만 제거한다.
+`check:paging`은 동일 key 동시 호출의 hierarchy range read가 2회에서 1회로 감소함을 고정한다.
+
 ## 다음
 
 워커풀·LRU(측정 후), 속성 견고성(intensity/classification), 복원력. 페이징 시각·성능은 실 GPU 대용량(millsite/sofi)에서 측정.

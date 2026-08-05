@@ -90,6 +90,7 @@ function fakeSession(toWgs: { forward: (xy: number[]) => number[] }, cube: numbe
     getter: (() => Promise.resolve(new Uint8Array())) as never,
     nodes: { '0-0-0-0': { pointCount: 1 } } as never,
     pages: {},
+    pageLoads: new Map(),
     toWgs,
     zUnit,
     cube,

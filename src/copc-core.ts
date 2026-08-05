@@ -327,6 +327,8 @@ export interface CopcSession {
   nodes: Hierarchy.Node.Map;
   /** 미로드 자식 하이어라키 페이지 포인터(key→{pageOffset,pageLength}). lazy 페이징용. */
   pages: Hierarchy.Page.Map;
+  /** 동일 서브페이지의 동시 로드를 공유하는 세션 단위 single-flight registry. */
+  pageLoads: Map<string, Promise<boolean>>;
   toWgs?: Reproj;
   /** reproject 가속기 (이슈 #17: 격자 bilinear, proj4 폴백). toWgs 있을 때만 설정. */
   reproj?: GridReproj;
@@ -386,6 +388,7 @@ export async function openCopc(url: string, opts?: { coalesce?: CoalesceOpts } &
     getter: base,
     nodes,
     pages,
+    pageLoads: new Map(),
     toWgs,
     reproj: makeGridReprojector(toWgs, copc.header.min, copc.header.max),
     zUnit,
@@ -414,13 +417,24 @@ export async function openCopc(url: string, opts?: { coalesce?: CoalesceOpts } &
 export async function loadSubPage(s: CopcSession, key: string): Promise<boolean> {
   const ptr = s.pages[key];
   if (!ptr) return false;
+  const existing = s.pageLoads.get(key);
+  if (existing) return existing;
   // --8<-- [start:loadSubPage]
-  const sub = await Copc.loadHierarchyPage(s.getter, ptr);
-  Object.assign(s.nodes, sub.nodes); // K 와 그 하위 실노드
-  Object.assign(s.pages, sub.pages); // 더 깊은 미로드 페이지 포인터
-  delete s.pages[key]; // 로드 완료 → 더는 미로드 포인터 아님
+  const pending = (async () => {
+    const sub = await Copc.loadHierarchyPage(s.getter, ptr);
+    Object.assign(s.nodes, sub.nodes); // K 와 그 하위 실노드
+    Object.assign(s.pages, sub.pages); // 더 깊은 미로드 페이지 포인터
+    delete s.pages[key]; // 로드 완료 → 더는 미로드 포인터 아님
+    return true;
+  })();
+  s.pageLoads.set(key, pending);
+  try {
+    return await pending;
+  } finally {
+    // 실패도 캐시하지 않는다. 포인터는 성공 시에만 지워지므로 다음 호출에서 재시도 가능하다.
+    if (s.pageLoads.get(key) === pending) s.pageLoads.delete(key);
+  }
   // --8<-- [end:loadSubPage]
-  return true;
 }
 
 /**
