@@ -1,3 +1,7 @@
+---
+lifecycle: active
+---
+
 # PROGRESS — CopcCesiumLab
 
 > 페이즈 체크리스트. 상태가 바뀌면 한 줄씩 갱신.

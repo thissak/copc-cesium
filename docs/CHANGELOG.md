@@ -2,6 +2,12 @@
 
 날짜별 변경 내역 + 결정 사유. 최신이 위.
 
+### 2026-08-06
+- [docs] **Claude Code SSOT→Codex 브릿지 `AGENTS.md` 추가.** 글로벌·프로젝트 `CLAUDE.md`와 `docs/PROGRESS.md`·`docs/CHANGELOG.md` 읽기 순서만 가리키는 얇은 포인터로, 규칙 복제 없이 Claude·Codex가 동일 SSOT를 사용하게 함.
+
+### 2026-07-12
+- [docs] **KOSSA 오픈소스 개발자대회 — 참가 접수 완료 + 접수 폼 문구 확정.** 참가신청(~2026-07-17) 마감 전 접수 완료(부문=일반·지정과제 "가이아쓰리디"·단독팀 김대욱). 접수 폼 "프로젝트 정보" 3필드를 결과보고서 기준으로 폼 글자수 제한에 맞춰 확정 — 프로젝트명 `copc-cesium`(폼 금지기호 없음), 개발 목적(194/200자)·프로젝트 소개(294/300자). 소개의 차별화 문구는 "직접 소비하는 **유일한** 오픈소스"→"**드문** 오픈소스"로 톤다운(심사 방어선 확보, "오픈소스 ∩ CesiumJS 빈자리" 근거는 유지). 출품작(결과보고서+소스+3분영상) 제출은 **2026-08-27(D-46) 대기** — moat 보호 위해 그때까지 레포 private·npm publish 보류(DIRECTION §6-A). 확정 문구 verbatim + 기대효과 초안은 DIRECTION §6-A에 보존해 출품작에 재사용. (문서만·코드 무변경)
+
 ### 2026-06-25
 - [chore] **테스트 진입점 단일화 — `npm test`(오프라인 unit)/`test:integration`(S3 통합)/`test:all` + 집계 러너 `scripts/run-checks.ts`.** **동기**(입상 갭): DIRECTION 스코어카드의 유일한 ❌ — 검증 자산(`verify`+`check-*` 16개)은 있으나 `package.json`엔 2개만 노출되고 `npm test` 진입점이 없어 심사위원 "테스트 없음" 감점 위험. **설계**: 각 스크립트가 이미 `exit 0/1`+PASS/FAIL 규약을 가져 **얇은 집계 러너 1개**로 충분 — vitest 등 프레임워크 도입은 16개 재작성·회귀 위험이라 기각(Simplicity First). 네트워크 의존으로 분리: `test`=PURE 5(crs/ecef/picking/pnts-batch/style, 오프라인 결정적·심사 환경 어디서나 재현), `test:integration`=verify+NET 9(S3 range로 georef/페이징/coalesce/retry/속성/snap e2e). `check-cancel`은 #20 won't-fix 재현 도구라 회귀 가드 아니므로 스위트 제외. 미노출 `check-*`도 개별 `npm run check:<name>`으로 노출(가시성 2→15). **검증(실측)**: unit 5/5·exit 0, 실패 주입 시 exit 1+집계 정확, integration 9/9·exit 0, `npm run build` 회귀 0. 스코어카드 ❌→✅. (`scripts/run-checks.ts`+`package.json`+`README`)
 - [fix] **누락된 millsite 기본 URL 정정 — `check-classification`·`check-paging`의 `data.entwine.io`(404)→`hobu-lidar`(206).** 2026-06-18 `datasets.ts` 죽은 URL 정리 때 demo·벤치는 hobu-lidar로 이전됐으나 이 **테스트 2개가 누락**돼 옛 entwine URL을 남겼고, 테스트 진입점 단일화가 즉시 적발(진입점 ROI 실증). 동일 파일 확증(교체 후 `check-paging` "서브페이지 141" PASS). (`scripts/check-classification.ts`+`scripts/check-paging.ts`)
