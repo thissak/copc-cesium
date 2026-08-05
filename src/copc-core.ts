@@ -380,9 +380,9 @@ function surfaceEcef(lonDeg: number, latDeg: number, heightM = 0): [number, numb
   ];
 }
 
-/** source XY extent의 경계를 WGS84로 변환해 최대 수평 chord 길이(미터)를 구한다. */
-export function horizontalSpanMeters(toWgs: Reproj, cube: number[], segments = 8): number {
-  const minX = cube[0], minY = cube[1], maxX = cube[3], maxY = cube[4];
+/** source XY bbox 경계를 WGS84로 변환해 최대 수평 chord 길이(미터)를 구한다. */
+export function horizontalSpanMeters(toWgs: Reproj, bounds: number[], segments = 8): number {
+  const minX = bounds[0], minY = bounds[1], maxX = bounds[3], maxY = bounds[4];
   const distance = (a: number[], b: number[]): number => {
     const ea = surfaceEcef(a[0], a[1]);
     const eb = surfaceEcef(b[0], b[1]);
@@ -427,7 +427,7 @@ export async function openCopc(url: string, opts?: { coalesce?: CoalesceOpts } &
     horizontalIsAngular,
     cube: copc.info.cube,
     spacing: copc.info.spacing,
-    horizontalSpanM: horizontalSpanMeters(toWgs, copc.info.cube),
+    horizontalSpanM: horizontalSpanMeters(toWgs, [...copc.header.min, ...copc.header.max]),
   };
   // coalesce 켜면 point 읽기를 병합 getter 로(헤더/hierarchy 는 passthrough). 워커 세션만 사용.
   if (opts?.coalesce) {
@@ -508,7 +508,7 @@ export interface NearestHit {
 }
 
 /** source 축 차분을 수평 source 단위계의 등방 거리 제곱으로 정규화한다. */
-export function sourceMetricSquared(
+function sourceMetricSquared(
   dx: number,
   dy: number,
   dz: number,
@@ -536,43 +536,28 @@ export function sessionMetricMetersSquared(
   a: [number, number, number],
   b: [number, number, number],
 ): number {
+  return makeSessionMetric(s, a)(b[0], b[1], b[2]);
+}
+
+/** 씨앗의 CRS 변환을 한 번만 수행하고 후보별 실제 미터 거리 제곱 함수를 만든다. */
+export function makeSessionMetric(
+  s: CopcSession,
+  seed: [number, number, number],
+): (x: number, y: number, z: number) => number {
   if (!s.horizontalIsAngular) {
-    return sourceMetricMetersSquared(
-      b[0] - a[0],
-      b[1] - a[1],
-      b[2] - a[2],
-      s.horizontalUnit,
-      s.zUnit,
+    return (x, y, z) => sourceMetricMetersSquared(
+      x - seed[0], y - seed[1], z - seed[2], s.horizontalUnit, s.zUnit,
     );
   }
-  const forward = (point: [number, number, number]): [number, number, number] => {
-    const ll = s.reproj ? s.reproj.forward(point[0], point[1]) : s.toWgs!.forward([point[0], point[1]]);
-    return surfaceEcef(ll[0], ll[1], point[2] * s.zUnit);
+  const forward = (x: number, y: number, z: number): [number, number, number] => {
+    const ll = s.reproj ? s.reproj.forward(x, y) : s.toWgs!.forward([x, y]);
+    return surfaceEcef(ll[0], ll[1], z * s.zUnit);
   };
-  const ae = forward(a);
-  const be = forward(b);
-  return (be[0] - ae[0]) ** 2 + (be[1] - ae[1]) ** 2 + (be[2] - ae[2]) ** 2;
-}
-
-/** geographic source 좌표 두 점의 WGS84 ECEF 실제 미터 거리 제곱. */
-export function geographicMetricMetersSquared(
-  toWgs: Reproj,
-  a: [number, number, number],
-  b: [number, number, number],
-  zUnit: number,
-): number {
-  const ae = geographicSourceEcef(toWgs, a, zUnit);
-  const be = geographicSourceEcef(toWgs, b, zUnit);
-  return (be[0] - ae[0]) ** 2 + (be[1] - ae[1]) ** 2 + (be[2] - ae[2]) ** 2;
-}
-
-function geographicSourceEcef(
-  toWgs: Reproj,
-  point: [number, number, number],
-  zUnit: number,
-): [number, number, number] {
-  const ll = toWgs.forward([point[0], point[1]]);
-  return surfaceEcef(ll[0], ll[1], point[2] * zUnit);
+  const ae = forward(seed[0], seed[1], seed[2]);
+  return (x, y, z) => {
+    const be = forward(x, y, z);
+    return (be[0] - ae[0]) ** 2 + (be[1] - ae[1]) ** 2 + (be[2] - ae[2]) ** 2;
+  };
 }
 
 /**
@@ -604,9 +589,10 @@ export async function nearestPointInNode(
   const gc = hideClass?.size && 'Classification' in view.dimensions ? view.getter('Classification') : null;
   let best = -1;
   let bestD2 = Infinity;
+  const metric = makeSessionMetric(s, [sx, sy, sz]);
   for (let i = 0; i < n; i++) {
     if (gc && hideClass!.has(gc(i) | 0)) continue;
-    const d2 = sessionMetricMetersSquared(s, [sx, sy, sz], [gx(i), gy(i), gz(i)]);
+    const d2 = metric(gx(i), gy(i), gz(i));
     if (d2 < bestD2) { bestD2 = d2; best = i; }
   }
   if (best < 0) return null;

@@ -44,3 +44,7 @@ COPC의 수평 CRS는 미터·피트·각도 단위를 쓸 수 있고 compound C
 - 3차 리뷰에서 문자열 모양 대신 proj4가 해소한 `Proj.projName`으로 angular 여부를 판정해
   `EPSG:4326`·`WGS84` 별칭도 같은 ECEF 경로를 사용하도록 고정했다. 후보 변환은 기존
   sub-mm 격자 reprojector를 재사용한다.
+- 4차 리뷰에서 COPC `info.cube`가 center±단일 radius인 규약 때문에 geographic의 Z(m)가
+  X/Y(°)를 팽창시키는 문제를 확인했다. 수평 span은 header bbox를 사용하고 각 node region은
+  header XY와 교집합해 실제 점 경계를 보수적으로 포함한다. geographic metric은 씨앗 ECEF를
+  루프 밖에서 한 번 계산하는 팩토리로 구성한다.

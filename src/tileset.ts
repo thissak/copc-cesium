@@ -19,15 +19,21 @@ function longitudeBounds(values: number[]): [number, number] {
 }
 
 /** source XY 사각형의 변을 샘플링해 비선형 투영에서도 보수적인 WGS84 region을 만든다. */
-function horizontalRegion(s: CopcSession, minX: number, minY: number, side: number): [number, number, number, number] {
+function horizontalRegion(
+  s: CopcSession,
+  minX: number,
+  minY: number,
+  maxX: number,
+  maxY: number,
+): [number, number, number, number] {
   const lons: number[] = [];
   const lats: number[] = [];
   const segments = 8;
   for (let i = 0; i <= segments; i++) {
     const t = i / segments;
-    const x = minX + side * t;
-    const y = minY + side * t;
-    for (const xy of [[x, minY], [x, minY + side], [minX, y], [minX + side, y]]) {
+    const x = minX + (maxX - minX) * t;
+    const y = minY + (maxY - minY) * t;
+    for (const xy of [[x, minY], [x, maxY], [minX, y], [maxX, y]]) {
       const ll = s.toWgs ? s.toWgs.forward(xy) : xy;
       if (!(Number.isFinite(ll[0]) && Number.isFinite(ll[1]) && ll[1] >= -90 && ll[1] <= 90))
         throw new Error(`tile region reproject out of range (lon=${ll[0]}, lat=${ll[1]})`);
@@ -48,7 +54,17 @@ function nodeRegionAndError(s: CopcSession, key: string): { region: number[]; ge
   const side = (s.cube[3] - s.cube[0]) / 2 ** d; // 루트 큐브 한 변(투영단위)
   const minX = s.cube[0] + x * side;
   const minY = s.cube[1] + y * side;
-  const [west, south, east, north] = horizontalRegion(s, minX, minY, side);
+  // info.cube는 모든 축에 같은 radius를 쓰므로 geographic CRS에서는 Z(m)가 X/Y(°)를
+  // 수백 도까지 팽창시킬 수 있다. 실제 점 bbox와 교집합해 source XY를 보수적으로 조인다.
+  const boundedMinX = Math.max(minX, s.copc.header.min[0]);
+  const boundedMinY = Math.max(minY, s.copc.header.min[1]);
+  const boundedMaxX = Math.min(minX + side, s.copc.header.max[0]);
+  const boundedMaxY = Math.min(minY + side, s.copc.header.max[1]);
+  if (!(boundedMaxX >= boundedMinX && boundedMaxY >= boundedMinY))
+    throw new Error(`tile ${key} does not intersect COPC header XY bounds`);
+  const [west, south, east, north] = horizontalRegion(
+    s, boundedMinX, boundedMinY, boundedMaxX, boundedMaxY,
+  );
   // 세로(높이)는 큐브가 과하게 크다 → 실제 데이터 Z 범위와 교집합으로 조임 (SSE 정확도↑ → LOD 일관성↑)
   const cubeMinZ = s.cube[2] + z * side;
   let minH = Math.max(cubeMinZ, s.copc.header.min[2]) * s.zUnit;

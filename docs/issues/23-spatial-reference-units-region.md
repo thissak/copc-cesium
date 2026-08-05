@@ -110,3 +110,6 @@
   1m 수직 후보를 선택하고 거리를 1m로 반환하는 회귀 계약으로 고정했다.
 - 3차 리뷰에서 `EPSG:4326`/`WGS84` 별칭이 문자열 판정을 우회함을 확인해 proj4의 해소된
   `projName` 판정으로 교체하고, 세션 metric 분기 자체를 unit 테스트에 포함했다.
+- 4차 리뷰에서 geographic COPC의 정육면체 `info.cube`가 Z 미터 범위만큼 X/Y 도 범위를
+  팽창시키는 실제 open 실패를 확인했다. root span은 header bbox로 측정하고 node region은
+  header XY로 clamp했다. center±radius 200의 재현 cube와 0.01° 실제 bbox를 회귀 테스트로 고정했다.

@@ -3,8 +3,9 @@
 import {
   resolveCrs,
   checkCenterInRange,
-  geographicMetricMetersSquared,
   horizontalSpanMeters,
+  makeGridReprojector,
+  makeSessionMetric,
   sessionMetricMetersSquared,
   sourceMetricMetersSquared,
 } from '../src/copc-core';
@@ -70,15 +71,23 @@ throws(() => resolveCrs(undefined), 'no WKT + no opts → throw');
   const [lon, lat] = toWgs.forward([-123, 44]);
   ok(Math.abs(lon + 123) < 1e-9 && Math.abs(lat - 44) < 1e-9 && horizontalIsAngular && zUnit === 1,
     'geographic compound CRS extracts horizontal GEOGCS');
-  const horizontal80m = geographicMetricMetersSquared(toWgs, [-123, 44, 0], [-122.999, 44, 0], zUnit);
-  const vertical1m = geographicMetricMetersSquared(toWgs, [-123, 44, 0], [-123, 44, 1], zUnit);
-  ok(vertical1m < horizontal80m && Math.abs(Math.sqrt(vertical1m) - 1) < 1e-6,
-    'geographic snap chooses 1m vertical over 0.001° horizontal distance');
-  const geographicSession = fakeSession(toWgs, [-124, 43, 0, -122, 45, 10], zUnit, true);
+  const geographicSession = fakeSession(toWgs, [-223, -56, 0, -23, 144, 200], zUnit, true, {
+    min: [-123.005, 44.05, 0], max: [-122.995, 44.06, 200],
+  });
   const sessionHorizontal = sessionMetricMetersSquared(geographicSession, [-123, 44, 0], [-122.999, 44, 0]);
   const sessionVertical = sessionMetricMetersSquared(geographicSession, [-123, 44, 0], [-123, 44, 1]);
   ok(sessionVertical < sessionHorizontal && Math.abs(Math.sqrt(sessionVertical) - 1) < 1e-6,
     'geographic session metric takes ECEF branch');
+  const grid = makeGridReprojector(toWgs, geographicSession.copc.header.min, geographicSession.copc.header.max);
+  const gridSession = { ...geographicSession, reproj: grid };
+  const exactMetric = makeSessionMetric(geographicSession, [-123, 44.055, 0]);
+  const gridMetric = makeSessionMetric(gridSession, [-123, 44.055, 0]);
+  ok(Math.abs(Math.sqrt(gridMetric(-122.999, 44.055, 1)) - Math.sqrt(exactMetric(-122.999, 44.055, 1))) < 0.001,
+    'geographic grid metric matches proj4 fallback within 1mm');
+  const json = buildTileset(geographicSession, '/tiles/') as { root: { boundingVolume: { region: number[] } } };
+  const region = json.root.boundingVolume.region;
+  ok(region[1] >= 44.049 * Math.PI / 180 && region[3] <= 44.061 * Math.PI / 180,
+    'geographic cube XY is clamped to real header bounds');
 }
 
 for (const alias of ['EPSG:4326', 'WGS84']) {
@@ -134,9 +143,11 @@ function fakeSession(
   cube: number[],
   zUnit = 1,
   horizontalIsAngular = false,
+  header?: { min: number[]; max: number[] },
 ): CopcSession {
+  const bounds = header ?? { min: cube.slice(0, 3), max: cube.slice(3) };
   return {
-    copc: { header: { min: cube.slice(0, 3), max: cube.slice(3) } } as never,
+    copc: { header: bounds } as never,
     getter: (() => Promise.resolve(new Uint8Array())) as never,
     nodes: { '0-0-0-0': { pointCount: 1 } } as never,
     pages: {},
@@ -147,7 +158,7 @@ function fakeSession(
     horizontalIsAngular,
     cube,
     spacing: 1,
-    horizontalSpanM: horizontalSpanMeters(toWgs, cube),
+    horizontalSpanM: horizontalSpanMeters(toWgs, [...bounds.min, ...bounds.max]),
   };
 }
 
