@@ -64,15 +64,16 @@ COPC의 수평 CRS는 미터·피트·각도 단위를 쓸 수 있고 compound C
 - 9차 리뷰에서 손상 header의 XY·Z 신뢰 판정을 하나로 통일했다. projected root span fallback은
   hierarchy cube의 수평 폭×`horizontalUnit`과 수직 폭×`zUnit` 중 큰 값을 사용해 넓고 얕은
   데이터도 refinement를 유지한다. geographic cube의 각도·미터 혼합 폭은 fallback에 사용하지 않는다.
-- 10차 리뷰 후 반복 edge-case의 원인이 전체 bbox 단위 fallback임을 확인해 축별 계약으로 재설계했다.
+- 10차 리뷰 후 반복 edge-case의 원인이 전체 bbox 단위 fallback임을 확인해 축별 계약으로 재설계했다
+  (Z clamp 세부 계약은 11~12차에서 아래와 같이 대체됨).
   OGC 3D Tiles는 `geometricError`를 미터로 요구하고 bounding volume이 content를 포함해야 하므로,
   projected header XY가 손상되면 COPC 단일-radius 정육면체의 `side × max(horizontalUnit,zUnit)`을
-  사용한다. geographic의 mixed-unit cube는 metric fallback으로 쓰지 않고 fail-loud한다. node Z는
-  header Z와 실제 교집합이 있을 때만 clamp한다.
+  사용한다. geographic의 mixed-unit cube는 metric fallback으로 쓰지 않고 fail-loud한다.
+
+- 11~12차 리뷰에서 퇴화축과 손상축을 분리했다. geographic은 cube를 쓰지 않지만 header XY chord와
+  Z 미터 span을 독립 계산해 둘 중 하나가 양수면 유효하다(동일 XY 수직 스캔 포함). LAS 규격의 정상
+  header Z는 node cube와 교집합으로 조이고, 손상되었거나 교집합이 없을 때만 node cube로 복구한다.
+  축 유효성 판정은 `headerAxisValidity` 한 곳에서 코어와 tileset이 공유한다.
 
 공식 근거: [OGC 3D Tiles 1.1](https://docs.ogc.org/cs/22-025r4/22-025r4.html),
 [COPC 1.0](https://copc.io/), [OGC CRS WKT](https://docs.ogc.org/is/12-063r5/12-063r5.html).
-
-- 11차 리뷰에서 퇴화축과 손상축을 분리했다. geographic은 cube를 쓰지 않지만 header XY chord와
-  Z 미터 span을 독립 계산해 둘 중 하나가 양수면 유효하다(동일 XY 수직 스캔 포함). projected tile Z는
-  stale header의 부분 교집합도 content를 자를 수 있으므로 항상 node cube로 완전포함한다.

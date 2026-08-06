@@ -414,9 +414,21 @@ export function horizontalSpanMeters(toWgs: Reproj, bounds: number[], segments =
 }
 
 /** header source XY가 유한하고 비역전인지 판정한다. 점/선 bbox도 유효한 공간 범위다. */
-export function boundsXYUsable(bounds: number[]): boolean {
-  return [bounds[0], bounds[1], bounds[3], bounds[4]].every(Number.isFinite) &&
+export function headerAxisValidity(bounds: number[]): {
+  xyUsable: boolean;
+  xyHasSpan: boolean;
+  zUsable: boolean;
+  zHasSpan: boolean;
+} {
+  const xyUsable = [bounds[0], bounds[1], bounds[3], bounds[4]].every(Number.isFinite) &&
     bounds[3] >= bounds[0] && bounds[4] >= bounds[1];
+  const zUsable = Number.isFinite(bounds[2]) && Number.isFinite(bounds[5]) && bounds[5] >= bounds[2];
+  return {
+    xyUsable,
+    xyHasSpan: xyUsable && (bounds[3] > bounds[0] || bounds[4] > bounds[1]),
+    zUsable,
+    zHasSpan: zUsable && bounds[5] > bounds[2],
+  };
 }
 
 /** 실제 bbox의 3D metric span. 손상/0 bbox는 projected cube의 수평·수직 span으로 fail-safe한다. */
@@ -428,15 +440,13 @@ export function computeRootSpanM(
   horizontalUnit = 1,
   horizontalIsAngular = false,
 ): number {
-  const xyUsable = boundsXYUsable(headerBounds);
-  const xyHasSpan = xyUsable && (headerBounds[3] > headerBounds[0] || headerBounds[4] > headerBounds[1]);
-  const zUsable = Number.isFinite(headerBounds[2]) && Number.isFinite(headerBounds[5]) &&
-    headerBounds[5] >= headerBounds[2];
+  const { xyHasSpan, zUsable } = headerAxisValidity(headerBounds);
+  const side = cube[3] - cube[0];
 
   let horizontal = 0;
   if (xyHasSpan) {
     try { horizontal = horizontalSpanMeters(toWgs, headerBounds); }
-    catch { horizontal = 0; }
+    catch { horizontal = horizontalIsAngular ? 0 : side * horizontalUnit; }
   }
   const vertical = zUsable ? (headerBounds[5] - headerBounds[2]) * zUnit : 0;
   const measured = Math.max(horizontal, vertical);
@@ -448,7 +458,6 @@ export function computeRootSpanM(
 
   // COPC info cube는 단일 radius로 만든 정육면체다. projected CRS에서만 같은 side를
   // 수평·수직 단위로 각각 미터화해 보수적인 metric extent를 복구할 수 있다.
-  const side = cube[3] - cube[0];
   const cubeMeasured = side * Math.max(horizontalUnit, zUnit);
   if (Number.isFinite(cubeMeasured) && cubeMeasured > 0) return cubeMeasured;
   throw new Error('COPC metric extent is zero or non-finite; header bbox and hierarchy cube are invalid');

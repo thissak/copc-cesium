@@ -41,8 +41,8 @@ LOD 로직 대신 우리가 한 일은: ① 01장에서 `geometricError = rootSp
 --8<-- "src/copc-tileset.ts:maxSSE"
 ```
 
-`geometricError`가 정확해야 SSE 판정도 정확합니다. 그래서 타일의 높이 범위를 큐브가 아니라 **실제 데이터 Z
-범위와 교집합**으로 조여, 오차 계산이 헐거워지지 않게 합니다.
+`geometricError`가 정확해야 SSE 판정도 정확합니다. LAS header Z와 node cube가 겹치면 **실제 데이터 Z
+범위와 교집합**으로 조이고, 손상되었거나 전혀 겹치지 않으면 node cube로 복구해 content를 포함합니다.
 
 ```ts
 // src/tileset.ts — nodeRegionAndError() : 세로를 데이터 범위로 조임

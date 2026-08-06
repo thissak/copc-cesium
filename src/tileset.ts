@@ -1,4 +1,4 @@
-import { boundsXYUsable, type CopcSession } from './copc-core';
+import { headerAxisValidity, type CopcSession } from './copc-core';
 
 // COPC 옥트리 → 3D Tiles tileset.json. 노드 1개 = 타일 1개.
 // boundingVolume 은 region([W,S,E,N,minH,maxH] 라디안/미터) — ECEF 변환 불필요(proj4만).
@@ -63,17 +63,13 @@ function nodeRegionAndError(s: CopcSession, key: string): { region: number[]; ge
   const boundedMaxX = Math.min(minX + side, s.copc.header.max[0]);
   const boundedMaxY = Math.min(minY + side, s.copc.header.max[1]);
   const intersectsHeader = boundedMaxX >= boundedMinX && boundedMaxY >= boundedMinY;
-  const headerUsable = boundsXYUsable([...s.copc.header.min, ...s.copc.header.max]);
-  const headerHasSpan = headerUsable &&
-    (s.copc.header.max[0] > s.copc.header.min[0] || s.copc.header.max[1] > s.copc.header.min[1]);
-  const headerZUsable = Number.isFinite(s.copc.header.min[2]) && Number.isFinite(s.copc.header.max[2]) &&
-    s.copc.header.max[2] >= s.copc.header.min[2];
-  if (s.horizontalIsAngular && !(headerUsable && (headerHasSpan ||
-    (headerZUsable && s.copc.header.max[2] > s.copc.header.min[2]))))
+  const bounds = [...s.copc.header.min, ...s.copc.header.max];
+  const { xyUsable, xyHasSpan, zUsable, zHasSpan } = headerAxisValidity(bounds);
+  if (s.horizontalIsAngular && !(xyUsable && (xyHasSpan || zHasSpan)))
     throw new Error('Geographic COPC header XY bounds are degenerate; hierarchy cube cannot recover angular bounds');
   // 투영 CRS는 cube의 X/Y/Z가 같은 선형단위라 header clamp가 필요 없다. 오히려
   // 손상·미갱신 header 밖의 유효 노드를 culling할 수 있으므로 geographic에만 적용한다.
-  const useHeader = s.horizontalIsAngular && (intersectsHeader || headerUsable);
+  const useHeader = s.horizontalIsAngular && (intersectsHeader || xyUsable);
   const useIntersection = useHeader && intersectsHeader;
   const [west, south, east, north] = horizontalRegion(
     s,
@@ -88,10 +84,12 @@ function nodeRegionAndError(s: CopcSession, key: string): { region: number[]; ge
   const cubeMinZ = s.cube[2] + z * side;
   const boundedMinZ = Math.max(cubeMinZ, s.copc.header.min[2]);
   const boundedMaxZ = Math.min(cubeMinZ + side, s.copc.header.max[2]);
-  const intersectsHeaderZ = headerZUsable && boundedMaxZ >= boundedMinZ;
-  // projected header는 stale일 수 있으므로 content 완전포함을 위해 node cube Z를 유지한다.
-  const useHeaderZ = s.horizontalIsAngular && headerZUsable;
-  const useIntersectionZ = useHeaderZ && intersectsHeaderZ;
+  const headerZTrusted = zUsable && (s.horizontalIsAngular ? xyUsable : xyHasSpan);
+  const intersectsHeaderZ = headerZTrusted && boundedMaxZ >= boundedMinZ;
+  // LAS 규격의 header extent는 실제 point 범위다. 교집합이 있으면 조이고, 손상되었거나
+  // node와 전혀 겹치지 않는 stale header만 node cube로 복구한다.
+  const useHeaderZ = intersectsHeaderZ || (s.horizontalIsAngular && headerZTrusted);
+  const useIntersectionZ = intersectsHeaderZ;
   let minH = (useIntersectionZ ? boundedMinZ : useHeaderZ ? s.copc.header.min[2] : cubeMinZ) * s.zUnit;
   let maxH = (useIntersectionZ ? boundedMaxZ : useHeaderZ ? s.copc.header.max[2] : cubeMinZ + side) * s.zUnit;
   if (maxH <= minH) maxH = minH + 1;

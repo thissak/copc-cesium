@@ -239,8 +239,22 @@ function fakeSession(
   ok(region[4] === 400 && region[5] === 800,
     `projected node outside stale header Z keeps cube height (${region[4]}..${region[5]})`);
   const rootRegion = json.root.boundingVolume.region;
-  ok(rootRegion[4] === 0 && rootRegion[5] === 800,
-    `projected node partially overlapping stale header Z also keeps cube height (${rootRegion[4]}..${rootRegion[5]})`);
+  ok(rootRegion[4] === 0 && rootRegion[5] === 100,
+    `projected node intersects compliant header Z extent (${rootRegion[4]}..${rootRegion[5]})`);
+}
+
+// header 중심은 유효하지만 edge reprojection이 실패하면 projected cube metric으로 복구한다.
+{
+  const toWgs = resolveCrs(UTM10N).toWgs;
+  const span = computeRootSpanM(
+    toWgs,
+    [-1e9, 4870000, 0, 1e9, 4871000, 1],
+    [-2328, 4868172, -2328, 2328, 4872828, 2328],
+    1,
+    1,
+    false,
+  );
+  ok(span === 4656, `projected edge reproject failure falls back to cube horizontal metric (${span})`);
 }
 
 // geographic의 퇴화 header는 cube와 우연히 겹쳐도 mixed-unit cube로 복구하지 않는다.
