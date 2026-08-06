@@ -64,7 +64,7 @@ function nodeRegionAndError(s: CopcSession, key: string): { region: number[]; ge
   const boundedMaxY = Math.min(minY + side, s.copc.header.max[1]);
   const intersectsHeader = boundedMaxX >= boundedMinX && boundedMaxY >= boundedMinY;
   const bounds = [...s.copc.header.min, ...s.copc.header.max];
-  const { xyUsable, xyHasSpan, zUsable, zHasSpan } = headerAxisValidity(bounds);
+  const { xyUsable, xyHasSpan, zHasSpan } = headerAxisValidity(bounds);
   if (s.horizontalIsAngular && !(xyUsable && (xyHasSpan || zHasSpan)))
     throw new Error('Geographic COPC header XY bounds are degenerate; hierarchy cube cannot recover angular bounds');
   // 투영 CRS는 cube의 X/Y/Z가 같은 선형단위라 header clamp가 필요 없다. 오히려
@@ -84,11 +84,10 @@ function nodeRegionAndError(s: CopcSession, key: string): { region: number[]; ge
   const cubeMinZ = s.cube[2] + z * side;
   const boundedMinZ = Math.max(cubeMinZ, s.copc.header.min[2]);
   const boundedMaxZ = Math.min(cubeMinZ + side, s.copc.header.max[2]);
-  const headerZTrusted = zUsable && (s.horizontalIsAngular ? xyUsable : xyHasSpan);
-  const intersectsHeaderZ = headerZTrusted && boundedMaxZ >= boundedMinZ;
-  // LAS 규격의 header extent는 실제 point 범위다. 교집합이 있으면 조이고, 손상되었거나
-  // node와 전혀 겹치지 않는 stale header만 node cube로 복구한다.
-  const useHeaderZ = intersectsHeaderZ || (s.horizontalIsAngular && headerZTrusted);
+  const intersectsHeaderZ = s.headerZTrusted && boundedMaxZ >= boundedMinZ;
+  // projected는 루트 hierarchy에서 한 번 판정한 세션 정책을 모든 타일에 적용한다.
+  // 타일별 fallback은 부모가 자식을 포함하지 못하는 비단조 bounding volume을 만든다.
+  const useHeaderZ = intersectsHeaderZ || (s.horizontalIsAngular && s.headerZTrusted);
   const useIntersectionZ = intersectsHeaderZ;
   let minH = (useIntersectionZ ? boundedMinZ : useHeaderZ ? s.copc.header.min[2] : cubeMinZ) * s.zUnit;
   let maxH = (useIntersectionZ ? boundedMaxZ : useHeaderZ ? s.copc.header.max[2] : cubeMinZ + side) * s.zUnit;

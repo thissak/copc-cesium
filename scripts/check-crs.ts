@@ -5,8 +5,10 @@ import {
   checkCenterInRange,
   computeRootSpanM,
   horizontalSpanMeters,
+  headerAxisValidity,
   makeGridReprojector,
   makeSessionMetric,
+  projectedHeaderZTrusted,
   sessionMetricMetersSquared,
   sourceMetricMetersSquared,
 } from '../src/copc-core';
@@ -183,6 +185,9 @@ function fakeSession(
     zUnit,
     horizontalUnit: 1,
     horizontalIsAngular,
+    headerZTrusted: horizontalIsAngular
+      ? headerAxisValidity([...bounds.min, ...bounds.max]).zUsable
+      : projectedHeaderZTrusted([...bounds.min, ...bounds.max], cube, { '0-0-0-0': { pointCount: 1 } } as never),
     cube,
     spacing: 1,
     rootSpanM: computeRootSpanM(toWgs, [...bounds.min, ...bounds.max], cube, zUnit, 1, horizontalIsAngular),
@@ -225,13 +230,16 @@ function fakeSession(
     `projected zero bbox height falls back to hierarchy cube (${region[4]}..${region[5]})`);
 }
 
-// stale projected header Z와 겹치지 않는 node는 1m 슬래브가 아니라 자기 cube Z를 유지한다.
+// stale projected header Z는 세션 전체가 node cube를 써 부모가 자식을 포함한다.
 {
   const toWgs = resolveCrs(UTM10N).toWgs;
   const s = fakeSession(toWgs, [490000, 4870000, 0, 490800, 4870800, 800], 1, false, {
     min: [490000, 4870000, 0], max: [490800, 4870800, 100],
   });
   s.nodes['1-0-0-1'] = { pointCount: 1 } as never;
+  s.headerZTrusted = projectedHeaderZTrusted(
+    [...s.copc.header.min, ...s.copc.header.max], s.cube, s.nodes,
+  );
   const json = buildTileset(s, '/tiles/') as {
     root: { children: Array<{ boundingVolume: { region: number[] } }> };
   };
@@ -239,8 +247,9 @@ function fakeSession(
   ok(region[4] === 400 && region[5] === 800,
     `projected node outside stale header Z keeps cube height (${region[4]}..${region[5]})`);
   const rootRegion = json.root.boundingVolume.region;
-  ok(rootRegion[4] === 0 && rootRegion[5] === 100,
-    `projected node intersects compliant header Z extent (${rootRegion[4]}..${rootRegion[5]})`);
+  ok(rootRegion[4] === 0 && rootRegion[5] === 800 &&
+    rootRegion[4] <= region[4] && rootRegion[5] >= region[5],
+    `stale-header session keeps parent-child Z containment (${rootRegion[4]}..${rootRegion[5]})`);
 }
 
 // header 중심은 유효하지만 edge reprojection이 실패하면 projected cube metric으로 복구한다.

@@ -70,10 +70,12 @@ COPC의 수평 CRS는 미터·피트·각도 단위를 쓸 수 있고 compound C
   projected header XY가 손상되면 COPC 단일-radius 정육면체의 `side × max(horizontalUnit,zUnit)`을
   사용한다. geographic의 mixed-unit cube는 metric fallback으로 쓰지 않고 fail-loud한다.
 
-- 11~12차 리뷰에서 퇴화축과 손상축을 분리했다. geographic은 cube를 쓰지 않지만 header XY chord와
-  Z 미터 span을 독립 계산해 둘 중 하나가 양수면 유효하다(동일 XY 수직 스캔 포함). LAS 규격의 정상
-  header Z는 node cube와 교집합으로 조이고, 손상되었거나 교집합이 없을 때만 node cube로 복구한다.
-  축 유효성 판정은 `headerAxisValidity` 한 곳에서 코어와 tileset이 공유한다.
+- 11~13차 리뷰에서 퇴화축과 손상축을 분리했다. geographic은 cube를 쓰지 않지만 header XY chord와
+  Z 미터 span을 독립 계산해 둘 중 하나가 양수면 유효하다(동일 XY 수직 스캔 포함). projected Z는
+  루트 hierarchy의 점 보유 노드가 LAS header와 모순되는지 한 번 판정한다. 정상 세션은 모든 타일을
+  header와 조이고, 모순 세션은 모든 타일이 node cube를 쓴다. lazy page가 뒤늦게 신뢰를 뒤집으면
+  fail-loud해 이미 생성된 부모 경계와의 불일치를 막는다. 축 유효성 판정은 `headerAxisValidity` 한 곳에서
+  코어와 tileset이 공유한다.
 
 공식 근거: [OGC 3D Tiles 1.1](https://docs.ogc.org/cs/22-025r4/22-025r4.html),
 [COPC 1.0](https://copc.io/), [OGC CRS WKT](https://docs.ogc.org/is/12-063r5/12-063r5.html).

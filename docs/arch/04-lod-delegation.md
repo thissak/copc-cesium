@@ -41,8 +41,9 @@ LOD 로직 대신 우리가 한 일은: ① 01장에서 `geometricError = rootSp
 --8<-- "src/copc-tileset.ts:maxSSE"
 ```
 
-`geometricError`가 정확해야 SSE 판정도 정확합니다. LAS header Z와 node cube가 겹치면 **실제 데이터 Z
-범위와 교집합**으로 조이고, 손상되었거나 전혀 겹치지 않으면 node cube로 복구해 content를 포함합니다.
+`geometricError`가 정확해야 SSE 판정도 정확합니다. projected 데이터는 루트 hierarchy에서 LAS header Z
+신뢰를 한 번 판정해, 세션 전체를 **header 교집합** 또는 **node cube** 중 하나로 고정합니다. 그래야 부모
+bounding volume이 자식을 포함합니다. geographic 데이터는 mixed-unit cube 대신 유효 header Z를 사용합니다.
 
 ```ts
 // src/tileset.ts — nodeRegionAndError() : 세로를 데이터 범위로 조임

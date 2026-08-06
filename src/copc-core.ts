@@ -366,6 +366,8 @@ export interface CopcSession {
   horizontalUnit: number;
   /** source X/Y가 선형 투영 단위가 아니라 경도·위도 각도인지 여부. */
   horizontalIsAngular: boolean;
+  /** projected LAS header Z를 전체 tileset에서 일관되게 사용할 수 있는지 여부. */
+  headerZTrusted: boolean;
   cube: number[]; // [minx,miny,minz,maxx,maxy,maxz] (root, 큐브)
   spacing: number;
   /** root의 수평 WGS84 span과 수직 미터 span 중 큰 값. 3D Tiles geometricError 단위용. */
@@ -431,6 +433,30 @@ export function headerAxisValidity(bounds: number[]): {
   };
 }
 
+function nodeCubeZ(cube: number[], key: string): [number, number] {
+  const [depth, , , z] = key.split('-').map(Number);
+  const side = (cube[3] - cube[0]) / 2 ** depth;
+  const minZ = cube[2] + z * side;
+  return [minZ, minZ + side];
+}
+
+/** 루트 hierarchy의 점 보유 노드가 LAS header Z와 모순되지 않는지 판정한다. */
+export function projectedHeaderZTrusted(
+  headerBounds: number[],
+  cube: number[],
+  nodes: Hierarchy.Node.Map,
+): boolean {
+  const { xyHasSpan, zUsable } = headerAxisValidity(headerBounds);
+  if (!(xyHasSpan && zUsable)) return false;
+  const minZ = headerBounds[2];
+  const maxZ = headerBounds[5];
+  return !Object.entries(nodes).some(([key, node]) => {
+    if (!node || node.pointCount <= 0) return false;
+    const [nodeMinZ, nodeMaxZ] = nodeCubeZ(cube, key);
+    return nodeMaxZ < minZ || nodeMinZ > maxZ;
+  });
+}
+
 /** 실제 bbox의 3D metric span. 손상/0 bbox는 projected cube의 수평·수직 span으로 fail-safe한다. */
 export function computeRootSpanM(
   toWgs: Reproj,
@@ -481,6 +507,7 @@ export async function openCopc(url: string, opts?: { coalesce?: CoalesceOpts } &
     horizontalUnit,
     horizontalIsAngular,
   );
+  const headerBounds = [...copc.header.min, ...copc.header.max];
   const session: CopcSession = {
     copc,
     getter: base,
@@ -492,6 +519,9 @@ export async function openCopc(url: string, opts?: { coalesce?: CoalesceOpts } &
     zUnit,
     horizontalUnit,
     horizontalIsAngular,
+    headerZTrusted: horizontalIsAngular
+      ? headerAxisValidity(headerBounds).zUsable
+      : projectedHeaderZTrusted(headerBounds, copc.info.cube, nodes),
     cube: copc.info.cube,
     spacing: copc.info.spacing,
     rootSpanM,
@@ -522,6 +552,10 @@ export async function loadSubPage(s: CopcSession, key: string): Promise<boolean>
   // --8<-- [start:loadSubPage]
   const pending = (async () => {
     const sub = await Copc.loadHierarchyPage(s.getter, ptr);
+    if (!s.horizontalIsAngular && s.headerZTrusted &&
+        !projectedHeaderZTrusted([...s.copc.header.min, ...s.copc.header.max], s.cube, sub.nodes)) {
+      throw new Error('COPC hierarchy contradicts the trusted LAS header Z extent');
+    }
     Object.assign(s.nodes, sub.nodes); // K 와 그 하위 실노드
     Object.assign(s.pages, sub.pages); // 더 깊은 미로드 페이지 포인터
     delete s.pages[key]; // 로드 완료 → 더는 미로드 포인터 아님

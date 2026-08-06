@@ -1,5 +1,7 @@
 # CHANGELOG
 
+- [fix] **[PR #28 dual-review R13] tile Z fallback을 세션 단위 단조 정책으로 고정.** 루트 hierarchy의 점 보유 노드와 LAS header Z가 모순되면 모든 projected 타일이 node cube를 사용하고, 정상 세션은 모든 타일을 header 교집합으로 조인다. 이후 lazy page가 기존 header 신뢰를 뒤집으면 fail-loud해 이미 생성된 부모 경계와 자식 경계의 불일치를 차단. 학습·이슈 문서의 CRS별 계약도 현행화. Blue CRITICAL 1·MINOR 2 대응.
+
 날짜별 변경 내역 + 결정 사유. 최신이 위.
 
 ### 2026-08-06
