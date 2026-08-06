@@ -8,7 +8,6 @@ import {
   headerAxisValidity,
   makeGridReprojector,
   makeSessionMetric,
-  projectedHeaderZTrusted,
   sessionMetricMetersSquared,
   sourceMetricMetersSquared,
 } from '../src/copc-core';
@@ -185,9 +184,6 @@ function fakeSession(
     zUnit,
     horizontalUnit: 1,
     horizontalIsAngular,
-    headerZTrusted: horizontalIsAngular
-      ? headerAxisValidity([...bounds.min, ...bounds.max]).zUsable
-      : projectedHeaderZTrusted([...bounds.min, ...bounds.max], cube, { '0-0-0-0': { pointCount: 1 } } as never),
     cube,
     spacing: 1,
     rootSpanM: computeRootSpanM(toWgs, [...bounds.min, ...bounds.max], cube, zUnit, 1, horizontalIsAngular),
@@ -237,9 +233,6 @@ function fakeSession(
     min: [490000, 4870000, 0], max: [490800, 4870800, 100],
   });
   s.nodes['1-0-0-1'] = { pointCount: 1 } as never;
-  s.headerZTrusted = projectedHeaderZTrusted(
-    [...s.copc.header.min, ...s.copc.header.max], s.cube, s.nodes,
-  );
   const json = buildTileset(s, '/tiles/') as {
     root: { children: Array<{ boundingVolume: { region: number[] } }> };
   };
@@ -250,6 +243,20 @@ function fakeSession(
   ok(rootRegion[4] === 0 && rootRegion[5] === 800 &&
     rootRegion[4] <= region[4] && rootRegion[5] >= region[5],
     `stale-header session keeps parent-child Z containment (${rootRegion[4]}..${rootRegion[5]})`);
+}
+
+// hierarchy node cube는 실제 점 extent가 아닌 컨테이너다. header와 부분 겹침만으로
+// 실제 점이 header 안에 있다고 증명할 수 없으므로 stale header를 신뢰하면 안 된다.
+{
+  const toWgs = resolveCrs(UTM10N).toWgs;
+  const s = fakeSession(toWgs, [490000, 4870000, 0, 490800, 4870800, 800], 1, false, {
+    min: [490000, 4870000, 0], max: [490800, 4870800, 100],
+  });
+  const json = buildTileset(s, '/tiles/') as { root: { boundingVolume: { region: number[] } } };
+  const region = json.root.boundingVolume.region;
+  const pointZ = 700;
+  ok(region[4] <= pointZ && region[5] >= pointZ,
+    `partially overlapping root cube cannot let stale header cull point Z=${pointZ} (${region[4]}..${region[5]})`);
 }
 
 // header 중심은 유효하지만 edge reprojection이 실패하면 projected cube metric으로 복구한다.

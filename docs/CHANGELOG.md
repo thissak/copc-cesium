@@ -1,5 +1,6 @@
 # CHANGELOG
 
+- [fix] **[PR #28 dual-review R14] projected tile Z를 COPC node cube로 단일화.** 부분 겹침 hierarchy cube로 LAS header의 실제 점 포함을 추론하던 R13 정책을 제거했다. OGC 3D Tiles의 content 완전포함 계약과 COPC octree center/halfsize 계약에 따라 projected tile은 항상 node cube Z를 사용하고, mixed-unit cube를 높이 근거로 쓸 수 없는 geographic만 유효 header Z를 사용한다. 반례 `header=[0,100]`, `cube=[0,800]`, `pointZ=700`은 RED `[0,100]`→GREEN `[0,800]`; 세션 신뢰 상태와 lazy-page fail-loud 분기도 함께 삭제했다. Blue CRITICAL 1 대응. ([ADR-007](adr/007-spatial-reference-metric-separation.md) 보강)
 - [fix] **[PR #28 dual-review R13] tile Z fallback을 세션 단위 단조 정책으로 고정.** 루트 hierarchy의 점 보유 노드와 LAS header Z가 모순되면 모든 projected 타일이 node cube를 사용하고, 정상 세션은 모든 타일을 header 교집합으로 조인다. 이후 lazy page가 기존 header 신뢰를 뒤집으면 fail-loud해 이미 생성된 부모 경계와 자식 경계의 불일치를 차단. 학습·이슈 문서의 CRS별 계약도 현행화. Blue CRITICAL 1·MINOR 2 대응.
 
 날짜별 변경 내역 + 결정 사유. 최신이 위.

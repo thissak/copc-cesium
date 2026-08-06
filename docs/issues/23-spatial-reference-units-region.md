@@ -125,7 +125,20 @@
   단일 radius 정육면체이므로 projected header에 metric 근거가 전혀 없을 때만
   `side × max(horizontalUnit,zUnit)`을 사용한다. geographic은 mixed-unit cube를 쓰지 않되,
   header XY chord 또는 Z 미터 span 중 사용 가능한 축 하나만 있어도 그 metric을 보존한다.
-  3D Tiles의 부모-자식 bounding volume 포함 계약에 따라 projected Z 정책은 루트 hierarchy에서
-  세션 단위로 결정한다. 정상 header는 모든 타일을 일관되게 clamp하고, header 밖 점 보유 노드가
-  확인된 세션은 모든 타일이 node cube를 사용한다. 이후 페이지가 기존 신뢰를 뒤집으면 fail-loud한다.
-  geographic은 mixed-unit cube 대신 유효 header 범위를 사용한다.
+  13차의 세션 신뢰 정책은 14차 최종 리뷰에서 폐기했다. hierarchy cube와 header Z의 부분 겹침은
+  실제 점 포함을 증명하지 못해 `header=[0,100]`, `cube=[0,800]`, `pointZ=700`을 컬링했다.
+  OGC 3D Tiles는 bounding volume이 content를 완전히 포함할 것을 요구하고 COPC는 octree의
+  center/halfsize를 정의하므로, projected Z는 항상 node cube를 사용한다. geographic만 단일
+  halfsize에 각도·미터가 섞여 cube Z를 사용할 수 없으므로 유효 header Z를 유지한다.
+
+### 14차 재현·BP·수정·검증
+
+- **RED:** 부분 겹침 반례의 emitted Z가 `[0,100]`이라 실제 점 Z=700을 포함하지 못했다.
+- **BP:** OGC 3D Tiles는 tile bounding volume의 content 완전포함과 child content의 parent
+  bounding volume 내부 배치를 요구한다. COPC info VLR은 octree center와 모든 면까지의
+  perpendicular halfsize를 정의한다. hierarchy entry는 point count와 chunk 위치만 제공하므로
+  cube/header 겹침으로 실제 point extrema를 추론할 근거가 없다.
+- **수정:** projected tile Z를 node cube로 단일화하고 `headerZTrusted`, hierarchy 스캔,
+  lazy-page 신뢰 역전 예외를 삭제했다. geographic header Z 경로만 유지했다.
+- **GREEN:** 동일 반례 emitted Z `[0,800]`; `check:crs` PASS. 전체 unit/build/lib/integration으로
+  회귀를 확인한다.

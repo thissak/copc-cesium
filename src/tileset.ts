@@ -64,7 +64,7 @@ function nodeRegionAndError(s: CopcSession, key: string): { region: number[]; ge
   const boundedMaxY = Math.min(minY + side, s.copc.header.max[1]);
   const intersectsHeader = boundedMaxX >= boundedMinX && boundedMaxY >= boundedMinY;
   const bounds = [...s.copc.header.min, ...s.copc.header.max];
-  const { xyUsable, xyHasSpan, zHasSpan } = headerAxisValidity(bounds);
+  const { xyUsable, xyHasSpan, zUsable, zHasSpan } = headerAxisValidity(bounds);
   if (s.horizontalIsAngular && !(xyUsable && (xyHasSpan || zHasSpan)))
     throw new Error('Geographic COPC header XY bounds are degenerate; hierarchy cube cannot recover angular bounds');
   // 투영 CRS는 cube의 X/Y/Z가 같은 선형단위라 header clamp가 필요 없다. 오히려
@@ -79,18 +79,21 @@ function nodeRegionAndError(s: CopcSession, key: string): { region: number[]; ge
     useIntersection ? boundedMaxY : useHeader ? s.copc.header.max[1] : minY + side,
     useHeader,
   );
-  // 세로(높이)는 큐브가 과하게 크다 → 실제 데이터 Z 범위와 교집합으로 조임 (SSE 정확도↑ → LOD 일관성↑)
   // --8<-- [start:tileHeight]
   const cubeMinZ = s.cube[2] + z * side;
-  const boundedMinZ = Math.max(cubeMinZ, s.copc.header.min[2]);
-  const boundedMaxZ = Math.min(cubeMinZ + side, s.copc.header.max[2]);
-  const intersectsHeaderZ = s.headerZTrusted && boundedMaxZ >= boundedMinZ;
-  // projected는 루트 hierarchy에서 한 번 판정한 세션 정책을 모든 타일에 적용한다.
-  // 타일별 fallback은 부모가 자식을 포함하지 못하는 비단조 bounding volume을 만든다.
-  const useHeaderZ = intersectsHeaderZ || (s.horizontalIsAngular && s.headerZTrusted);
-  const useIntersectionZ = intersectsHeaderZ;
-  let minH = (useIntersectionZ ? boundedMinZ : useHeaderZ ? s.copc.header.min[2] : cubeMinZ) * s.zUnit;
-  let maxH = (useIntersectionZ ? boundedMaxZ : useHeaderZ ? s.copc.header.max[2] : cubeMinZ + side) * s.zUnit;
+  // 3D Tiles boundingVolume은 content를 완전히 포함해야 한다. hierarchy cube는 COPC가
+  // 보장하는 공간 컨테이너지만 LAS header extent와의 부분 겹침은 실제 점 포함의 증거가
+  // 아니다. projected CRS는 항상 node cube를 사용한다. geographic CRS만 mixed-unit
+  // cube를 높이 근거로 쓸 수 없으므로 유효한 LAS header Z를 사용한다.
+  let minH = cubeMinZ * s.zUnit;
+  let maxH = (cubeMinZ + side) * s.zUnit;
+  if (s.horizontalIsAngular && zUsable) {
+    const boundedMinZ = Math.max(cubeMinZ, s.copc.header.min[2]);
+    const boundedMaxZ = Math.min(cubeMinZ + side, s.copc.header.max[2]);
+    const intersectsHeaderZ = boundedMaxZ >= boundedMinZ;
+    minH = (intersectsHeaderZ ? boundedMinZ : s.copc.header.min[2]) * s.zUnit;
+    maxH = (intersectsHeaderZ ? boundedMaxZ : s.copc.header.max[2]) * s.zUnit;
+  }
   if (maxH <= minH) maxH = minH + 1;
   // --8<-- [end:tileHeight]
   // --8<-- [start:geomError]
