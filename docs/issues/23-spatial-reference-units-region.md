@@ -121,3 +121,9 @@
 - 7차 리뷰에서 0 bbox가 region을 `(0,0)`으로 붕괴시키는 경로를 확인했다. projected 0 bbox는
   hierarchy cube 위치로 복구하고, geographic 0 bbox는 명시적으로 실패한다. 비유한 Z는 cube Z,
   정상 header region 샘플은 격자 reproject를 사용한다.
+- 8~11차 리뷰와 공식 규약 재검토에서 fallback을 축별 계약으로 정리했다. COPC `info.cube`는
+  단일 radius 정육면체이므로 projected header에 metric 근거가 전혀 없을 때만
+  `side × max(horizontalUnit,zUnit)`을 사용한다. geographic은 mixed-unit cube를 쓰지 않되,
+  header XY chord 또는 Z 미터 span 중 사용 가능한 축 하나만 있어도 그 metric을 보존한다.
+  3D Tiles bounding volume의 content 완전포함 계약에 따라 projected tile Z는 stale header로
+  clamp하지 않고 node cube를 사용하며, geographic은 유효 header 범위를 사용한다.

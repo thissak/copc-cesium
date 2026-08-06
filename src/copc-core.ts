@@ -413,11 +413,10 @@ export function horizontalSpanMeters(toWgs: Reproj, bounds: number[], segments =
   return maxDistance;
 }
 
-/** header source XY가 유한·비역전이며 최소 한 축에 실제 폭을 갖는지 판정한다. */
-export function boundsXYValid(bounds: number[]): boolean {
+/** header source XY가 유한하고 비역전인지 판정한다. 점/선 bbox도 유효한 공간 범위다. */
+export function boundsXYUsable(bounds: number[]): boolean {
   return [bounds[0], bounds[1], bounds[3], bounds[4]].every(Number.isFinite) &&
-    bounds[3] >= bounds[0] && bounds[4] >= bounds[1] &&
-    (bounds[3] > bounds[0] || bounds[4] > bounds[1]);
+    bounds[3] >= bounds[0] && bounds[4] >= bounds[1];
 }
 
 /** 실제 bbox의 3D metric span. 손상/0 bbox는 projected cube의 수평·수직 span으로 fail-safe한다. */
@@ -429,31 +428,29 @@ export function computeRootSpanM(
   horizontalUnit = 1,
   horizontalIsAngular = false,
 ): number {
-  const xyValid = boundsXYValid(headerBounds);
-  const zValid = Number.isFinite(headerBounds[2]) && Number.isFinite(headerBounds[5]) &&
+  const xyUsable = boundsXYUsable(headerBounds);
+  const xyHasSpan = xyUsable && (headerBounds[3] > headerBounds[0] || headerBounds[4] > headerBounds[1]);
+  const zUsable = Number.isFinite(headerBounds[2]) && Number.isFinite(headerBounds[5]) &&
     headerBounds[5] >= headerBounds[2];
-  if (horizontalIsAngular && !(xyValid && zValid))
-    throw new Error('Geographic COPC header bounds are invalid; mixed-unit hierarchy cube is not a metric fallback');
+
+  let horizontal = 0;
+  if (xyHasSpan) {
+    try { horizontal = horizontalSpanMeters(toWgs, headerBounds); }
+    catch { horizontal = 0; }
+  }
+  const vertical = zUsable ? (headerBounds[5] - headerBounds[2]) * zUnit : 0;
+  const measured = Math.max(horizontal, vertical);
+  if (horizontalIsAngular) {
+    if (Number.isFinite(measured) && measured > 0) return measured;
+    throw new Error('Geographic COPC header has no usable metric extent; mixed-unit hierarchy cube is not a fallback');
+  }
+  if (xyHasSpan && Number.isFinite(measured) && measured > 0) return measured;
 
   // COPC info cube는 단일 radius로 만든 정육면체다. projected CRS에서만 같은 side를
   // 수평·수직 단위로 각각 미터화해 보수적인 metric extent를 복구할 수 있다.
   const side = cube[3] - cube[0];
   const cubeMeasured = side * Math.max(horizontalUnit, zUnit);
-  if (!xyValid) {
-    if (!horizontalIsAngular && Number.isFinite(cubeMeasured) && cubeMeasured > 0) return cubeMeasured;
-    throw new Error('COPC metric extent is zero or non-finite; header bbox and hierarchy cube are invalid');
-  }
-
-  let horizontal: number;
-  try {
-    horizontal = horizontalSpanMeters(toWgs, headerBounds);
-  } catch {
-    horizontal = horizontalIsAngular ? NaN : side * horizontalUnit;
-  }
-  const vertical = zValid ? (headerBounds[5] - headerBounds[2]) * zUnit :
-    horizontalIsAngular ? NaN : side * zUnit;
-  const measured = Math.max(horizontal, vertical);
-  if (Number.isFinite(measured) && measured > 0) return measured;
+  if (Number.isFinite(cubeMeasured) && cubeMeasured > 0) return cubeMeasured;
   throw new Error('COPC metric extent is zero or non-finite; header bbox and hierarchy cube are invalid');
 }
 

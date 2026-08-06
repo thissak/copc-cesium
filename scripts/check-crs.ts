@@ -192,7 +192,7 @@ function fakeSession(
 {
   const toWgs = resolveCrs(UTM10N).toWgs;
   const span = computeRootSpanM(toWgs, [0, 0, 0, 0, 0, 0], [0, 0, 0, 4656, 4656, 4656], 1);
-  ok(span === 4656, `zero header bbox falls back to cube vertical span (${span})`);
+  ok(span === 4656, `zero header bbox falls back to COPC cube side metric (${span})`);
   const mixedUnitCubeSpan = computeRootSpanM(
     toWgs,
     [0, 0, 0, 0, 0, 0],
@@ -238,6 +238,9 @@ function fakeSession(
   const region = json.root.children[0].boundingVolume.region;
   ok(region[4] === 400 && region[5] === 800,
     `projected node outside stale header Z keeps cube height (${region[4]}..${region[5]})`);
+  const rootRegion = json.root.boundingVolume.region;
+  ok(rootRegion[4] === 0 && rootRegion[5] === 800,
+    `projected node partially overlapping stale header Z also keeps cube height (${rootRegion[4]}..${rootRegion[5]})`);
 }
 
 // geographic의 퇴화 header는 cube와 우연히 겹쳐도 mixed-unit cube로 복구하지 않는다.
@@ -245,6 +248,27 @@ function fakeSession(
   const toWgs = resolveCrs('+proj=longlat +datum=WGS84 +no_defs').toWgs;
   throws(() => computeRootSpanM(toWgs, [0, 0, 0, 0, 0, 0], [-50, -20, 0, 150, 180, 200], 1, 1, true),
     'geographic degenerate header fails loud independently of cube intersection');
+}
+
+// geographic 수직 스캔은 XY 폭이 0이어도 header Z metric만으로 유효하다.
+{
+  const toWgs = resolveCrs('+proj=longlat +datum=WGS84 +no_defs').toWgs;
+  const bounds = [-123, 44, 0, -123, 44, 200];
+  const span = computeRootSpanM(toWgs, bounds, [-123, 44, 0, 77, 244, 200], 1, 1, true);
+  ok(span === 200, `geographic vertical scan preserves header Z metric (${span})`);
+  const s = fakeSession(toWgs, [-123, 44, 0, 77, 244, 200], 1, true, {
+    min: bounds.slice(0, 3), max: bounds.slice(3),
+  });
+  const json = buildTileset(s, '/tiles/') as { root: { boundingVolume: { region: number[] } } };
+  ok(json.root.boundingVolume.region[5] - json.root.boundingVolume.region[4] === 200,
+    'geographic vertical scan builds a 200m region');
+}
+
+// geographic Z가 손상돼도 유효한 XY chord는 독립 metric 근거다.
+{
+  const toWgs = resolveCrs('+proj=longlat +datum=WGS84 +no_defs').toWgs;
+  const span = computeRootSpanM(toWgs, [0, 0, NaN, 0.02, 0.02, NaN], [0, 0, 0, 1, 1, 1], 1, 1, true);
+  ok(span > 2000, `geographic valid XY survives damaged Z (${span.toFixed(1)}m)`);
 }
 
 // 유효하지만 실제 점보다 좁은 header와 일부만 겹치는 projected node도 cube region을 유지해야 한다.

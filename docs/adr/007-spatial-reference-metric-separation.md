@@ -72,3 +72,7 @@ COPC의 수평 CRS는 미터·피트·각도 단위를 쓸 수 있고 compound C
 
 공식 근거: [OGC 3D Tiles 1.1](https://docs.ogc.org/cs/22-025r4/22-025r4.html),
 [COPC 1.0](https://copc.io/), [OGC CRS WKT](https://docs.ogc.org/is/12-063r5/12-063r5.html).
+
+- 11차 리뷰에서 퇴화축과 손상축을 분리했다. geographic은 cube를 쓰지 않지만 header XY chord와
+  Z 미터 span을 독립 계산해 둘 중 하나가 양수면 유효하다(동일 XY 수직 스캔 포함). projected tile Z는
+  stale header의 부분 교집합도 content를 자를 수 있으므로 항상 node cube로 완전포함한다.
