@@ -25,7 +25,8 @@ Showing a large point cloud in CesiumJS normally means **pre-converting** the da
 npm install copc-cesium cesium
 ```
 
-`cesium` is a peer dependency (bring your own version, `>=1.120`).
+`cesium` is a peer dependency (bring your own version, `>=1.142`). The minimum is required
+for the empty-tile `missingTilePolicy` used by the streaming bridge.
 
 ## Service worker setup (required)
 
@@ -53,7 +54,7 @@ await CopcTileset.fromUrl(url, options);
 | `pointSize` | — | Fixed pixel size (applied when attenuation is off) |
 | `hideClassifications` | `[7, 18]` | ASPRS classes dropped at decode (default = low/high noise); `[]` keeps all |
 | `attributes` | `Classification, Intensity, ReturnNumber, NumberOfReturns` | Per-point LAS attributes exposed to Cesium as a batch table for **dynamic styling and picking**. `undefined` = the curated default; `'all'` = every dimension incl. extra bytes; `string[]` = explicit names (unknown names are skipped with a warning). Exposing attributes adds a `BATCH_ID` (~2–4 B/point). See *Style & pick by attribute* below. |
-| `maxRequestsPerServer` | `6` | Max concurrent Cesium requests to the content host. Cesium's default (18) assumes HTTP/2; for HTTP/1.1 range sources (e.g. S3) it over-subscribes one host and causes timeout/retry storms. `6` matches the browser's HTTP/1.1 per-host connection limit. Raise it behind an HTTP/2 CDN; `0` leaves Cesium's default untouched. Applied per-host via `RequestScheduler.requestsByServer` (does not mutate the global). |
+| `maxRequestsPerServer` | `6` | Max concurrent Cesium requests to the content host. Cesium's default (18) assumes HTTP/2; for HTTP/1.1 range sources (e.g. S3) it over-subscribes one host and causes timeout/retry storms. `6` matches the browser's HTTP/1.1 per-host connection limit. Raise it behind an HTTP/2 CDN; `0` leaves Cesium's default untouched. The per-host override is shared by active `copc-cesium` tilesets (the lowest positive limit wins) and the previous Cesium value is restored when the last owning tileset is destroyed. |
 | `serviceWorkerUrl` | `'/copc-sw.js'` | Service worker URL |
 | `serviceWorkerScope` | `'/'` | Service worker scope (must cover the content path) |
 | `crs` | — | Override CRS (force) — ignore the file's WKT and place with this CRS. proj4 string / WKT / built-in EPSG. Use when the header has no/wrong CRS. |
@@ -114,7 +115,7 @@ const snapped = await tileset.snapPoint(viewer.scene, windowPosition); // window
 // 빈틈/하늘 클릭(pickPosition 미가용) → undefined.
 ```
 
-> Note: searches the nearest point **within the deepest node containing the seed** (no neighbor-node search). A click hugging a node boundary may miss the true global nearest by up to ~node spacing (~0.14 m on autzen) — a *local full-resolution approximate snap*, not a guaranteed global nearest. Neighbor search is a planned enhancement. Assumes a projected CRS (X/Y/Z share one linear unit).
+> Note: searches the nearest point **within the deepest node containing the seed** (no neighbor-node search). A click hugging a node boundary may miss the true global nearest by up to ~node spacing (~0.14 m on autzen) — a *local full-resolution approximate snap*, not a guaranteed global nearest. Neighbor search is a planned enhancement. Projected mixed-unit and geographic CRS metrics are normalized to metres.
 
 `rampStyle(name, range)` builds a normalized color-ramp style for any attribute, and `await tileset.attributeRange(name)` samples the root node for `[min, max]`:
 
@@ -142,10 +143,14 @@ This repository started as a competition lab (KOSSA OSSP / Gaia3D task — *"COP
 
 ```bash
 npm install
-npm run dev        # demo at http://localhost:5173
-npm run build:lib  # build the library to dist/
-npm run verify     # headless correctness check
+npm run dev              # demo at http://localhost:5173
+npm run build:lib        # build the library to dist/
+npm test                 # headless unit checks (offline, deterministic)
+npm run test:integration # full pipeline checks (fetch real COPC over S3 range)
+npm run test:all         # both suites
 ```
+
+`npm test` runs the offline, deterministic checks (CRS resolution, ECEF math, picking, batch tables, styling, request lifecycle, service-worker routing, public types, and the Cesium codec contract) — no network, so it reproduces anywhere. `npm run test:integration` additionally streams real COPC files over S3 range requests to verify the end-to-end pipeline (georeferencing, hierarchy paging, range coalescing, retry, attribute decode, octree snap). Each check is also runnable on its own via `npm run check:<name>`.
 
 ## License
 

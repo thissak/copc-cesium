@@ -90,6 +90,15 @@ export interface CopcTilesetOptions {
   defaultCrs?: string;
 }
 
+/**
+ * `CopcTileset.fromUrl()`이 반환하는 Cesium tileset.
+ * Cesium 기본 인터페이스에 COPC 세션을 필요로 하는 공개 헬퍼를 더한다.
+ */
+export type CopcCesiumTileset = Cesium3DTileset & {
+  snapPoint(scene: Scene, windowPosition: Cartesian2): Promise<SnappedPoint | undefined>;
+  attributeRange(name: string): Promise<[number, number]>;
+};
+
 let sidCounter = 0;
 const activeSids = new Set<string>(); // 살아있는 tileset 세션 (생명주기 추적)
 // 진단(이슈 #20): 디코드 요청 누적/완료 카운터. in-flight = started − done.
@@ -176,6 +185,7 @@ function cleanupIfIdle() {
 // 한 세션(sid) 정리 — destroy 와 fromUrl 초기화 실패 양쪽에서 공유(누수 방지).
 function releaseSession(sid: string) {
   if (!activeSids.delete(sid)) return;
+  releaseContentServerThrottle(sid);
   pageSessions.delete(sid);
   if (activeSids.size > 0) {
     // fire-and-forget 이지만 rejection 을 삼키지 않는다(조용한 실패 방지)
@@ -232,22 +242,66 @@ async function ensureServiceWorker(swUrl: string, scope: string): Promise<void> 
 // 콘텐츠(/__copc-real/)는 앱 origin 에서 서빙된다. Cesium RequestScheduler 의 "호스트당 동시 요청"
 // 상한을 그 호스트에만 적용해(전역 maximumRequestsPerServer 미오염) 과동시성 range 폭풍을 막는다.
 // 서버키는 Cesium getServerKey 와 동일 형식(authority; 기본 포트면 :443/:80 부착) — 타입 미노출이라 직접 구성.
-function setContentServerThrottle(maxPerServer: number) {
-  if (maxPerServer <= 0) return;
+type ThrottleOwner = { serverKey: string; maxPerServer: number };
+type ThrottleOriginal = { hadValue: boolean; value: number | undefined };
+const throttleOwners = new Map<string, ThrottleOwner>();
+const throttleOriginals = new Map<string, ThrottleOriginal>();
+
+function contentServerKey(): string {
   const host = location.host; // hostname[:port]
-  const serverKey = /:/.test(host) ? host : `${host}:${location.protocol === 'https:' ? '443' : '80'}`;
-  RequestScheduler.requestsByServer[serverKey] = maxPerServer;
+  return /:/.test(host) ? host : `${host}:${location.protocol === 'https:' ? '443' : '80'}`;
+}
+
+function applyContentServerThrottle(serverKey: string): void {
+  const limits = [...throttleOwners.values()]
+    .filter((owner) => owner.serverKey === serverKey)
+    .map((owner) => owner.maxPerServer);
+  if (limits.length) {
+    RequestScheduler.requestsByServer[serverKey] = Math.min(...limits);
+    return;
+  }
+  const original = throttleOriginals.get(serverKey);
+  if (!original) return;
+  if (original.hadValue) RequestScheduler.requestsByServer[serverKey] = original.value!;
+  else delete RequestScheduler.requestsByServer[serverKey];
+  throttleOriginals.delete(serverKey);
+}
+
+/** 세션별 호스트 제한 소유권. 다중 세션은 가장 보수적인 양수 상한을 공유한다. */
+export function acquireContentServerThrottle(sid: string, maxPerServer: number): void {
+  releaseContentServerThrottle(sid);
+  if (maxPerServer <= 0) return;
+  const serverKey = contentServerKey();
+  if (!throttleOriginals.has(serverKey)) {
+    throttleOriginals.set(serverKey, {
+      hadValue: Object.prototype.hasOwnProperty.call(RequestScheduler.requestsByServer, serverKey),
+      value: RequestScheduler.requestsByServer[serverKey],
+    });
+  }
+  throttleOwners.set(sid, { serverKey, maxPerServer });
+  applyContentServerThrottle(serverKey);
+}
+
+export function releaseContentServerThrottle(sid: string): void {
+  const owner = throttleOwners.get(sid);
+  if (!owner) return;
+  throttleOwners.delete(sid);
+  applyContentServerThrottle(owner.serverKey);
+}
+
+/** 단일 호출 호환/검증용. 0은 이 호출이 보유한 제한을 해제한다. */
+export function setContentServerThrottle(maxPerServer: number): void {
+  acquireContentServerThrottle('__direct__', maxPerServer);
 }
 
 export const CopcTileset = {
   /** COPC URL → LOD 스트리밍 Cesium3DTileset. viewer.scene.primitives.add(tileset) 로 사용. */
-  async fromUrl(url: string, options: CopcTilesetOptions = {}): Promise<Cesium3DTileset> {
+  async fromUrl(url: string, options: CopcTilesetOptions = {}): Promise<CopcCesiumTileset> {
     await ensureServiceWorker(options.serviceWorkerUrl ?? '/copc-sw.js', options.serviceWorkerScope ?? '/');
     installHandler();
-    setContentServerThrottle(options.maxRequestsPerServer ?? 6);
-
     const sid = `s${++sidCounter}`;
     activeSids.add(sid);
+    acquireContentServerThrottle(sid, options.maxRequestsPerServer ?? 6);
     try {
       // 디코드 세션(laz-perf 포함)은 워커가 보관, 지오메트리(tileset.json)용 세션은 페이지에서.
       // 페이지 openCopc 는 헤더+옥트리만(점 디코드·WASM 불필요) → 경량. 둘은 병렬로 연다.
@@ -278,9 +332,9 @@ export const CopcTileset = {
 
       const contentBase = `${location.origin}${CONTENT_BASE_PATH}${sid}/`;
       const tilesetJson = buildTileset(session, contentBase);
-      const tileset = await Cesium3DTileset.fromUrl(
+      const tileset = (await Cesium3DTileset.fromUrl(
         'data:application/json;base64,' + btoa(JSON.stringify(tilesetJson)),
-      );
+      )) as CopcCesiumTileset;
       // 빈 노드(전부 노이즈 → 0점)는 SW 가 404 로 응답한다. Cesium 의 missingTilePolicy(빈 타일 정책)로
       // 404 를 Empty3DTileContent(ready·에러 없음)로 처리 → 0점 pnts 가 Model 로 PROCESSING 에 영구
       // 고착하던 결함(tilesLoaded/allTilesLoaded 가 영영 안 잡힘)을 막는다(이슈 #03). createContent 를
@@ -329,7 +383,7 @@ export const CopcTileset = {
         getWorkerApi().getProfile();
 
       // 옥트리 풀해상도 최근접점 스냅 (이슈 #3-B). pickPosition 씨앗 → 워커 nearestPoint → SnappedPoint.
-      (tileset as unknown as { snapPoint: (scene: Scene, win: Cartesian2) => Promise<SnappedPoint | undefined> }).snapPoint =
+      tileset.snapPoint =
         (scene, win) =>
           snapPoint(tileset, scene, win, (seed) => {
             // destroy 가 마지막 세션 워커를 terminate 하면 comlink RPC 가 영영 미해소(hang) → 백스톱 타임아웃(무한 대기
@@ -358,7 +412,7 @@ export const CopcTileset = {
       (tileset as unknown as { copcDecodeStats: () => { started: number; done: number; inflight: number } }).copcDecodeStats =
         () => ({ started: decodeStats.started, done: decodeStats.done, inflight: decodeStats.started - decodeStats.done });
 
-      (tileset as unknown as { attributeRange: (name: string) => Promise<[number, number]> }).attributeRange = async (name) => {
+      tileset.attributeRange = async (name) => {
         const session = pageSessions.get(sid)!;
         const rootNode = session.nodes['0-0-0-0'];
         if (!rootNode) throw new Error('attributeRange: root node not yet loaded');

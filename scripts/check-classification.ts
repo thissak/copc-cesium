@@ -3,7 +3,7 @@
 import { Copc } from 'copc';
 import { openCopc } from '../src/copc-core';
 
-const url = process.argv[2] ?? 'https://s3.amazonaws.com/data.entwine.io/millsite.copc.laz';
+const url = process.argv[2] ?? 'https://s3.amazonaws.com/hobu-lidar/millsite.copc.laz';
 const MAX_NODES = 60;
 const MAX_POINTS = 400_000;
 

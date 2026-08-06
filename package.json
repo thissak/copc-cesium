@@ -31,8 +31,27 @@
     "build": "tsc --noEmit && vite build",
     "build:lib": "tsup",
     "preview": "vite preview",
+    "test": "tsx scripts/run-checks.ts unit",
+    "test:integration": "tsx scripts/run-checks.ts integration",
+    "test:all": "tsx scripts/run-checks.ts all",
     "verify": "tsx scripts/verify.ts",
+    "check:crs": "tsx scripts/check-crs.ts",
+    "check:ecef": "tsx scripts/check-ecef.ts",
+    "check:picking": "tsx scripts/check-picking.ts",
+    "check:pnts-batch": "tsx scripts/check-pnts-batch.ts",
+    "check:style": "tsx scripts/check-style.ts",
+    "check:attributes": "tsx scripts/check-attributes.ts",
+    "check:attr-pipeline": "tsx scripts/check-attr-pipeline.ts",
+    "check:classification": "tsx scripts/check-classification.ts",
+    "check:coalesce": "tsx scripts/check-coalesce.ts",
+    "check:hierarchy": "tsx scripts/check-hierarchy.ts",
+    "check:paging": "tsx scripts/check-paging.ts",
+    "check:retry": "tsx scripts/check-retry.ts",
     "check:snap": "tsx scripts/check-snap.ts",
+    "check:public-types": "tsc --ignoreConfig --noEmit --target ES2022 --module ESNext --moduleResolution bundler --strict --skipLibCheck --types vite/client scripts/check-public-types.ts",
+    "check:request-throttle": "tsx scripts/check-request-throttle.ts",
+    "check:sw-routing": "tsx scripts/check-sw-routing.ts",
+    "check:cesium-codec": "tsx scripts/check-cesium-codec.ts",
     "sweep": "tsx scripts/sweep.ts",
     "bench:probe-bundle": "esbuild scripts/bench/probe.ts --bundle --platform=browser --format=iife --global-name=BenchProbe --footer:js=\"window.BenchProbe=BenchProbe;\" --outfile=scripts/bench/probe-bundle.js",
     "prebench:eptium": "npm run bench:probe-bundle",
@@ -48,7 +67,7 @@
     "release": "npm run build:lib && set -a && . ./.env && set +a && npm publish"
   },
   "peerDependencies": {
-    "cesium": ">=1.120.0"
+    "cesium": ">=1.142.0"
   },
   "dependencies": {
     "comlink": "^4.4.2",

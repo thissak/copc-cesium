@@ -1,7 +1,7 @@
 # 04. LOD 위임 — Cesium에게 맡긴다
 
 > 한 줄: **"언제 어느 노드를 더 가져올지"(LOD)를 우리가 손코딩하지 않는다.** [01장에서 심은
-> `geometricError`](01-public-api-and-isomorphism.md#결정적-한-줄--geometricerror--spacing--2깊이) 하나로 Cesium이 알아서 정한다.
+> `geometricError`](01-public-api-and-isomorphism.md) 하나로 Cesium이 알아서 정한다.
 
 [00장](00-big-picture.md)에서 "Cesium이 타일을 요청한다"고 했습니다. 그 **요청을 누가, 어떤 기준으로
 일으키나**가 이 장의 주제입니다.
@@ -33,7 +33,7 @@ flowchart TD
 
 ## 우리가 푼 건 단 두 줄
 
-LOD 로직 대신 우리가 한 일은: ① 01장에서 `geometricError = spacing / 2^깊이`를 심은 것, ② 그리고 노브 하나를
+LOD 로직 대신 우리가 한 일은: ① 01장에서 `geometricError = rootSpanM / 16 / 2^깊이`를 심은 것, ② 그리고 노브 하나를
 넘긴 것뿐입니다.
 
 ```ts
@@ -41,13 +41,13 @@ LOD 로직 대신 우리가 한 일은: ① 01장에서 `geometricError = spacin
 --8<-- "src/copc-tileset.ts:maxSSE"
 ```
 
-`geometricError`가 정확해야 SSE 판정도 정확합니다. 그래서 타일의 높이 범위를 큐브가 아니라 **실제 데이터 Z
-범위와 교집합**으로 조여, 오차 계산이 헐거워지지 않게 합니다.
+`geometricError`가 정확해야 SSE 판정도 정확합니다. projected 데이터는 루트 hierarchy에서 LAS header Z
+신뢰를 한 번 판정해, 세션 전체를 **header 교집합** 또는 **node cube** 중 하나로 고정합니다. 그래야 부모
+bounding volume이 자식을 포함합니다. geographic 데이터는 mixed-unit cube 대신 유효 header Z를 사용합니다.
 
 ```ts
 // src/tileset.ts — nodeRegionAndError() : 세로를 데이터 범위로 조임
-let minH = Math.max(cubeMinZ, s.copc.header.min[2]) * s.zUnit;
-let maxH = Math.min(cubeMinZ + side, s.copc.header.max[2]) * s.zUnit;
+--8<-- "src/tileset.ts:tileHeight"
 ```
 
 ## refine: ADD — 덮지 않고 더한다

@@ -98,10 +98,10 @@ export async function loadCopcPoints(
     .filter((k) => nodes[k])
     .sort((a, b) => Number(a.split('-')[0]) - Number(b.split('-')[0]));
 
-  // 좌표계: resolveCrs(crs>wkt>defaultCrs) → WGS84 변환. cube 중심 sanity 가드.
+  // 좌표계: resolveCrs(crs>wkt>defaultCrs) → WGS84 변환. 실제 point bbox 중심 sanity 가드.
   const wkt = copc.wkt;
   const { toWgs, zUnit } = resolveCrs(wkt, crsOpts);
-  checkCenterInRange(toWgs, copc.info.cube);
+  checkCenterInRange(toWgs, [...copc.header.min, ...copc.header.max]);
   const reproj = makeGridReprojector(toWgs, copc.header.min, copc.header.max); // 이슈 #17
 
   const lonLatH: number[] = [];
@@ -137,31 +137,59 @@ export async function loadCopcPoints(
  * COMPD_CS(복합좌표계)면 내부 PROJCS만 균형 괄호로 잘라낸다 (proj4는 COMPD_CS 미지원).
  * 선형 단위 factor(예: 피트 0.3048)도 함께 반환해 Z 높이 보정에 쓴다.
  */
+function extractBracketed(wkt: string, keywords: string[]): string | undefined {
+  let start = -1;
+  let canonicalKeyword = '';
+  for (const keyword of keywords) {
+    const i = new RegExp(`\\b${keyword}\\s*\\[`, 'i').exec(wkt)?.index ?? -1;
+    if (i >= 0 && (start < 0 || i < start)) {
+      start = i;
+      canonicalKeyword = keyword;
+    }
+  }
+  if (start < 0) return undefined;
+  const bracket = wkt.indexOf('[', start);
+  let depth = 0;
+  for (let i = bracket; i < wkt.length; i++) {
+    if (wkt[i] === '[') depth++;
+    else if (wkt[i] === ']' && --depth === 0) return canonicalKeyword + wkt.slice(bracket, i + 1);
+  }
+  return undefined;
+}
+
+function lastLinearUnit(def: string): number | undefined {
+  const units = [...def.matchAll(/(?:LENGTHUNIT|UNIT)\s*\["[^"]*",\s*([0-9.eE+-]+)/gi)];
+  return units.length ? Number(units[units.length - 1][1]) : undefined;
+}
+
+function projStringUnit(def: string): number | undefined {
+  return namedProjStringUnit(def, 'units', 'to_meter');
+}
+
+function namedProjStringUnit(def: string, unitsKey: string, factorKey: string): number | undefined {
+  const units = new RegExp(`(?:^|\\s)\\+${unitsKey}=([^\\s]+)`).exec(def)?.[1];
+  if (units === 'm') return 1;
+  if (units === 'ft') return 0.3048;
+  if (units === 'us-ft') return 1200 / 3937;
+  const toMeter = new RegExp(`(?:^|\\s)\\+${factorKey}=([0-9.eE+-]+)`).exec(def)?.[1];
+  return toMeter ? Number(toMeter) : undefined;
+}
+
 export function extractHorizontalCrs(wkt: string): { proj: string; linearUnit: number } {
   let proj = wkt;
-  const i = wkt.indexOf('PROJCS[');
-  if (wkt.startsWith('COMPD_CS') && i >= 0) {
-    let depth = 0;
-    let end = -1;
-    for (let j = i + 'PROJCS'.length; j < wkt.length; j++) {
-      const c = wkt[j];
-      if (c === '[') depth++;
-      else if (c === ']') {
-        depth--;
-        if (depth === 0) {
-          end = j + 1;
-          break;
-        }
-      }
-    }
-    if (end > 0) proj = wkt.slice(i, end);
-  }
-  let linearUnit = 1;
-  if (proj.includes('PROJCS[')) {
-    const units = [...proj.matchAll(/UNIT\["[^"]*",\s*([0-9.]+)/g)];
-    if (units.length) linearUnit = Number(units[units.length - 1][1]);
-  }
+  const projected = extractBracketed(wkt, ['PROJCS', 'PROJCRS']);
+  const geographic = extractBracketed(wkt, ['GEOGCS', 'GEOGCRS', 'GEOGRAPHICCRS']);
+  const horizontal = projected ?? geographic;
+  if (horizontal && /^\s*(?:COMPD_CS|COMPOUNDCRS)\s*\[/i.test(wkt)) proj = horizontal;
+  const linearUnit = (projected ? lastLinearUnit(projected) : projStringUnit(proj)) ?? 1;
   return { proj, linearUnit };
+}
+
+/** Compound CRS의 수직 CRS 단위를 우선하고, 없으면 수평 선형단위를 폴백한다. */
+export function extractVerticalUnit(wkt: string, horizontalUnit: number): number {
+  const vertical = extractBracketed(wkt, ['VERT_CS', 'VERTCS', 'VERTCRS', 'VERTICALCRS']);
+  return (vertical ? lastLinearUnit(vertical) : undefined) ??
+    namedProjStringUnit(wkt, 'vunits', 'vto_meter') ?? horizontalUnit;
 }
 
 export type CrsOpts = { crs?: string; defaultCrs?: string };
@@ -173,7 +201,12 @@ export type CrsOpts = { crs?: string; defaultCrs?: string };
  * 높이(Z)는 선형단위만 보정한 ellipsoidal(HAE)로 취급 — geoid/정사고(orthometric) 보정 안 함
  * (web-viewer 업계 norm: Potree·giro3d·py3dtiles 동일). orthometric 입력은 수십 m 수직 오프셋 가능.
  */
-export function resolveCrs(wkt: string | undefined, opts: CrsOpts = {}): { toWgs: Reproj; zUnit: number } {
+export function resolveCrs(wkt: string | undefined, opts: CrsOpts = {}): {
+  toWgs: Reproj;
+  horizontalUnit: number;
+  horizontalIsAngular: boolean;
+  zUnit: number;
+} {
   const def = opts.crs ?? wkt ?? opts.defaultCrs;
   if (!def) {
     throw new Error(
@@ -183,7 +216,15 @@ export function resolveCrs(wkt: string | undefined, opts: CrsOpts = {}): { toWgs
   }
   const horiz = extractHorizontalCrs(def);
   let toWgs: Reproj;
+  let horizontalIsAngular: boolean;
   try {
+    const sourceProjection = new proj4.Proj(horiz.proj) as unknown as {
+      projName?: string;
+      to_meter?: number;
+    };
+    horizontalIsAngular = sourceProjection.projName === 'longlat';
+    if (!horizontalIsAngular && Number.isFinite(sourceProjection.to_meter))
+      horiz.linearUnit = sourceProjection.to_meter!;
     toWgs = proj4(horiz.proj, proj4.WGS84) as unknown as Reproj;
     if (typeof toWgs.forward !== 'function') throw new Error('no forward()');
   } catch (e) {
@@ -192,7 +233,12 @@ export function resolveCrs(wkt: string | undefined, opts: CrsOpts = {}): { toWgs
         `via the \`crs\` option. (${(e as Error).message})`,
     );
   }
-  return { toWgs, zUnit: horiz.linearUnit };
+  return {
+    toWgs,
+    horizontalUnit: horiz.linearUnit,
+    horizontalIsAngular,
+    zUnit: extractVerticalUnit(def, horiz.linearUnit),
+  };
 }
 
 /**
@@ -310,12 +356,111 @@ export interface CopcSession {
   nodes: Hierarchy.Node.Map;
   /** 미로드 자식 하이어라키 페이지 포인터(key→{pageOffset,pageLength}). lazy 페이징용. */
   pages: Hierarchy.Page.Map;
+  /** 동일 서브페이지의 동시 로드를 공유하는 세션 단위 single-flight registry. */
+  pageLoads: Map<string, Promise<boolean>>;
   toWgs?: Reproj;
   /** reproject 가속기 (이슈 #17: 격자 bilinear, proj4 폴백). toWgs 있을 때만 설정. */
   reproj?: GridReproj;
   zUnit: number;
+  /** 투영 source X/Y 선형단위의 미터 환산값. */
+  horizontalUnit: number;
+  /** source X/Y가 선형 투영 단위가 아니라 경도·위도 각도인지 여부. */
+  horizontalIsAngular: boolean;
   cube: number[]; // [minx,miny,minz,maxx,maxy,maxz] (root, 큐브)
   spacing: number;
+  /** root의 수평 WGS84 span과 수직 미터 span 중 큰 값. 3D Tiles geometricError 단위용. */
+  rootSpanM: number;
+}
+
+const GEO_A = 6378137;
+const GEO_F = 1 / 298.257223563;
+const GEO_E2 = GEO_F * (2 - GEO_F);
+
+function surfaceEcef(lonDeg: number, latDeg: number, heightM = 0): [number, number, number] {
+  const lon = lonDeg * Math.PI / 180;
+  const lat = latDeg * Math.PI / 180;
+  const sinLat = Math.sin(lat);
+  const cosLat = Math.cos(lat);
+  const n = GEO_A / Math.sqrt(1 - GEO_E2 * sinLat * sinLat);
+  return [
+    (n + heightM) * cosLat * Math.cos(lon),
+    (n + heightM) * cosLat * Math.sin(lon),
+    (n * (1 - GEO_E2) + heightM) * sinLat,
+  ];
+}
+
+/** source XY bbox 경계를 WGS84로 변환해 최대 수평 chord 길이(미터)를 구한다. */
+export function horizontalSpanMeters(toWgs: Reproj, bounds: number[], segments = 8): number {
+  const minX = bounds[0], minY = bounds[1], maxX = bounds[3], maxY = bounds[4];
+  const distance = (a: number[], b: number[]): number => {
+    const ea = surfaceEcef(a[0], a[1]);
+    const eb = surfaceEcef(b[0], b[1]);
+    return Math.hypot(ea[0] - eb[0], ea[1] - eb[1], ea[2] - eb[2]);
+  };
+  let maxDistance = 0;
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    const x = minX + (maxX - minX) * t;
+    const y = minY + (maxY - minY) * t;
+    const bottom = toWgs.forward([x, minY]);
+    const top = toWgs.forward([x, maxY]);
+    const left = toWgs.forward([minX, y]);
+    const right = toWgs.forward([maxX, y]);
+    for (const ll of [bottom, top, left, right])
+      if (!(Number.isFinite(ll[0]) && Number.isFinite(ll[1]))) throw new Error('CRS boundary reproject produced non-finite coordinates');
+    maxDistance = Math.max(maxDistance, distance(bottom, top), distance(left, right));
+  }
+  return maxDistance;
+}
+
+/** header source XY가 유한하고 비역전인지 판정한다. 점/선 bbox도 유효한 공간 범위다. */
+export function headerAxisValidity(bounds: number[]): {
+  xyUsable: boolean;
+  xyHasSpan: boolean;
+  zUsable: boolean;
+  zHasSpan: boolean;
+} {
+  const xyUsable = [bounds[0], bounds[1], bounds[3], bounds[4]].every(Number.isFinite) &&
+    bounds[3] >= bounds[0] && bounds[4] >= bounds[1];
+  const zUsable = Number.isFinite(bounds[2]) && Number.isFinite(bounds[5]) && bounds[5] >= bounds[2];
+  return {
+    xyUsable,
+    xyHasSpan: xyUsable && (bounds[3] > bounds[0] || bounds[4] > bounds[1]),
+    zUsable,
+    zHasSpan: zUsable && bounds[5] > bounds[2],
+  };
+}
+
+/** 실제 bbox의 3D metric span. 손상/0 bbox는 projected cube의 수평·수직 span으로 fail-safe한다. */
+export function computeRootSpanM(
+  toWgs: Reproj,
+  headerBounds: number[],
+  cube: number[],
+  zUnit: number,
+  horizontalUnit = 1,
+  horizontalIsAngular = false,
+): number {
+  const { xyHasSpan, zUsable } = headerAxisValidity(headerBounds);
+  const side = cube[3] - cube[0];
+
+  let horizontal = 0;
+  if (xyHasSpan) {
+    try { horizontal = horizontalSpanMeters(toWgs, headerBounds); }
+    catch { horizontal = horizontalIsAngular ? 0 : side * horizontalUnit; }
+  }
+  const vertical = zUsable ? (headerBounds[5] - headerBounds[2]) * zUnit : 0;
+  const measured = Math.max(horizontal, vertical);
+  if (horizontalIsAngular) {
+    if (Number.isFinite(measured) && measured > 0) return measured;
+    throw new Error('Geographic COPC header has no usable metric extent; mixed-unit hierarchy cube is not a fallback');
+  }
+  if (xyHasSpan && Number.isFinite(measured) && measured > 0) return measured;
+
+  // COPC info cube는 단일 radius로 만든 정육면체다. projected CRS에서만 같은 side를
+  // 수평·수직 단위로 각각 미터화해 보수적인 metric extent를 복구할 수 있다.
+  const cubeMeasured = side * Math.max(horizontalUnit, zUnit);
+  if (Number.isFinite(cubeMeasured) && cubeMeasured > 0) return cubeMeasured;
+  throw new Error('COPC metric extent is zero or non-finite; header bbox and hierarchy cube are invalid');
 }
 
 /** COPC 를 열어 헤더 + 옥트리(루트 페이지) + 좌표변환을 준비 (스트리밍 세션). */
@@ -323,18 +468,33 @@ export async function openCopc(url: string, opts?: { coalesce?: CoalesceOpts } &
   const base = httpGetterWithRetry(url);
   const copc = await Copc.create(base); // 헤더는 base 로(비-노드)
   const { nodes, pages } = await Copc.loadHierarchyPage(base, copc.info.rootHierarchyPage); // 루트 hierarchy 도 base
-  const { toWgs, zUnit } = resolveCrs(copc.wkt, { crs: opts?.crs, defaultCrs: opts?.defaultCrs });
-  checkCenterInRange(toWgs, copc.info.cube);
+  const { toWgs, horizontalUnit, horizontalIsAngular, zUnit } = resolveCrs(
+    copc.wkt,
+    { crs: opts?.crs, defaultCrs: opts?.defaultCrs },
+  );
+  checkCenterInRange(toWgs, [...copc.header.min, ...copc.header.max]);
+  const rootSpanM = computeRootSpanM(
+    toWgs,
+    [...copc.header.min, ...copc.header.max],
+    copc.info.cube,
+    zUnit,
+    horizontalUnit,
+    horizontalIsAngular,
+  );
   const session: CopcSession = {
     copc,
     getter: base,
     nodes,
     pages,
+    pageLoads: new Map(),
     toWgs,
     reproj: makeGridReprojector(toWgs, copc.header.min, copc.header.max),
     zUnit,
+    horizontalUnit,
+    horizontalIsAngular,
     cube: copc.info.cube,
     spacing: copc.info.spacing,
+    rootSpanM,
   };
   // coalesce 켜면 point 읽기를 병합 getter 로(헤더/hierarchy 는 passthrough). 워커 세션만 사용.
   if (opts?.coalesce) {
@@ -357,13 +517,24 @@ export async function openCopc(url: string, opts?: { coalesce?: CoalesceOpts } &
 export async function loadSubPage(s: CopcSession, key: string): Promise<boolean> {
   const ptr = s.pages[key];
   if (!ptr) return false;
+  const existing = s.pageLoads.get(key);
+  if (existing) return existing;
   // --8<-- [start:loadSubPage]
-  const sub = await Copc.loadHierarchyPage(s.getter, ptr);
-  Object.assign(s.nodes, sub.nodes); // K 와 그 하위 실노드
-  Object.assign(s.pages, sub.pages); // 더 깊은 미로드 페이지 포인터
-  delete s.pages[key]; // 로드 완료 → 더는 미로드 포인터 아님
+  const pending = (async () => {
+    const sub = await Copc.loadHierarchyPage(s.getter, ptr);
+    Object.assign(s.nodes, sub.nodes); // K 와 그 하위 실노드
+    Object.assign(s.pages, sub.pages); // 더 깊은 미로드 페이지 포인터
+    delete s.pages[key]; // 로드 완료 → 더는 미로드 포인터 아님
+    return true;
+  })();
+  s.pageLoads.set(key, pending);
+  try {
+    return await pending;
+  } finally {
+    // 실패도 캐시하지 않는다. 포인터는 성공 시에만 지워지므로 다음 호출에서 재시도 가능하다.
+    if (s.pageLoads.get(key) === pending) s.pageLoads.delete(key);
+  }
   // --8<-- [end:loadSubPage]
-  return true;
 }
 
 /**
@@ -403,12 +574,65 @@ export interface NearestHit {
   attributes: Record<string, number>;
 }
 
+/** source 축 차분을 수평 source 단위계의 등방 거리 제곱으로 정규화한다. */
+function sourceMetricSquared(
+  dx: number,
+  dy: number,
+  dz: number,
+  horizontalUnit: number,
+  zUnit: number,
+): number {
+  const normalizedZ = dz * (zUnit / horizontalUnit);
+  return dx * dx + dy * dy + normalizedZ * normalizedZ;
+}
+
+/** projected source 축 차분의 실제 미터 거리 제곱. */
+export function sourceMetricMetersSquared(
+  dx: number,
+  dy: number,
+  dz: number,
+  horizontalUnit: number,
+  zUnit: number,
+): number {
+  return sourceMetricSquared(dx, dy, dz, horizontalUnit, zUnit) * horizontalUnit * horizontalUnit;
+}
+
+/** 세션 CRS 종류에 따라 projected source metric 또는 geographic ECEF metric을 선택한다. */
+export function sessionMetricMetersSquared(
+  s: CopcSession,
+  a: [number, number, number],
+  b: [number, number, number],
+): number {
+  return makeSessionMetric(s, a)(b[0], b[1], b[2]);
+}
+
+/** 씨앗의 CRS 변환을 한 번만 수행하고 후보별 실제 미터 거리 제곱 함수를 만든다. */
+export function makeSessionMetric(
+  s: CopcSession,
+  seed: [number, number, number],
+): (x: number, y: number, z: number) => number {
+  if (!s.horizontalIsAngular) {
+    return (x, y, z) => sourceMetricMetersSquared(
+      x - seed[0], y - seed[1], z - seed[2], s.horizontalUnit, s.zUnit,
+    );
+  }
+  const forward = (x: number, y: number, z: number): [number, number, number] => {
+    const ll = s.reproj ? s.reproj.forward(x, y) : s.toWgs!.forward([x, y]);
+    return surfaceEcef(ll[0], ll[1], z * s.zUnit);
+  };
+  const ae = forward(seed[0], seed[1], seed[2]);
+  return (x, y, z) => {
+    const be = forward(x, y, z);
+    return (be[0] - ae[0]) ** 2 + (be[1] - ae[1]) ** 2 + (be[2] - ae[2]) ** 2;
+  };
+}
+
 /**
  * 노드(key) 안에서 씨앗(source sx,sy,sz)에 3D 최근접인 실제 점을 찾아 정확 좌표+속성 반환 (이슈 #3-B).
- * 비교는 source 공간(전체 reproject 안 함), 승자 1점만 reproject. hideClass 점은 스킵(렌더와 일관).
- * X·Y·Z 모두 동일 source 선형단위(zUnit)이므로 raw 차분으로 *등방* 비교(어느 축에도 zUnit 미적용 — 비-미터
- * CRS(예: 피트)서 수평/수직 가중이 어긋나 오답 선택하던 버그 방지, PR#21 dual-review), 거리만 zUnit 으로 미터 환산.
- * (투영 CRS 가정: 지리좌표계(수평 도°, 수직 m)면 단위가 달라 비등방 — 거의 모든 COPC 가 투영이라 현 스코프 밖.)
+ * projected는 source metric, geographic은 후보별 격자 reproject→ECEF metric으로 비교한다.
+ * hideClass 점은 스킵(렌더와 일관).
+ * projected CRS는 Z 차분을 zUnit/horizontalUnit으로 정규화한 source metric을 사용한다.
+ * geographic CRS는 각도에 상수 선형 환산을 적용할 수 없으므로 후보를 WGS84 ECEF로 변환해 비교한다.
  * 노드 없음/0점/전부 스킵 → null.
  */
 export async function nearestPointInNode(
@@ -432,19 +656,17 @@ export async function nearestPointInNode(
   const gc = hideClass?.size && 'Classification' in view.dimensions ? view.getter('Classification') : null;
   let best = -1;
   let bestD2 = Infinity;
+  const metric = makeSessionMetric(s, [sx, sy, sz]);
   for (let i = 0; i < n; i++) {
     if (gc && hideClass!.has(gc(i) | 0)) continue;
-    const dx = gx(i) - sx;
-    const dy = gy(i) - sy;
-    const dz = gz(i) - sz; // 등방: X·Y 와 동일 source 단위(zUnit 미적용)
-    const d2 = dx * dx + dy * dy + dz * dz;
+    const d2 = metric(gx(i), gy(i), gz(i));
     if (d2 < bestD2) { bestD2 = d2; best = i; }
   }
   if (best < 0) return null;
   const o = s.reproj ? s.reproj.forward(gx(best), gy(best)) : [gx(best), gy(best)];
   const attributes: Record<string, number> = {};
   if (attrs) for (const spec of attrs) attributes[spec.batchName] = view.getter(spec.lasName)(best);
-  return { lon: o[0], lat: o[1], height: gz(best) * s.zUnit, dist: Math.sqrt(bestD2) * s.zUnit, attributes };
+  return { lon: o[0], lat: o[1], height: gz(best) * s.zUnit, dist: Math.sqrt(bestD2), attributes };
 }
 
 /**

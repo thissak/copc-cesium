@@ -1,3 +1,7 @@
+---
+lifecycle: active
+---
+
 # PROGRESS — CopcCesiumLab
 
 > 페이즈 체크리스트. 상태가 바뀌면 한 줄씩 갱신.
@@ -83,7 +87,7 @@
 - [x] **클릭→점 경위도·고도 + LAS 속성 조회.** `pickPoint()` free 함수(Cesium pick/pickPosition + #1 getProperty, 렌더러 손코딩 0) + 데모 패널. 소유권 `picked.primitive===tileset`(globe/하늘/타 tileset→undefined). check-picking 4케이스·autzen 브라우저 스모크·verify C1·기존 check-* 회귀 0. 범위 B(옥트리 최근접점·측정 스냅)=별도.
 
 ### Tier1 #3-B 옥트리 풀해상도 최근접점 스냅 (2026-06-23 · feat/3b-octree-nearest-point-snap · PR #21)
-- [x] **`tileset.snapPoint(scene, win)` — 클릭→옥트리 *가장 깊은 노드* 디코드→실제 최근접 점 정확좌표+속성+distanceM.** 순수 math(`locateDeepestNode`/`nearestPointInNode`/`nearestPoint`)=copc-core(Cesium-free·Node 결정적), 디코드=워커 재사용, Cesium=page만, 렌더러 손코딩 0·신규 의존성 0. **subagent-driven 6 task TDD + dual-review 2R**(R1 비등방 메트릭+순환 오라클→등방화+독립 WGS84→ECEF 오라클; R2 단일-노드≠전역 최근접 한계 공개+계약누수 catch; R3 OK-to-merge). 검증: `check:snap`(ECEF 오라클·N2 등방 변별)·verify C1·헤드리스 스모크·CI 배선. **한계**: 로컬 노드 내 최근접(전역 보장 아님·경계 ~0.14m, 이웃검색=후속)·투영 CRS 가정·측정도구/시각화=별도. [[math-correctness-suffices-when-imperceptible]]·over-headline 금지.
+- [x] **`tileset.snapPoint(scene, win)` — 클릭→옥트리 *가장 깊은 노드* 디코드→실제 최근접 점 정확좌표+속성+distanceM.** 순수 math(`locateDeepestNode`/`nearestPointInNode`/`nearestPoint`)=copc-core(Cesium-free·Node 결정적), 디코드=워커 재사용, Cesium=page만, 렌더러 손코딩 0·신규 의존성 0. projected 혼합단위는 source metric 정규화, geographic은 WGS84 ECEF metric을 사용한다. **한계**: 로컬 노드 내 최근접(전역 보장 아님·경계 ~0.14m, 이웃검색=후속)·측정도구/시각화=별도. [[math-correctness-suffices-when-imperceptible]]·over-headline 금지.
 
 ### 공정 비교 도구(fair-compare) + point budget 약점 발견 (2026-06-20 · feat/fair-engine-bench, 미머지)
 - [x] **공정 엔진 비교 도구 작성** — `scripts/bench/fair-compare.ts`(+probe/types/report). 5대 통제(config 정규화·고정 시점·**GPU 타이머 GPU ms**·로딩 곡선 샘플링·ours-vs-ours 영실험). vsync 플래그 macOS Metal 미작동→GPU 타이머 피벗, settle 비현실적(단조 로딩 60s+)→곡선 샘플링 피벗(둘 다 스파이크/진단으로 확정). 설계/계획 `docs/superpowers/{specs,plans}/2026-06-20-fair-engine-bench*`.
@@ -99,6 +103,9 @@
 
 ### 취소/백프레셔 전파 조사 — WON'T-FIX (2026-06-23 · 이슈 #20)
 - [x] **IMPROVEMENTS Tier2 #4 착수 → measure-first 로 won't-fix 확정.** 재현 RED(`check-cancel.ts`: getter 외부취소 미수신)·BP 조사(deep-research+context7) 후 **Phase 0 게이트(빌드 전 실측)**: SW `event.request.signal` 이 클라이언트 abort 시 미발화(`probe-sw-cancel.ts`, w3c/ServiceWorker #1544) = 클린 수정 불가(진입 채널 없음). 실해 측정(`repro-20.ts`+`copcDecodeStats` 훅): churn 시 in-flight 디코드 ≤2·self-heal(유계). 클린 차단+유계+Tier2 → won't-fix(fragile monkey-patch 만 가능, STOP 비정당). build·verify C1 회귀 0. ([이슈 #20](issues/20-cancel-backpressure-propagation.md))
+
+### 테스트 진입점 단일화 (입상 T1 게이트, 2026-06-25 · 미머지)
+- [x] **`npm test`(오프라인 unit)/`test:integration`(S3)/`test:all` + 집계 러너 `scripts/run-checks.ts`.** 오프라인 9(public type·요청 생명주기·SW 라우팅·Cesium codec 포함)/네트워크 9를 CI에 전부 연결. `check-cancel`(#20 재현)은 회귀 가드가 아니므로 제외. 검증: unit 9/9·integration 9/9·`build` 회귀 0. **DIRECTION 스코어카드 테스트 ❌→✅.**
 
 ## Phase 3 — 평가 / 입상 판정 🔒
 대용량 실데이터에서 60fps / 메모리 / UX 측정 → 입상 가능성 데이터로 판정.

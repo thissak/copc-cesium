@@ -9,7 +9,7 @@
 // 소비자 origin 의 콘텐츠 경로를 덮는 scope(기본 root)에 서빙해야 한다. (README 참조)
 
 export { CopcTileset } from './copc-tileset';
-export type { CopcTilesetOptions } from './copc-tileset';
+export type { CopcCesiumTileset, CopcTilesetOptions } from './copc-tileset';
 export type { ColorBy } from './colors';
 export { rampStyle } from './copc-style';
 export { pickPoint, snapPoint } from './picking';

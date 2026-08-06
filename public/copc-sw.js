@@ -41,12 +41,11 @@ self.addEventListener('fetch', (e) => {
   if (url.pathname.startsWith('/__copc-real/')) {
     e.respondWith(
       (async () => {
-        let client = await self.clients.get(e.clientId);
-        if (!client) {
-          const all = await self.clients.matchAll({ type: 'window' });
-          client = all[0];
-        }
-        if (!client) return new Response('no client', { status: 503 });
+        // FetchEvent.clientId 만이 요청을 시작한 클라이언트의 정체성이다.
+        // 없거나 만료된 경우 임의의 열린 탭으로 보내면 탭별 sid 충돌로 다른 COPC를
+        // 반환할 수 있으므로 명확히 실패한다.
+        const client = e.clientId ? await self.clients.get(e.clientId) : undefined;
+        if (!client) return new Response('request client unavailable', { status: 503 });
         const prefix = '/__copc-real/';
         const rest = url.pathname.slice(url.pathname.indexOf(prefix) + prefix.length); // "{sid}/{key}.pnts" 또는 "{key}.pnts"
         try {

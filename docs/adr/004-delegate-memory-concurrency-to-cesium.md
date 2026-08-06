@@ -47,3 +47,15 @@ ADR-001 §결과는 "LOD는 Cesium 위임, 단 **메모리 캐시는 우리 일*
 **조정 사항.** `FETCH_TIMEOUT_MS`(8s)는 안전 backstop 으로 유지 — 동시성 6에선 타임아웃이 애초에 안 난다. 실 GPU **절대 fps headline** 측정은 여전히 유용하나(부드럽게 정량 증거) ③ 노브 결정과는 무관해졌다. (헤드리스 software-GPU 는 traversal 이 느려 기본 MSSE 8 에선 이 regime 미재현 → MSSE=2 강제 필요. 실 GPU 는 빠른 traversal 로 자연 진입하므로 6 근거가 오히려 더 강함.)
 
 → **③ 동시성 = 닫힘.** (②④ 는 원 결정대로 Cesium 위임 유지.)
+
+---
+
+## 보강 (2026-08-06): 호스트 override 생명주기
+
+`requestsByServer`는 전역 기본값은 아니지만 Cesium 모듈의 호스트별 **공유 static map**이다.
+따라서 "전역 미오염"은 다른 호스트에 영향을 주지 않는다는 뜻으로만 유효하며,
+같은 앱 origin의 다중 tileset과 기존 override 생명주기는 별도 관리가 필요하다.
+
+[#24](../issues/24-request-throttle-lifecycle.md)에서 sid별 소유권을 추가했다. 활성 세션의 양수
+상한 중 최솟값을 적용하고, 첫 소유 전 기존 호스트 값을 스냅샷해 마지막 소유자
+destroy/초기화 실패 시 복원한다. `0`은 no-op이 아니라 해당 세션의 제한 미설정을 뜻한다.

@@ -101,6 +101,8 @@ nav:
           - adr/004-delegate-memory-concurrency-to-cesium.md
           - adr/005-attribute-fidelity-via-pnts-batch-table.md
           - adr/006-range-coalescing.md
+          - adr/007-spatial-reference-metric-separation.md
+          - adr/008-cesium-compatibility-contract.md
       - 핸드오프:
           - handoff/phase2-streaming-handoff.md
 

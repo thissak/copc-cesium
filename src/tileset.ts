@@ -1,10 +1,51 @@
-import type { CopcSession } from './copc-core';
+import { headerAxisValidity, type CopcSession } from './copc-core';
 
 // COPC 옥트리 → 3D Tiles tileset.json. 노드 1개 = 타일 1개.
 // boundingVolume 은 region([W,S,E,N,minH,maxH] 라디안/미터) — ECEF 변환 불필요(proj4만).
-// geometricError = cube_size/16 / 2^깊이 (미터, ept-tools 관례). content 는 contentBase/{key}.pnts → SW가 가로채 노드 디코드.
+// geometricError = root metric span/16/2^깊이 (수평 WGS84 span·수직 미터 span의 최대).
+// content 는 contentBase/{key}.pnts → SW가 가로채 노드 디코드.
 
 const D2R = Math.PI / 180;
+
+function longitudeBounds(values: number[]): [number, number] {
+  const normalized = values.map((v) => ((v + 180) % 360 + 360) % 360 - 180).sort((a, b) => a - b);
+  if (normalized.length === 1) return [normalized[0], normalized[0]];
+  let gapIndex = normalized.length - 1;
+  let largestGap = normalized[0] + 360 - normalized[normalized.length - 1];
+  for (let i = 0; i < normalized.length - 1; i++) {
+    const gap = normalized[i + 1] - normalized[i];
+    if (gap > largestGap) { largestGap = gap; gapIndex = i; }
+  }
+  return [normalized[(gapIndex + 1) % normalized.length], normalized[gapIndex]];
+}
+
+/** source XY 사각형의 변을 샘플링해 비선형 투영에서도 보수적인 WGS84 region을 만든다. */
+function horizontalRegion(
+  s: CopcSession,
+  minX: number,
+  minY: number,
+  maxX: number,
+  maxY: number,
+  useGrid: boolean,
+): [number, number, number, number] {
+  const lons: number[] = [];
+  const lats: number[] = [];
+  const segments = 8;
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    const x = minX + (maxX - minX) * t;
+    const y = minY + (maxY - minY) * t;
+    for (const xy of [[x, minY], [x, maxY], [minX, y], [maxX, y]]) {
+      const ll = useGrid && s.reproj ? s.reproj.forward(xy[0], xy[1]) : s.toWgs ? s.toWgs.forward(xy) : xy;
+      if (!(Number.isFinite(ll[0]) && Number.isFinite(ll[1]) && ll[1] >= -90 && ll[1] <= 90))
+        throw new Error(`tile region reproject out of range (lon=${ll[0]}, lat=${ll[1]})`);
+      lons.push(ll[0]);
+      lats.push(ll[1]);
+    }
+  }
+  const [west, east] = longitudeBounds(lons);
+  return [west * D2R, Math.min(...lats) * D2R, east * D2R, Math.max(...lats) * D2R];
+}
 
 function nodeRegionAndError(s: CopcSession, key: string): { region: number[]; geomError: number } {
   const parts = key.split('-').map(Number);
@@ -15,19 +56,48 @@ function nodeRegionAndError(s: CopcSession, key: string): { region: number[]; ge
   const side = (s.cube[3] - s.cube[0]) / 2 ** d; // 루트 큐브 한 변(투영단위)
   const minX = s.cube[0] + x * side;
   const minY = s.cube[1] + y * side;
-  const c1 = s.toWgs ? s.toWgs.forward([minX, minY]) : [minX, minY];
-  const c2 = s.toWgs ? s.toWgs.forward([minX + side, minY + side]) : [minX + side, minY + side];
-  const west = Math.min(c1[0], c2[0]) * D2R;
-  const east = Math.max(c1[0], c2[0]) * D2R;
-  const south = Math.min(c1[1], c2[1]) * D2R;
-  const north = Math.max(c1[1], c2[1]) * D2R;
-  // 세로(높이)는 큐브가 과하게 크다 → 실제 데이터 Z 범위와 교집합으로 조임 (SSE 정확도↑ → LOD 일관성↑)
+  // info.cube는 모든 축에 같은 radius를 쓰므로 geographic CRS에서는 Z(m)가 X/Y(°)를
+  // 수백 도까지 팽창시킬 수 있다. 실제 점 bbox와 교집합해 source XY를 보수적으로 조인다.
+  const boundedMinX = Math.max(minX, s.copc.header.min[0]);
+  const boundedMinY = Math.max(minY, s.copc.header.min[1]);
+  const boundedMaxX = Math.min(minX + side, s.copc.header.max[0]);
+  const boundedMaxY = Math.min(minY + side, s.copc.header.max[1]);
+  const intersectsHeader = boundedMaxX >= boundedMinX && boundedMaxY >= boundedMinY;
+  const bounds = [...s.copc.header.min, ...s.copc.header.max];
+  const { xyUsable, xyHasSpan, zUsable, zHasSpan } = headerAxisValidity(bounds);
+  if (s.horizontalIsAngular && !(xyUsable && (xyHasSpan || zHasSpan)))
+    throw new Error('Geographic COPC header XY bounds are degenerate; hierarchy cube cannot recover angular bounds');
+  // 투영 CRS는 cube의 X/Y/Z가 같은 선형단위라 header clamp가 필요 없다. 오히려
+  // 손상·미갱신 header 밖의 유효 노드를 culling할 수 있으므로 geographic에만 적용한다.
+  const useHeader = s.horizontalIsAngular && (intersectsHeader || xyUsable);
+  const useIntersection = useHeader && intersectsHeader;
+  const [west, south, east, north] = horizontalRegion(
+    s,
+    useIntersection ? boundedMinX : useHeader ? s.copc.header.min[0] : minX,
+    useIntersection ? boundedMinY : useHeader ? s.copc.header.min[1] : minY,
+    useIntersection ? boundedMaxX : useHeader ? s.copc.header.max[0] : minX + side,
+    useIntersection ? boundedMaxY : useHeader ? s.copc.header.max[1] : minY + side,
+    useHeader,
+  );
+  // --8<-- [start:tileHeight]
   const cubeMinZ = s.cube[2] + z * side;
-  let minH = Math.max(cubeMinZ, s.copc.header.min[2]) * s.zUnit;
-  let maxH = Math.min(cubeMinZ + side, s.copc.header.max[2]) * s.zUnit;
+  // 3D Tiles boundingVolume은 content를 완전히 포함해야 한다. hierarchy cube는 COPC가
+  // 보장하는 공간 컨테이너지만 LAS header extent와의 부분 겹침은 실제 점 포함의 증거가
+  // 아니다. projected CRS는 항상 node cube를 사용한다. geographic CRS만 mixed-unit
+  // cube를 높이 근거로 쓸 수 없으므로 유효한 LAS header Z를 사용한다.
+  let minH = cubeMinZ * s.zUnit;
+  let maxH = (cubeMinZ + side) * s.zUnit;
+  if (s.horizontalIsAngular && zUsable) {
+    const boundedMinZ = Math.max(cubeMinZ, s.copc.header.min[2]);
+    const boundedMaxZ = Math.min(cubeMinZ + side, s.copc.header.max[2]);
+    const intersectsHeaderZ = boundedMaxZ >= boundedMinZ;
+    minH = (intersectsHeaderZ ? boundedMinZ : s.copc.header.min[2]) * s.zUnit;
+    maxH = (intersectsHeaderZ ? boundedMaxZ : s.copc.header.max[2]) * s.zUnit;
+  }
   if (maxH <= minH) maxH = minH + 1;
+  // --8<-- [end:tileHeight]
   // --8<-- [start:geomError]
-  const rootGE = ((s.cube[3] - s.cube[0]) * s.zUnit) / 16; // ept-tools 관례: cube_size/16 (spacing 아님 — spacing=cube/147이라 9.2× 과소refine)
+  const rootGE = s.rootSpanM / 16; // 수평·수직 중 큰 실제 미터 span. 수직형 데이터도 refine 보존.
   return { region: [west, south, east, north, minH, maxH], geomError: rootGE / 2 ** d };
   // --8<-- [end:geomError]
 }
@@ -78,7 +148,7 @@ function buildNode(s: CopcSession, key: string, contentBase: string): object {
 
 /** 옥트리(루트 페이지) → tileset.json. content 는 contentBase + 'D-X-Y-Z.pnts'. */
 export function buildTileset(s: CopcSession, contentBase: string): object {
-  const rootGE = ((s.cube[3] - s.cube[0]) * s.zUnit) / 16;
+  const rootGE = s.rootSpanM / 16;
   return {
     asset: { version: '1.0' },
     geometricError: rootGE * 2,
