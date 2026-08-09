@@ -1,9 +1,12 @@
 # CHANGELOG
 
+날짜별 변경 내역 + 결정 사유. 최신이 위.
+
+### 2026-08-09
+- [docs] **2026 오픈소스 개발자대회 3분 시연영상 패키지 완성.** 실제 앱에서 Autzen RGB COPC와 SoFi Stadium 1.9GB를 녹화해 대표성과 대형 데이터 증명을 분리하고, 한국어 합성 나레이션·번인 자막·문제/API/아키텍처/검증 카드를 합성했다. 최종본은 167초·1080p 30fps·H.264/AAC이며 전체 디코딩 오류 0, unit 9/9·integration 9/9를 재확인했다. 영상·썸네일·YouTube 설명·재현 스크립트와 공식 결과보고서 양식을 `docs/submission/`에 보존했다.
+- [fix] **출품영상의 잘못된 npm 설치 안내를 공개 GitHub clone으로 교체.** npm의 `copc-cesium` 이름은 이미 다른 ISC 저장소가 사용 중임을 레지스트리에서 확인해, 타 패키지 설치를 유도하지 않도록 영상·대본·업로드 문구를 `git clone github.com/thissak/CopcCesiumLab.git`로 정정했다. scoped npm 이름 확정 전까지 기존 npm 설치 문구는 사용하지 않는다.
 - [fix] **[PR #28 dual-review R14] projected tile Z를 COPC node cube로 단일화.** 부분 겹침 hierarchy cube로 LAS header의 실제 점 포함을 추론하던 R13 정책을 제거했다. OGC 3D Tiles의 content 완전포함 계약과 COPC octree center/halfsize 계약에 따라 projected tile은 항상 node cube Z를 사용하고, mixed-unit cube를 높이 근거로 쓸 수 없는 geographic만 유효 header Z를 사용한다. 반례 `header=[0,100]`, `cube=[0,800]`, `pointZ=700`은 RED `[0,100]`→GREEN `[0,800]`; 세션 신뢰 상태와 lazy-page fail-loud 분기도 함께 삭제했다. Blue CRITICAL 1 대응. ([ADR-007](adr/007-spatial-reference-metric-separation.md) 보강)
 - [fix] **[PR #28 dual-review R13] tile Z fallback을 세션 단위 단조 정책으로 고정.** 루트 hierarchy의 점 보유 노드와 LAS header Z가 모순되면 모든 projected 타일이 node cube를 사용하고, 정상 세션은 모든 타일을 header 교집합으로 조인다. 이후 lazy page가 기존 header 신뢰를 뒤집으면 fail-loud해 이미 생성된 부모 경계와 자식 경계의 불일치를 차단. 학습·이슈 문서의 CRS별 계약도 현행화. Blue CRITICAL 1·MINOR 2 대응.
-
-날짜별 변경 내역 + 결정 사유. 최신이 위.
 
 ### 2026-08-06
 - [fix] **[PR #28 dual-review R12] 공식 LAS extent 신뢰와 축 판정 SSOT 정리.** projected header edge reprojection 실패는 cube 수평 metric으로 복구해 얕은 Z 조기반환을 차단. 정상 LAS header Z는 node cube와 교집합으로 조이고 손상/비교집합만 cube로 복구해 SSE 정확도와 완전포함을 함께 보존. `headerAxisValidity`로 코어·tileset 판정을 통합하고 학습 문서·ADR 충돌을 정리. Blue WARNING 2·MINOR 3 대응. ([ADR-007](adr/007-spatial-reference-metric-separation.md) 보강)
