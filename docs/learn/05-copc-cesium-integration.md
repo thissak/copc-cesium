@@ -22,7 +22,7 @@ flowchart LR
 |------|------|------------------|
 | **A. on-the-fly 3D Tiles** | COPC 옥트리 → 메모리상 가짜 tileset + pnts → Cesium 네이티브 렌더 | Cesium의 SSE/컬링/LOD를 공짜로. 가장 "Cesium 라이브러리"다움. 단 변환 글루를 직접, 공개 레퍼런스 없음(Eptium은 상용) |
 | **B. custom WebGL primitive** | Cesium Primitive로 점을 직접 그리고 LOD도 손코딩 | 완전 제어. 하지만 Cesium이 이미 가진 것을 재발명 |
-| **C. Potree-in-Cesium** | Potree가 점을 렌더, Cesium은 지구본, 카메라만 동기화 | 데모까지 최단·레퍼런스 공개. 단 "Cesium 네이티브"로 보기 애매(심사 리스크) |
+| **C. Potree-in-Cesium** | Potree가 점을 렌더, Cesium은 지구본, 카메라만 동기화 | 데모까지 최단·레퍼런스 공개. 단 "Cesium 네이티브"로 보기 애매(포지셔닝 리스크) |
 
 !!! info "결정은 측정 후"
     A냐 C냐는 **Phase 1 baseline 측정 결과로** 정합니다. 지금 고르지 않습니다.

@@ -34,7 +34,7 @@
 |------|------|------|------|--------------|
 | **A. on-the-fly 3D Tiles** | COPC 옥트리→메모리 가짜 tileset+pnts→Cesium 네이티브 렌더 | Cesium SSE/컬링/LOD 공짜. 가장 "Cesium 라이브러리"다움(과제 적합) | 변환 글루 직접. 레퍼런스가 전부 닫힘 | 없음(Eptium만, 닫힘) |
 | **B. custom WebGL primitive** | Cesium Primitive로 점 직접 렌더 + LOD 손코딩 | 완전 제어 | LOD/컬링 재발명 — 최다 작업 | (Giro3D 로직 참고) |
-| **C. Potree-in-Cesium 하이브리드** | Potree가 점 렌더, Cesium은 지구본, 카메라 동기화 | 데모까지 최단. 레퍼런스 완전 공개 | "Cesium 네이티브 라이브러리"로 보기 애매 — 심사 리스크 | Potree cesium_retz.html ★ |
+| **C. Potree-in-Cesium 하이브리드** | Potree가 점 렌더, Cesium은 지구본, 카메라 동기화 | 데모까지 최단. 레퍼런스 완전 공개 | "Cesium 네이티브 라이브러리"로 보기 애매 — 포지셔닝 리스크 | Potree cesium_retz.html ★ |
 
 → **결정은 Phase 1 baseline 측정 후.** baseline(naive 로드)으로 4축 어디가 먼저 터지는지 보고, 그 데이터로 A/C를 고른다.
 

@@ -172,7 +172,7 @@ Expected: C1 Oregon PASS (라이브러리 기존 로직 무변경 → 회귀 0).
 `pickPoint(tileset, scene, windowPosition)` is a higher-level helper: one call returns the clicked point's exact location **and** attributes, or `undefined` if the click missed the point cloud (sky, globe, or another tileset):
 
 ​```ts
-import { pickPoint } from 'copc-cesium';
+import { pickPoint } from '@goldenlabs/copc-cesium';
 
 handler.setInputAction((movement) => {
   const hit = pickPoint(tileset, viewer.scene, movement.position);

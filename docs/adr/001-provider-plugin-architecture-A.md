@@ -26,7 +26,7 @@
 
 ```ts
 import { Viewer } from 'cesium';
-import { CopcTileset } from 'copc-cesium';
+import { CopcTileset } from '@goldenlabs/copc-cesium';
 
 const viewer = new Viewer('app');
 const copc = await CopcTileset.fromUrl('https://…/autzen.copc.laz', {

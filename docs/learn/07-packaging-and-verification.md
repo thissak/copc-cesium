@@ -1,9 +1,9 @@
 # 07. 남이 쓸 수 있게 — 패키징과 외부 환경 검증
 
-[06장](06-streaming-engine-and-production-core.md)에서 엔진은 상용 코어 품질이 됐습니다. 하지만 **"내 머신에서 됨"은 "남이 새 환경에서 설치해 됨"과 다릅니다.** 이 장은 프로토타입을 `npm install copc-cesium` 한 줄로 쓰는 라이브러리로 만들고, 그게 *우리 머신 밖*에서도 도는지 증명하는 이야기입니다.
+[06장](06-streaming-engine-and-production-core.md)에서 엔진은 상용 코어 품질이 됐습니다. 하지만 **"내 머신에서 됨"은 "남이 새 환경에서 설치해 됨"과 다릅니다.** 이 장은 프로토타입을 `npm install @goldenlabs/copc-cesium` 한 줄로 쓰는 라이브러리로 만들고, 그게 *우리 머신 밖*에서도 도는지 증명하는 이야기입니다.
 
 !!! quote "T1 게이트 — 판정 한 문장"
-    깨끗한 환경에서 `npm install copc-cesium` → `CopcTileset.fromUrl()` → 렌더가 재현된다. 심사물(코드·보고서·영상)이 전부 이 한 줄을 증명해야 한다.
+    깨끗한 환경에서 `npm install @goldenlabs/copc-cesium` → `CopcTileset.fromUrl()` → 렌더가 재현된다. 프로젝트의 모든 산출물이 이 한 줄을 증명해야 한다.
 
 ## "소스가 도는 것"과 "패키지가 도는 것"은 다르다
 
@@ -22,7 +22,7 @@
 엔진의 핵심은 **서비스워커가 Cesium의 타일 요청을 가로채는 것**([06장](06-streaming-engine-and-production-core.md))이라, 소비자도 그 워커를 자기 사이트 루트에 두어야 합니다:
 
 ```bash
-cp node_modules/copc-cesium/dist/copc-sw.js public/copc-sw.js
+cp node_modules/@goldenlabs/copc-cesium/dist/copc-sw.js public/copc-sw.js
 ```
 
 워커의 scope는 **content 경로(`/__copc-real/…`)를 덮어야** 합니다. 못 가로채면 — 이 랩의 규칙대로 — **조용히 실패하지 않고** `fromUrl()`이 명확한 에러를 던집니다. "되는 척"이 가장 비싼 버그라서.
@@ -67,7 +67,7 @@ SW 가로채기·워커 디코드·WASM 로드·의존성이 **전부 소비자 
 false positive 안에도 배울 건 있었습니다. 가짜 원인(`reg.update` hang) 말고 **진짜 약점** 둘:
 
 - `reg.update()`는 **redundant**(register가 이미 update를 트리거)면서 `ensureServiceWorker`에서 **유일하게 timeout이 없는 무한대기 가능 await**였습니다. 느린/단일스레드 서버에선 큰 번들 뒤에 막힐 *수* 있습니다 → **비차단화**(활성/제어 게이트는 register+ready+controller가 담당). 무한 대기 금지([06장](06-streaming-engine-and-production-core.md))와 같은 원칙. **버그 수정이 아니라 방어적 개선**으로 분류.
-- ion 401은 *우리* 문제는 아니지만 **smoke 오판의 진짜 원인**이었습니다 → 예제·문서의 Viewer를 `baseLayer: false`로(포인트클라우드는 토큰 불필요). 심사위원이 복붙했을 때 401·검은 지구본에 "깨졌다"고 오해할 false-negative를 차단.
+- ion 401은 *우리* 문제는 아니지만 **smoke 오판의 진짜 원인**이었습니다 → 예제·문서의 Viewer를 `baseLayer: false`로(포인트클라우드는 토큰 불필요). 사용자가 복붙했을 때 401·검은 지구본에 "깨졌다"고 오해할 false-negative를 차단.
 
 !!! info "지금 위치와 다음"
     T1 게이트는 **통과**입니다 — 패키징·클린앱 재현·CI·README·LICENSE 완료, FAIL 판정은 false positive로 확정. 남은 T1은 산출물 둘뿐: **결과보고서 + 3분 시연 영상**. 우리의 측정·재검증 깊이가 곧 그 보고서의 원재료입니다. 현재 상태는 [PROGRESS](../PROGRESS.md), 변경 이력은 [CHANGELOG](../CHANGELOG.md), 메모리·동시성 위임 근거는 [ADR-004](../adr/004-delegate-memory-concurrency-to-cesium.md).
