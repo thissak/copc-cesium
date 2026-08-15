@@ -43,3 +43,8 @@ docs/submission/video/assets/render/
 docs/submission/video/assets/raw/*-demo.webm
 docs/submission/video/assets/raw/millsite-clean.webm
 docs/submission/video/assets/raw/playwright/
+
+# 로컬 전용 문서·산출물
+docs/DIRECTION.md
+docs/submission/
+docs/handoff/2026-submission-video-handoff.md

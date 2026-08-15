@@ -166,7 +166,7 @@ for (;;) { const { done, value } = await reader.read(); if (done) break; resetId
 **정직**: S3 throttle로 *깨끗한 before/after 로드시간 비교*는 못 함 — 결정적 단위 테스트(RED→GREEN)가 수정의 정확성을 증명. S3 회복 후 clean 재측정은 follow-up.
 
 ### 잔여 이슈
-- 권장 수치(idle 8s·absMax 30~180s)는 실측 튜닝 여지(DIRECTION §10). idle 전환 자체로 brittle 해소.
+- 권장 수치(idle 8s·absMax 30~180s)는 실측 튜닝 여지. idle 전환 자체로 brittle 해소.
 - S3 회복 후 clean before/after 로드시간 재측정(폭풍 소멸의 시간 이득 정량화) — follow-up.
 - coalescing 동시성 cap(ON 동시성3 vs OFF 6)은 별건(이슈 #02 연관, 본 이슈 스코프 외).
 
