@@ -1,7 +1,7 @@
 # CRS 자동배치 견고화 (Tier1 #2) — 설계 spec
 
 > 작성 2026-06-19 · 출처: IMPROVEMENTS #2 · BP 조사(proj4/copc.js 실측 + prior-art 6종) · 승인 scope = **A안**
-> 결정 근거는 구현 후 ADR-007로 승격. 진행은 [PROGRESS](../../PROGRESS.md), 방향은 [DIRECTION](../../DIRECTION.md).
+> 결정 근거는 구현 후 ADR-007로 승격. 진행은 [PROGRESS](../../PROGRESS.md).
 
 ## 1. 문제 (측정으로 확정)
 

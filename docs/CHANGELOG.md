@@ -3,6 +3,7 @@
 날짜별 변경 내역 + 결정 사유. 최신이 위.
 
 ### 2026-08-16
+- [docs] **저장소를 `github.com/thissak/copc-cesium`으로 공개.** 프로젝트명·npm 패키지명·저장소명을 `copc-cesium` 하나로 일치시켜, npm에서 패키지를 본 사용자가 GitHub에서 같은 이름을 찾을 수 있게 했다. 설치·임포트·`node_modules` 경로 안내를 문서 전체에서 스코프 패키지명으로 통일했다(구 비스코프 이름은 다른 저자의 패키지를 가리킨다).
 - [release] **`@goldenlabs/copc-cesium@0.1.0` npm 배포 + 저장소 공개.** **배포 검증은 로컬 dist가 아니라 레지스트리에서 받은 실물로**: 빈 디렉터리에 `npm install @goldenlabs/copc-cesium cesium` → 0 vulnerabilities(cesium@1.144.0 동반 해석) · ESM 서브패스 2종 해석(`.`·`./copc-sw.js`) · Node 런타임 import에서 공개 심볼 4종(`CopcTileset`·`pickPoint`·`rampStyle`·`snapPoint`)과 `CopcTileset.fromUrl` 함수 확인 · **tsc strict 타입체크 에러 0**(반환값을 `Cesium3DTileset` 변수에 직접 할당하고 `.style`에 `rampStyle()`을 대입하는 코드까지 통과 → "표준 Cesium3DTileset을 반환한다"는 주장이 타입 레벨에서 성립). 최초 `npm view` 404는 CDN 전파 지연(약 30초 후 200)이었다.
 - [chore] **npm 패키지명을 `@goldenlabs/copc-cesium`으로 확정.** 비스코프 `copc-cesium`은 2026-07-31 다른 저자가 동명 패키지를 선점해 사용할 수 없다. **스코프 선택 근거**: 프로젝트명 `copc-cesium`을 그대로 유지할 수 있고, 스코프는 타인이 선점할 수 없어 이름 리스크가 사라진다. **클래스명은 이름에 넣지 않음** — cesium 생태계 상위 20개 패키지가 전부 `cesium-<기능>`/`<대상>-cesium` 관례이고 API 심볼(`Cesium3DTileset`)을 패키지명에 박은 선례가 0건이며 출처 오인 소지도 있어, 차별화 신호는 npm이 색인하는 `description`("returns a standard Cesium3DTileset")과 `keywords`(`cesium3dtileset` 외 4개 추가)로 옮겼다. 스코프 패키지는 기본이 restricted라 `publishConfig.access=public`을 명시한다. **검증**: `build:lib` OK · `publish --dry-run` = 8파일 209.9kB `public access` · unit 9/9 PASS. (`package.json`·`README.md`·`src/index.ts`)
 

@@ -2,7 +2,7 @@
 lifecycle: active
 ---
 
-# PROGRESS — CopcCesiumLab
+# PROGRESS — copc-cesium
 
 > 페이즈 체크리스트. 상태가 바뀌면 한 줄씩 갱신.
 > 성능 경쟁지형: [STRATEGY](STRATEGY.md)
@@ -110,8 +110,14 @@ lifecycle: active
 ### 2026 출품물 준비 (2026-08-09)
 - [x] **3분 시연영상 완성.** Autzen RGB를 대표 예제로, SoFi Stadium 1.9GB를 대형 데이터 증명으로 사용한 실제 앱 화면 중심 영상. 최종본 167초·1920×1080·30fps·H.264/AAC, 전체 디코딩 오류 0. 한국어 합성 나레이션과 번인 자막 포함.
 - [x] **영상 주장 재검증.** 오프라인 체크 9/9·실데이터 통합 체크 9/9 통과, 8.9GB Cahokia 90초 스트레스와 Range 61→6은 기존 측정 문서와 일치. npm 동명 패키지 충돌을 확인해 설치 문구는 공개 GitHub clone으로 정정.
-- [ ] **YouTube 업로드 후 URL 확정.** 1080p 처리와 비공개 창 재생을 확인하고 결과보고서에 URL 기재.
-- [ ] **결과보고서 최종 작성·제출.** 영상·GitHub URL·측정 수치와 용어를 일치시켜 2026-08-27 18:00 전 제출.
+- [ ] ~~**YouTube 업로드 후 URL 확정.**~~ → 영상 재제작 결정(2026-08-16)으로 superseded. 새 영상에는 저장소 URL `github.com/thissak/copc-cesium`을 사용한다.
+- [ ] **결과보고서 최종 작성·제출.** 영상·GitHub URL·측정 수치와 용어를 일치시켜 2026-08-27 18:00 전 제출. (저장소 URL은 새 주소로 갱신 완료)
+
+### 배포·공개 (2026-08-16)
+- [x] **npm 배포 — `@goldenlabs/copc-cesium@0.1.0`.** 비스코프 `copc-cesium`이 선점돼 스코프 패키지로 전환. 스코프는 기본이 restricted라 `publishConfig.access=public` 명시. 8파일 209.9kB(dist + 서비스워커 + laz-perf wasm + LICENSE + README).
+- [x] **배포 검증 — 레지스트리 실물 기준.** 빈 디렉터리 clean install(0 vulnerabilities) → ESM 서브패스 2종 해석(`.`·`./copc-sw.js`) → Node import에서 공개 심볼 4종 확인 → **tsc strict 에러 0**(반환값을 `Cesium3DTileset` 변수에 할당하고 `.style`에 `rampStyle()`을 대입하는 코드까지 통과). T1 게이트의 "install → fromUrl" 절반이 실증됐다.
+- [x] **저장소 공개 — `github.com/thissak/copc-cesium`.** 프로젝트명·패키지명·저장소명 일치. 문서 전체의 설치·임포트 경로를 스코프 패키지명으로 통일.
+- [ ] **T1 게이트 나머지 — 외부 환경 렌더 확인.** 타입·해석까지는 실증됐고, 브라우저에서 실제 렌더까지 확인하면 게이트가 닫힌다.
 
 ## Phase 3 — 평가 / 입상 판정 🔒
 대용량 실데이터에서 60fps / 메모리 / UX 측정 → 입상 가능성 데이터로 판정.

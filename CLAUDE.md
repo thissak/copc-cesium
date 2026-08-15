@@ -1,7 +1,7 @@
-# CopcCesiumLab — 운영 규칙
+# copc-cesium — 운영 규칙
 
-COPC 포인트클라우드를 사전 변환 없이 CesiumJS에 직접 렌더하는 기술 프로토타입. (대회 입상 타진용 실험 랩)
-성격: 학습·사이드. SSOT는 이 파일 → `docs/PROGRESS.md` → `docs/CHANGELOG.md` 순.
+COPC 포인트클라우드를 사전 변환 없이 CesiumJS에 직접 렌더하는 오픈소스 플러그인.
+배포 패키지 = `@goldenlabs/copc-cesium` (npm, Apache-2.0). SSOT는 이 파일 → `docs/PROGRESS.md` → `docs/CHANGELOG.md` 순.
 
 ## 빌드 / 실행
 
