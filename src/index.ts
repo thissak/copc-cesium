@@ -1,7 +1,7 @@
 // copc-cesium — 공개 진입점 (라이브러리 표면).
 // CesiumJS 에서 COPC 를 변환 없이 스트리밍하는 플러그인.
 //
-//   import { CopcTileset } from 'copc-cesium';
+//   import { CopcTileset } from '@goldenlabs/copc-cesium';
 //   const tileset = await CopcTileset.fromUrl(url);
 //   viewer.scene.primitives.add(tileset);
 //

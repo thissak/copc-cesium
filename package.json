@@ -1,18 +1,25 @@
 {
-  "name": "copc-cesium",
+  "name": "@goldenlabs/copc-cesium",
   "version": "0.1.0",
-  "description": "Stream COPC point clouds directly in CesiumJS — no conversion to 3D Tiles.",
+  "description": "Stream COPC point clouds directly in CesiumJS — returns a standard Cesium3DTileset, no pre-conversion required.",
   "type": "module",
   "license": "Apache-2.0",
   "keywords": [
     "cesium",
     "cesiumjs",
+    "cesium3dtileset",
     "copc",
     "point-cloud",
+    "pointcloud",
     "lidar",
     "3d-tiles",
-    "laz"
+    "laz",
+    "las",
+    "streaming"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

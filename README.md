@@ -6,7 +6,7 @@ Stream COPC point clouds directly in CesiumJS — no conversion to 3D Tiles.
 
 ```ts
 import { Viewer } from 'cesium';
-import { CopcTileset } from 'copc-cesium';
+import { CopcTileset } from '@goldenlabs/copc-cesium';
 
 // The point cloud needs no Cesium ion token. The default Viewer base imagery does —
 // pass `baseLayer: false` (below) or set `Ion.defaultAccessToken` if you want a basemap.
@@ -22,7 +22,7 @@ Showing a large point cloud in CesiumJS normally means **pre-converting** the da
 ## Install
 
 ```bash
-npm install copc-cesium cesium
+npm install @goldenlabs/copc-cesium cesium
 ```
 
 `cesium` is a peer dependency (bring your own version, `>=1.142`). The minimum is required
@@ -33,7 +33,7 @@ for the empty-tile `missingTilePolicy` used by the streaming bridge.
 Cesium fetches tile content over the network, so `copc-cesium` supplies that content through a **service worker**. Copy the bundled worker to a path your server serves at the site root:
 
 ```bash
-cp node_modules/copc-cesium/dist/copc-sw.js public/copc-sw.js
+cp node_modules/@goldenlabs/copc-cesium/dist/copc-sw.js public/copc-sw.js
 ```
 
 The service worker must be served at a scope that covers the content path (`/__copc-real/…`) — the default root scope (`/copc-sw.js`) does. If it cannot intercept, `fromUrl()` throws a clear error rather than failing silently. Override the location with `serviceWorkerUrl` / `serviceWorkerScope` if needed.
@@ -92,7 +92,7 @@ feature?.getProperty('Intensity');      // → e.g. 5120
 `pickPoint(tileset, scene, windowPosition)` is a higher-level helper: one call returns the clicked point's exact location **and** attributes, or `undefined` if the click missed the point cloud (sky, globe, or another tileset):
 
 ```ts
-import { pickPoint } from 'copc-cesium';
+import { pickPoint } from '@goldenlabs/copc-cesium';
 
 handler.setInputAction((movement) => {
   const hit = pickPoint(tileset, viewer.scene, movement.position);
@@ -120,7 +120,7 @@ const snapped = await tileset.snapPoint(viewer.scene, windowPosition); // window
 `rampStyle(name, range)` builds a normalized color-ramp style for any attribute, and `await tileset.attributeRange(name)` samples the root node for `[min, max]`:
 
 ```ts
-import { rampStyle } from 'copc-cesium';
+import { rampStyle } from '@goldenlabs/copc-cesium';
 tileset.style = rampStyle('Intensity', await tileset.attributeRange('Intensity'));
 ```
 
@@ -136,7 +136,6 @@ tileset.style = rampStyle('Intensity', await tileset.attributeRange('Intensity')
 
 This repository started as a competition lab (KOSSA OSSP / Gaia3D task — *"COPC visualization for CesiumJS"*). Internal docs:
 
-- [`docs/DIRECTION.md`](docs/DIRECTION.md) — project direction & roadmap
 - [`docs/PROGRESS.md`](docs/PROGRESS.md) — phase checklist
 - [`docs/adr/`](docs/adr/) — architecture decisions
 - [`docs/PROFILING.md`](docs/PROFILING.md) — 4-axis bottleneck profiling

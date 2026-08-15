@@ -5,7 +5,7 @@ lifecycle: active
 # PROGRESS — CopcCesiumLab
 
 > 페이즈 체크리스트. 상태가 바뀌면 한 줄씩 갱신.
-> 방향·입상 로드맵: [DIRECTION](DIRECTION.md) · 성능 경쟁지형: [STRATEGY](STRATEGY.md)
+> 성능 경쟁지형: [STRATEGY](STRATEGY.md)
 
 ## Phase 0 — 부팅 + 프로파일링 하네스 ✅
 환경이 돌고, 디버깅 도구가 보인다는 것 자체를 증명.
@@ -106,6 +106,12 @@ lifecycle: active
 
 ### 테스트 진입점 단일화 (입상 T1 게이트, 2026-06-25 · 미머지)
 - [x] **`npm test`(오프라인 unit)/`test:integration`(S3)/`test:all` + 집계 러너 `scripts/run-checks.ts`.** 오프라인 9(public type·요청 생명주기·SW 라우팅·Cesium codec 포함)/네트워크 9를 CI에 전부 연결. `check-cancel`(#20 재현)은 회귀 가드가 아니므로 제외. 검증: unit 9/9·integration 9/9·`build` 회귀 0. **DIRECTION 스코어카드 테스트 ❌→✅.**
+
+### 2026 출품물 준비 (2026-08-09)
+- [x] **3분 시연영상 완성.** Autzen RGB를 대표 예제로, SoFi Stadium 1.9GB를 대형 데이터 증명으로 사용한 실제 앱 화면 중심 영상. 최종본 167초·1920×1080·30fps·H.264/AAC, 전체 디코딩 오류 0. 한국어 합성 나레이션과 번인 자막 포함.
+- [x] **영상 주장 재검증.** 오프라인 체크 9/9·실데이터 통합 체크 9/9 통과, 8.9GB Cahokia 90초 스트레스와 Range 61→6은 기존 측정 문서와 일치. npm 동명 패키지 충돌을 확인해 설치 문구는 공개 GitHub clone으로 정정.
+- [ ] **YouTube 업로드 후 URL 확정.** 1080p 처리와 비공개 창 재생을 확인하고 결과보고서에 URL 기재.
+- [ ] **결과보고서 최종 작성·제출.** 영상·GitHub URL·측정 수치와 용어를 일치시켜 2026-08-27 18:00 전 제출.
 
 ## Phase 3 — 평가 / 입상 판정 🔒
 대용량 실데이터에서 60fps / 메모리 / UX 측정 → 입상 가능성 데이터로 판정.

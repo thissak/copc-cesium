@@ -36,3 +36,15 @@ smoke-*.png
 
 # 결과보고서 초안 — premature deliverable, 로컬 보존만. T1 정식 착수 시 다듬어 커밋
 docs/결과보고서.md
+
+# 출품 영상 제작 중간 산출물
+docs/submission/video/assets/audio/
+docs/submission/video/assets/render/
+docs/submission/video/assets/raw/*-demo.webm
+docs/submission/video/assets/raw/millsite-clean.webm
+docs/submission/video/assets/raw/playwright/
+
+# 로컬 전용 문서·산출물
+docs/DIRECTION.md
+docs/submission/
+docs/handoff/2026-submission-video-handoff.md

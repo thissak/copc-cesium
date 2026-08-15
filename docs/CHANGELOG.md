@@ -1,9 +1,16 @@
 # CHANGELOG
 
+날짜별 변경 내역 + 결정 사유. 최신이 위.
+
+### 2026-08-16
+- [release] **`@goldenlabs/copc-cesium@0.1.0` npm 배포 + 저장소 공개.** **배포 검증은 로컬 dist가 아니라 레지스트리에서 받은 실물로**: 빈 디렉터리에 `npm install @goldenlabs/copc-cesium cesium` → 0 vulnerabilities(cesium@1.144.0 동반 해석) · ESM 서브패스 2종 해석(`.`·`./copc-sw.js`) · Node 런타임 import에서 공개 심볼 4종(`CopcTileset`·`pickPoint`·`rampStyle`·`snapPoint`)과 `CopcTileset.fromUrl` 함수 확인 · **tsc strict 타입체크 에러 0**(반환값을 `Cesium3DTileset` 변수에 직접 할당하고 `.style`에 `rampStyle()`을 대입하는 코드까지 통과 → "표준 Cesium3DTileset을 반환한다"는 주장이 타입 레벨에서 성립). 최초 `npm view` 404는 CDN 전파 지연(약 30초 후 200)이었다.
+- [chore] **npm 패키지명을 `@goldenlabs/copc-cesium`으로 확정.** 비스코프 `copc-cesium`은 2026-07-31 다른 저자가 동명 패키지를 선점해 사용할 수 없다. **스코프 선택 근거**: 프로젝트명 `copc-cesium`을 그대로 유지할 수 있고, 스코프는 타인이 선점할 수 없어 이름 리스크가 사라진다. **클래스명은 이름에 넣지 않음** — cesium 생태계 상위 20개 패키지가 전부 `cesium-<기능>`/`<대상>-cesium` 관례이고 API 심볼(`Cesium3DTileset`)을 패키지명에 박은 선례가 0건이며 출처 오인 소지도 있어, 차별화 신호는 npm이 색인하는 `description`("returns a standard Cesium3DTileset")과 `keywords`(`cesium3dtileset` 외 4개 추가)로 옮겼다. 스코프 패키지는 기본이 restricted라 `publishConfig.access=public`을 명시한다. **검증**: `build:lib` OK · `publish --dry-run` = 8파일 209.9kB `public access` · unit 9/9 PASS. (`package.json`·`README.md`·`src/index.ts`)
+
+### 2026-08-09
+- [docs] **2026 오픈소스 개발자대회 3분 시연영상 패키지 완성.** 실제 앱에서 Autzen RGB COPC와 SoFi Stadium 1.9GB를 녹화해 대표성과 대형 데이터 증명을 분리하고, 한국어 합성 나레이션·번인 자막·문제/API/아키텍처/검증 카드를 합성했다. 최종본은 167초·1080p 30fps·H.264/AAC이며 전체 디코딩 오류 0, unit 9/9·integration 9/9를 재확인했다. 영상·썸네일·재현 스크립트는 저장소 외부에 보존했다.
+- [fix] **출품영상의 잘못된 npm 설치 안내를 공개 GitHub clone으로 교체.** npm의 `copc-cesium` 이름은 이미 다른 ISC 저장소가 사용 중임을 레지스트리에서 확인해, 타 패키지 설치를 유도하지 않도록 영상·대본·업로드 문구를 `git clone github.com/thissak/CopcCesiumLab.git`로 정정했다. scoped npm 이름 확정 전까지 기존 npm 설치 문구는 사용하지 않는다.
 - [fix] **[PR #28 dual-review R14] projected tile Z를 COPC node cube로 단일화.** 부분 겹침 hierarchy cube로 LAS header의 실제 점 포함을 추론하던 R13 정책을 제거했다. OGC 3D Tiles의 content 완전포함 계약과 COPC octree center/halfsize 계약에 따라 projected tile은 항상 node cube Z를 사용하고, mixed-unit cube를 높이 근거로 쓸 수 없는 geographic만 유효 header Z를 사용한다. 반례 `header=[0,100]`, `cube=[0,800]`, `pointZ=700`은 RED `[0,100]`→GREEN `[0,800]`; 세션 신뢰 상태와 lazy-page fail-loud 분기도 함께 삭제했다. Blue CRITICAL 1 대응. ([ADR-007](adr/007-spatial-reference-metric-separation.md) 보강)
 - [fix] **[PR #28 dual-review R13] tile Z fallback을 세션 단위 단조 정책으로 고정.** 루트 hierarchy의 점 보유 노드와 LAS header Z가 모순되면 모든 projected 타일이 node cube를 사용하고, 정상 세션은 모든 타일을 header 교집합으로 조인다. 이후 lazy page가 기존 header 신뢰를 뒤집으면 fail-loud해 이미 생성된 부모 경계와 자식 경계의 불일치를 차단. 학습·이슈 문서의 CRS별 계약도 현행화. Blue CRITICAL 1·MINOR 2 대응.
-
-날짜별 변경 내역 + 결정 사유. 최신이 위.
 
 ### 2026-08-06
 - [fix] **[PR #28 dual-review R12] 공식 LAS extent 신뢰와 축 판정 SSOT 정리.** projected header edge reprojection 실패는 cube 수평 metric으로 복구해 얕은 Z 조기반환을 차단. 정상 LAS header Z는 node cube와 교집합으로 조이고 손상/비교집합만 cube로 복구해 SSE 정확도와 완전포함을 함께 보존. `headerAxisValidity`로 코어·tileset 판정을 통합하고 학습 문서·ADR 충돌을 정리. Blue WARNING 2·MINOR 3 대응. ([ADR-007](adr/007-spatial-reference-metric-separation.md) 보강)
