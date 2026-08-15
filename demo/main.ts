@@ -9,6 +9,7 @@ import {
   HeadingPitchRange,
   Matrix4,
   RequestScheduler,
+  Cesium3DTileStyle,
 } from 'cesium';
 import 'cesium/Build/Cesium/Widgets/widgets.css';
 import { loadCopcNaive } from './copc';
@@ -452,6 +453,31 @@ async function runPerf() {
   }
 }
 
+// 시연용 스타일 토글: 반환값이 표준 Cesium3DTileset 이므로 Cesium 의 스타일 언어가 그대로 먹는다.
+// 키 `c` 로 전환하고, 녹화 스크립트가 결정적으로 부를 수 있게 window 훅도 노출한다.
+function installStyleToggle(tileset: { style?: Cesium3DTileStyle }): void {
+  const byClassification = new Cesium3DTileStyle({
+    color: {
+      conditions: [
+        ['${Classification} === 2', 'color("saddlebrown")'], // ground
+        ['${Classification} === 3', 'color("darkolivegreen")'], // low vegetation
+        ['${Classification} === 4', 'color("forestgreen")'], // medium vegetation
+        ['${Classification} === 5', 'color("limegreen")'], // high vegetation
+        ['${Classification} === 6', 'color("orange")'], // building
+        ['${Classification} === 9', 'color("deepskyblue")'], // water
+        ['true', 'color("gainsboro")'],
+      ],
+    },
+  });
+  const set = (on: boolean) => {
+    tileset.style = on ? byClassification : undefined;
+  };
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'c') set(!tileset.style);
+  });
+  (window as unknown as { __copcStyle: (on: boolean) => void }).__copcStyle = set;
+}
+
 // 기본 페이지 = 공개 API 데모: CopcTileset.fromUrl 로 변환 없이 LOD 스트리밍
 async function runDemo() {
   log('CopcTileset.fromUrl 데모 …');
@@ -476,6 +502,7 @@ async function runDemo() {
     });
     viewer.scene.primitives.add(tileset);
     installPickPanel(viewer, tileset);
+    installStyleToggle(tileset);
     await viewer.zoomTo(tileset);
     await new Promise((res) => setTimeout(res, 4000));
     log(
