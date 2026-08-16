@@ -1,6 +1,6 @@
 # #22 공개 tileset 헬퍼가 타입 선언에서 누락됨
 
-**Issue**: https://github.com/thissak/CopcCesiumLab/issues/22
+**Issue**: #22 (개발 이력 — 비공개 트래커)
 **Status**: Resolved
 **Created**: 2026-08-06
 **Resolved**: 2026-08-06

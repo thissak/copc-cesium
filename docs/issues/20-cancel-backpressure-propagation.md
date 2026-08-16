@@ -1,6 +1,6 @@
 # #20 취소/백프레셔 전파 부재 — 불필요해진 타일의 fetch/decode가 끝까지 점유
 
-**Issue**: https://github.com/thissak/CopcCesiumLab/issues/20
+**Issue**: #20 (개발 이력 — 비공개 트래커)
 **Status**: Closed — Won't-fix (Phase 0 게이트 FAIL: SW-signal 미발화로 클린 수정 불가 + 유계 영향 + Tier2)
 **Created**: 2026-06-23
 **Resolved**: 2026-06-23 (won't-fix — measure-first 결론)

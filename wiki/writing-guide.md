@@ -13,7 +13,7 @@ title: <사람이 읽는 제목>
 status: active | stable | deprecated
 last_verified: YYYY-MM-DD   # 본문을 실제로 SoT와 대조한 날
 owner: copc-cesium
-projects: [CopcCesiumLab]
+projects: [copc-cesium]
 ---
 ```
 

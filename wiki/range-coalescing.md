@@ -4,7 +4,7 @@ title: range coalescing — 인접 노드를 한 번에 읽어 round-trip을 줄
 status: active
 last_verified: 2026-06-18
 owner: copc-cesium
-projects: [CopcCesiumLab]
+projects: [copc-cesium]
 ---
 
 # range coalescing — 왜 적게 요청하는 게 빠른가

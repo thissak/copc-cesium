@@ -1,6 +1,6 @@
 # #17 deep-load 내부 병목: reproject(proj4 수평변환)가 내부 compute의 50%
 
-**Issue**: https://github.com/thissak/CopcCesiumLab/issues/17
+**Issue**: #17 (개발 이력 — 비공개 트래커)
 **Status**: Resolved (PR #18 머지, dual-review 2R 통과)
 **Created**: 2026-06-22
 **Resolved**: 2026-06-22

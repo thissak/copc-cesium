@@ -1,6 +1,6 @@
 # #24 요청 제한값이 다중 tileset 생명주기를 따르지 않음
 
-**Issue**: https://github.com/thissak/CopcCesiumLab/issues/24
+**Issue**: #24 (개발 이력 — 비공개 트래커)
 **Status**: Resolved
 **Created**: 2026-08-06
 **Resolved**: 2026-08-06

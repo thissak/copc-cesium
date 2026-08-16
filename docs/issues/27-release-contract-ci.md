@@ -1,6 +1,6 @@
 # #27 출하 계약 테스트와 Cesium 최소 호환 버전이 불일치함
 
-**Issue**: https://github.com/thissak/CopcCesiumLab/issues/27
+**Issue**: #27 (개발 이력 — 비공개 트래커)
 **Status**: Resolved
 **Created**: 2026-08-06
 **Resolved**: 2026-08-06

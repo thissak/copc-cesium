@@ -4,7 +4,7 @@ title: CRS georeferencing — 포인트클라우드를 지구 위 제자리에 �
 status: active
 last_verified: 2026-06-22
 owner: copc-cesium
-projects: [CopcCesiumLab]
+projects: [copc-cesium]
 ---
 
 # CRS georeferencing — 좌표계를 읽어 지구 위에 놓기, 없으면 조용히 틀리지 않기
