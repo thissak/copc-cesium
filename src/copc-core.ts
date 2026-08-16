@@ -370,6 +370,10 @@ export interface CopcSession {
   spacing: number;
   /** root의 수평 WGS84 span과 수직 미터 span 중 큰 값. 3D Tiles geometricError 단위용. */
   rootSpanM: number;
+  /** 고도색 램프 범위(미터). 이상치 클리핑된 값 — 이슈 #30. 세션당 1회 계산. */
+  rampZRange?: [number, number];
+  /** rampZRange 계산 single-flight (동시 디코드가 중복 계산·불일치를 만들지 않게). */
+  rampZPending?: Promise<void>;
 }
 
 const GEO_A = 6378137;
@@ -735,11 +739,82 @@ export async function decodeNode(
     zVals.push(z);
     keep.push(i);
   }
+  // 고도색 램프 범위를 세션당 1회 확정(이슈 #30) — colorize 는 동기이므로 그 전에 해결해 둔다.
+  // 램프를 실제로 쓸 때만 계산한다: 'height' 이거나, 요청 차원이 없어 height 로 폴백할 때.
+  // (RGB 가 있는 데이터셋은 램프를 안 쓰므로 루트 재요청도 하지 않는다.)
+  if (colorBy) {
+    const needsRamp =
+      colorBy === 'height' ||
+      (colorBy === 'rgb' && !('Red' in view.dimensions && 'Green' in view.dimensions && 'Blue' in view.dimensions)) ||
+      (colorBy === 'classification' && !('Classification' in view.dimensions)) ||
+      (colorBy === 'intensity' && !('Intensity' in view.dimensions)) ||
+      (colorBy === 'returns' && !('ReturnNumber' in view.dimensions));
+    if (needsRamp) await ensureRampZRange(s, key, zVals, lazPerf, hideClass);
+  }
   const colors = colorBy ? colorize(s, view, keep, colorBy, zVals) : undefined;
   const attrValues = attrs?.length
     ? attrs.map((spec) => readArr(view.getter(spec.lasName), keep))
     : undefined;
   return { lonLatH, zVals, count: keep.length, colors, attrValues };
+}
+
+// ── 고도색 램프 범위 (이슈 #30) ──
+// LAS header 의 원시 min/max 는 이상치에 무방비다. 바닥/천장 노이즈 몇 점이 램프를 지배하면
+// 실제 지형이 단일 색으로 압축된다(SoFi: header span 221.9m 중 실제 점 1–99% 는 56.2m = 25%만 사용).
+// COPC 루트 노드는 전 범위를 고르게 훑는 부분표본이므로 그 Z 의 백분위를 램프 범위로 쓴다.
+// **세션당 1회만** 계산해 노드 간 색 일관성을 지킨다(Potree elevationRange 와 같은 취지).
+const ROOT_KEY = '0-0-0-0';
+const RAMP_LO = 0.01;
+const RAMP_HI = 0.99;
+
+/** 정렬 가능한 Z 표본 → [lo, hi] 백분위. 표본이 부족하거나 span 이 0 이면 null. */
+function percentileRange(zVals: number[]): [number, number] | null {
+  if (zVals.length < 32) return null; // 표본이 너무 적으면 백분위가 무의미
+  const s = [...zVals].sort((a, b) => a - b);
+  const at = (p: number) => s[Math.min(s.length - 1, Math.max(0, Math.floor(p * s.length)))];
+  const lo = at(RAMP_LO);
+  const hi = at(RAMP_HI);
+  if (!Number.isFinite(lo) || !Number.isFinite(hi) || hi <= lo) return null;
+  return [lo, hi];
+}
+
+/**
+ * 램프 범위를 세션에 1회 확정한다. 루트 노드를 디코드 중이면 그 zVals 를 그대로 쓰고(추가 요청 없음),
+ * 아니면 루트를 한 번 읽어 계산한다. 실패하면 rampZRange 를 비워 둬 header 범위로 폴백한다.
+ */
+async function ensureRampZRange(
+  s: CopcSession,
+  key: string,
+  zVals: number[],
+  lazPerf: LazPerf | undefined,
+  hideClass: ReadonlySet<number> | undefined,
+): Promise<void> {
+  if (s.rampZRange) return;
+  if (key === ROOT_KEY) {
+    const r = percentileRange(zVals); // 이미 hideClass 가 걸러진 점들
+    if (r) s.rampZRange = r;
+    return;
+  }
+  if (s.rampZPending) return s.rampZPending;
+  s.rampZPending = (async () => {
+    const rootNode = s.nodes[ROOT_KEY];
+    if (!rootNode) return;
+    try {
+      const view = await Copc.loadPointDataView(s.getter, s.copc, rootNode, lazPerf ? { lazPerf } : undefined);
+      const gz = view.getter('Z');
+      const gc = hideClass?.size && 'Classification' in view.dimensions ? view.getter('Classification') : null;
+      const vals: number[] = [];
+      for (let i = 0; i < view.pointCount; i++) {
+        if (gc && hideClass!.has(gc(i) | 0)) continue;
+        vals.push(gz(i) * s.zUnit);
+      }
+      const r = percentileRange(vals);
+      if (r) s.rampZRange = r;
+    } catch {
+      /* 램프 범위 실패는 렌더를 막지 않는다 — header 범위로 폴백 */
+    }
+  })();
+  return s.rampZPending;
 }
 
 // colorBy 차원이 없어 height 로 폴백할 때, 세션당 한 번만 경고(타일마다 스팸 방지·표면화는 유지).
@@ -758,8 +833,10 @@ function readArr(g: (i: number) => number, keep: number[]): number[] {
 function colorize(s: CopcSession, view: PointView, keep: number[], colorBy: ColorBy, zVals: number[]): Uint8Array {
   const n = keep.length;
   const has = (d: string) => d in view.dimensions;
-  // 고도 색은 노드별이 아니라 데이터셋 전역 Z 범위(COPC 헤더)로 정규화 → 노드 간 색 일관(Potree elevationRange).
-  const zRange: [number, number] = [s.copc.header.min[2] * s.zUnit, s.copc.header.max[2] * s.zUnit];
+  // 고도 색은 노드별이 아니라 데이터셋 전역 Z 범위로 정규화 → 노드 간 색 일관(Potree elevationRange).
+  // 범위는 이상치 클리핑된 백분위(이슈 #30). 계산 실패 시에만 header 원시 min/max 로 폴백한다.
+  const zRange: [number, number] =
+    s.rampZRange ?? [s.copc.header.min[2] * s.zUnit, s.copc.header.max[2] * s.zUnit];
   switch (colorBy) {
     case 'height':
       return heightColors(zVals, n, zRange);
