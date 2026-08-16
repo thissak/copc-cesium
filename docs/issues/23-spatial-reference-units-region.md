@@ -1,6 +1,6 @@
 # #23 CRS 수평·수직 단위 혼용과 비보수적 tile region
 
-**Issue**: https://github.com/thissak/CopcCesiumLab/issues/23
+**Issue**: #23 (개발 이력 — 비공개 트래커)
 **Status**: Resolved
 **Created**: 2026-08-06
 **Resolved**: 2026-08-06

@@ -1,7 +1,7 @@
 # 문제 정의와 범위 — 갭 실증 데모
 
 > AI 시대에 코드는 싸졌다. 그래서 병목은 "어떻게 만드나"가 아니라 **"무엇을, 어디까지 푸나"** 로 이동한다.
-> 이 문서는 첫 데모가 *무엇을 증명하는 물건인지* 못을 박는다. 이진 체크리스트는 [`../.claude-criteria.md`](https://github.com/thissak/CopcCesiumLab/blob/main/.claude-criteria.md).
+> 이 문서는 첫 데모가 *무엇을 증명하는 물건인지* 못을 박는다. 이진 체크리스트는 [`../.claude-criteria.md`](https://github.com/thissak/copc-cesium/blob/main/.claude-criteria.md).
 
 ## 문제 정의 (한 문장)
 

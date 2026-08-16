@@ -1,6 +1,6 @@
 # #26 하이어라키 서브페이지 동시 요청이 중복 로드됨
 
-**Issue**: https://github.com/thissak/CopcCesiumLab/issues/26
+**Issue**: #26 (개발 이력 — 비공개 트래커)
 **Status**: Resolved
 **Created**: 2026-08-06
 **Resolved**: 2026-08-06

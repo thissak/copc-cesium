@@ -1,6 +1,6 @@
 # #14 deep-load 8초 fetch 타임아웃 brittle — 느린 네트워크서 재시도 폭풍
 
-**Issue**: https://github.com/thissak/CopcCesiumLab/issues/14
+**Issue**: #14 (개발 이력 — 비공개 트래커)
 **Status**: **measuring** (dual-review 2라운드 BLOCKED → circuit-breaker → 측정 결과 idle 타임아웃은 *틀린 레버*로 판명, 레버 재선택 중)
 **Created**: 2026-06-20
 **Resolved**: -

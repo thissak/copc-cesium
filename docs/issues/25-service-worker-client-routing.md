@@ -1,6 +1,6 @@
 # #25 서비스워커가 clientId 부재 시 임의 탭으로 라우팅함
 
-**Issue**: https://github.com/thissak/CopcCesiumLab/issues/25
+**Issue**: #25 (개발 이력 — 비공개 트래커)
 **Status**: Resolved
 **Created**: 2026-08-06
 **Resolved**: 2026-08-06

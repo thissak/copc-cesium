@@ -4,7 +4,7 @@ title: Reproject 격자 근사 — 비싼 점별 변환을 앵커 격자 + bilin
 status: active
 last_verified: 2026-06-22
 owner: copc-cesium
-projects: [CopcCesiumLab]
+projects: [copc-cesium]
 ---
 
 # Reproject 격자 근사 — 점마다 proj4를 돌리지 말고, 앵커 몇 개만 진짜로 풀고 그 사이는 어림한다

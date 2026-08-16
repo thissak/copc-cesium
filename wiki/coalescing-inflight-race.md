@@ -4,7 +4,7 @@ title: 진행 중 묶음은 "받아온 범위"로 잘라야 한다 — coalescin
 status: active
 last_verified: 2026-06-18
 owner: copc-cesium
-projects: [CopcCesiumLab]
+projects: [copc-cesium]
 ---
 
 # 진행 중 묶음은 "받아온 범위"로 잘라야 한다

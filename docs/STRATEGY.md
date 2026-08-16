@@ -34,7 +34,7 @@
 | **Giro3D** | ✅ | Three.js | ✅ | ❌ |
 | **iTowns** | ✅ | Three.js | ✅ | ❌ |
 | **Potree** | ✅ | 자체 WebGL | ✅ | ❌ |
-| **우리 (CopcCesiumLab)** | ✅ 목표 | **Cesium** | 목표 | **✅** |
+| **우리 (copc-cesium)** | ✅ 목표 | **Cesium** | 목표 | **✅** |
 
 핵심: **"오픈소스 ∩ CesiumJS" 칸이 비어 있다.** 이게 우리가 채우는 자리이자 입상 논리다.
 

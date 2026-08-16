@@ -4,7 +4,7 @@ title: 하이어라키 서브페이지 페이징 — 깊은 옥트리를 외부 
 status: active
 last_verified: 2026-06-17
 owner: copc-cesium
-projects: [CopcCesiumLab]
+projects: [copc-cesium]
 ---
 
 # 하이어라키 서브페이지 페이징

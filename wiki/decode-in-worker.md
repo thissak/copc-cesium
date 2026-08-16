@@ -4,7 +4,7 @@ title: 디코드는 어디서 도는가 — Web Worker (메인스레드 밖)
 status: active
 last_verified: 2026-06-22
 owner: copc-cesium
-projects: [CopcCesiumLab]
+projects: [copc-cesium]
 ---
 
 # 디코드는 어디서 도는가
