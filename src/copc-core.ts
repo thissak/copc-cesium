@@ -29,11 +29,69 @@ export function rangeTimeoutMs(begin: number, end: number, baseMs: number): numb
   return Math.max(baseMs, Math.ceil((end - begin) / (1024 * 1024)) * 2000);
 }
 
+/** `Content-Range: bytes 0-374/375` → 375. 없거나 `*` 면 undefined. */
+export function parseContentRangeTotal(header: string | null): number | undefined {
+  const m = header ? /\/\s*(\d+)\s*$/.exec(header) : null;
+  return m ? Number(m[1]) : undefined;
+}
+
+/**
+ * 서버가 실제로 "요청한 바이트"를 줬는지 검사한다. 이 검사가 없으면 계약 위반 응답이
+ * 조용히 점 데이터로 둔갑한다(측정: 0바이트·절반·Range 무시 → 예외 0으로 엉뚱한 좌표 렌더).
+ *
+ *  · 200(=206 아님): RFC 9110 §15.3.7 — Range 를 무시한 전체 응답. 바이트가 offset 부터가 아니라
+ *    **파일 처음부터**이므로 절대 신뢰 불가. 서버 능력 문제 = 결정적 → 재시도 없이 중단.
+ *  · 길이 초과: Range 끝을 무시하고 더 준 응답. 어디까지가 요청분인지 보장이 없다(뒤가 아니라 앞이
+ *    밀렸을 수도 있다) → 잘라 쓰지 않고 거부한다. 서버 능력 문제 = 결정적 → 재시도 없이 중단.
+ *  · 길이 부족: 파일 끝에서 클램프된 경우(Content-Range 의 total 로 확인)만 정당. 그 외는 잘린 응답 =
+ *    프록시/연결 문제로 일시적일 수 있으므로 재시도 대상.
+ *
+ * @param knownTotal 앞선 정상 응답에서 학습한 파일 크기. 주어지면 헤더 total 보다 **우선**한다 —
+ *   "총=begin+received" 로 거짓말하는 서버의 가짜 EOF 클램프를 잘린 응답으로 잡아내기 위함.
+ *
+ * 반환: 문제 없으면 undefined, 있으면 `{ message, retryable }`.
+ */
+export function rangeContractViolation(
+  begin: number,
+  end: number,
+  status: number,
+  contentRange: string | null,
+  received: number,
+  knownTotal?: number,
+): { message: string; retryable: boolean } | undefined {
+  if (status !== 206) {
+    return {
+      message:
+        `COPC range ${begin}-${end}: 서버가 Range 요청을 무시했습니다 (HTTP ${status}, 206 Partial Content 아님). ` +
+        '이 호스트는 HTTP Range 를 지원하지 않아 COPC 스트리밍이 불가능합니다 — Range(Accept-Ranges: bytes)를 지원하는 호스트/CDN 을 쓰세요.',
+      retryable: false,
+    };
+  }
+  const wanted = end - begin;
+  if (received === wanted) return undefined;
+  if (received > wanted) {
+    return {
+      message: `COPC range ${begin}-${end}: 요청 ${wanted}B 에 ${received}B 반환 (초과). Range 끝을 무시하는 서버 — 신뢰할 수 없습니다.`,
+      retryable: false, // 서버 능력 문제 = 결정적
+    };
+  }
+  const total = knownTotal ?? parseContentRangeTotal(contentRange);
+  // 파일 끝까지 읽고 끝난 짧은 응답은 정당(예: 헤더 프로브가 파일 크기보다 큰 범위를 요청).
+  if (received < wanted && total !== undefined && begin + received >= total) return undefined;
+  return {
+    message: `COPC range ${begin}-${end}: 요청 ${wanted}B 중 ${received}B 만 반환 (Content-Range: ${contentRange ?? '없음'}). 잘린 응답 — 신뢰할 수 없습니다.` +
+      (contentRange === null ? ' (cross-origin 이면 서버가 Access-Control-Expose-Headers: Content-Range 를 노출해야 파일 끝 클램프를 식별할 수 있습니다)' : ''),
+    retryable: true,
+  };
+}
+
 export function httpGetterWithRetry(
   url: string,
   fetchImpl: typeof fetch = fetch,
   timeoutMs = FETCH_TIMEOUT_MS,
 ): RangeGetter {
+  // 첫 정상 응답의 Content-Range 에서 학습한 파일 크기 — 이후 클램프 주장을 이 값으로 검증해 거짓 total 을 좁힌다.
+  let knownTotal: number | undefined;
   return (begin, end) =>
     pRetry(
       async () => {
@@ -46,7 +104,17 @@ export function httpGetterWithRetry(
           if (!RETRYABLE_HTTP.has(res.status)) throw new AbortError(msg); // 결정적 → 즉시 중단
           throw new Error(msg); // 429/5xx → 재시도
         }
-        return new Uint8Array(await res.arrayBuffer());
+        const bytes = new Uint8Array(await res.arrayBuffer());
+        const contentRange = res.headers.get('Content-Range');
+        // status 가 ok 여도 "요청한 바이트"가 아닐 수 있다 — 그 경우 조용히 쓰레기를 디코드하게 된다.
+        const bad = rangeContractViolation(begin, end, res.status, contentRange, bytes.length, knownTotal);
+        if (bad) {
+          const msg = `${bad.message} (${url})`;
+          if (!bad.retryable) throw new AbortError(msg);
+          throw new Error(msg);
+        }
+        knownTotal ??= parseContentRangeTotal(contentRange);
+        return bytes;
       },
       {
         retries: 3,

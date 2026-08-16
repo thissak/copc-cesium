@@ -137,6 +137,7 @@ tileset.style = rampStyle('Intensity', await tileset.attributeRange('Intensity')
 - The COPC octree is exposed as a **dynamic `Cesium3DTileset`** (geometricError per node). Cesium's screen-space-error traversal decides which nodes to load — **LOD, culling and memory eviction (`cacheBytes`) are delegated to Cesium.**
 - When Cesium requests a node, the **service worker** intercepts the request and routes it to the page, which delegates decode to a **Web Worker** (laz-perf WASM). The node is returned as `.pnts`.
 - Deep octrees page their hierarchy sub-pages on demand, so arbitrarily large files stream without reading the whole tree up front.
+- The COPC file is read with HTTP range requests, so its host must support them (`Accept-Ranges: bytes`). When it is served cross-origin, the CORS response also has to expose the range header — `Access-Control-Expose-Headers: Content-Range` — otherwise a legitimate end-of-file clamp cannot be told apart from a truncated response and the read fails loudly instead.
 
 ## Development
 
