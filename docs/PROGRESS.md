@@ -117,7 +117,9 @@ lifecycle: active
 - [x] **npm 배포 — `@goldenlabs/copc-cesium@0.1.0`.** 비스코프 `copc-cesium`이 선점돼 스코프 패키지로 전환. 스코프는 기본이 restricted라 `publishConfig.access=public` 명시. 8파일 209.9kB(dist + 서비스워커 + laz-perf wasm + LICENSE + README).
 - [x] **배포 검증 — 레지스트리 실물 기준.** 빈 디렉터리 clean install(0 vulnerabilities) → ESM 서브패스 2종 해석(`.`·`./copc-sw.js`) → Node import에서 공개 심볼 4종 확인 → **tsc strict 에러 0**(반환값을 `Cesium3DTileset` 변수에 할당하고 `.style`에 `rampStyle()`을 대입하는 코드까지 통과). T1 게이트의 "install → fromUrl" 절반이 실증됐다.
 - [x] **저장소 공개 — `github.com/thissak/copc-cesium`.** 프로젝트명·패키지명·저장소명 일치. 문서 전체의 설치·임포트 경로를 스코프 패키지명으로 통일.
-- [ ] **T1 게이트 나머지 — 외부 환경 렌더 확인.** 타입·해석까지는 실증됐고, 브라우저에서 실제 렌더까지 확인하면 게이트가 닫힌다.
+- [x] **라이브 데모 공개 — https://copc-cesium.vercel.app.** 익명 접근 200에서 Playwright 헤드리스로 검증: SW controller 확보·콘텐츠 65건 non-200 **0**·렌더 점수 **1,994,426**(pointBudget 기본 200만 수렴)·중심 **-123.0688, 44.0562 = Autzen, Oregon**·에러 0. 로컬 preview와 수치 완전 일치. `vercel.json`(SW 캐시 무효화)·`.vercelignore`(출품영상 1.3GB 차단)·SSO 보호 해제 포함. 서브패스 호스트에서 SW scope가 안 맞는 문제는 루트 도메인 선택으로 회피 — 경로 base-relative 리팩터는 불필요로 판정(루트에 SW를 놓을 수 있으면 서브패스 앱도 동작, 안 되면 fail-loud).
+- [x] **동일 아키텍처 경쟁작 분석 — `GyeongHoKim/copc-tileset`(같은 대회·같은 가이아쓰리디 지정과제, AGPL-3.0).** COPC→서비스워커→온더플라이 3D Tiles→Cesium 위임 구조와 의존 스택(copc.js·laz-perf·proj4)이 우리와 동일하나, 우리 레포가 2026-08-16까지 private이었고 그쪽 생성이 07-12라 **독립 수렴**(설계 타당성의 외부 검증). 측정 기반 항목은 우리 우위 — GE 공식(그쪽 `spacing/2^d` = 우리가 이슈 #01에서 under-refine으로 측정해 교체한 바로 그 식)·bbox(그쪽 sphere 전용)·per-point proj4(우리 격자 bilinear 54×)·range coalescing 부재·Float32 위치(우리 quantized)·point budget 부재·no-WKT 미처리·재시도/타임아웃 부재·`snapPoint` 부재. 그쪽 e2e의 지오레퍼런싱 단언은 `hypot(center) > 6.2e6`("지구 표면 어딘가")로 우리 C1(좌표 4자리 일치)보다 느슨. 상세는 CHANGELOG 2026-08-16.
+- [ ] **T1 게이트 나머지 — npm 설치본 렌더 확인.** 타입·서브패스 해석까지는 레지스트리 실물로 실증됐고, 라이브 데모로 **라이브러리 소스의 프로덕션 렌더**까지 실증됐다. 다만 데모는 `../src/copc-tileset`를 직접 import하므로 **`npm install` 한 패키지로 렌더**하는 경로는 아직 미실증 — 이 한 가지가 남으면 게이트가 닫힌다.
 
 ## Phase 3 — 평가 / 입상 판정 🔒
 대용량 실데이터에서 60fps / 메모리 / UX 측정 → 입상 가능성 데이터로 판정.

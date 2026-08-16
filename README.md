@@ -2,6 +2,8 @@
 
 Stream COPC point clouds directly in CesiumJS — no conversion to 3D Tiles.
 
+**[Live demo](https://copc-cesium.vercel.app)** — Autzen Stadium (77 MB `.copc.laz`) streamed straight from public S3 range requests. Nothing is pre-tiled and no backend of ours is involved.
+
 `copc-cesium` exposes a [COPC](https://copc.io/) file as a native `Cesium3DTileset`. There is **no offline tiling step**: the original `.copc.laz` is read with HTTP range requests, decoded on demand in a Web Worker, and streamed into Cesium's own LOD / culling machine. One line, like `TIFFImageryProvider` for COG.
 
 ```ts
@@ -33,7 +35,11 @@ for the empty-tile `missingTilePolicy` used by the streaming bridge.
 Cesium fetches tile content over the network, so `copc-cesium` supplies that content through a **service worker**. Copy the bundled worker to a path your server serves at the site root:
 
 ```bash
+# macOS / Linux
 cp node_modules/@goldenlabs/copc-cesium/dist/copc-sw.js public/copc-sw.js
+
+# Windows (PowerShell)
+Copy-Item node_modules/@goldenlabs/copc-cesium/dist/copc-sw.js public/copc-sw.js
 ```
 
 The service worker must be served at a scope that covers the content path (`/__copc-real/…`) — the default root scope (`/copc-sw.js`) does. If it cannot intercept, `fromUrl()` throws a clear error rather than failing silently. Override the location with `serviceWorkerUrl` / `serviceWorkerScope` if needed.
