@@ -47,6 +47,35 @@ function horizontalRegion(
   return [west * D2R, Math.min(...lats) * D2R, east * D2R, Math.max(...lats) * D2R];
 }
 
+/**
+ * LAS header 의 실제 점 범위를 WGS84 region 으로 환산한다 — **카메라 프레이밍 전용** (이슈 #28).
+ *
+ * 타일 boundingVolume 은 3D Tiles 완전포함 계약 때문에 옥트리 *큐브* Z 를 쓴다(ADR-007 R14).
+ * 큐브 한 변은 가장 긴 수평 범위와 같아 점이 없는 상공까지 뻗으므로, 그 구를 조준하면
+ * 점군이 화면 아래로 밀린다. 여기서는 경계 판정이 아니라 조준에만 쓰므로 header 범위를 그대로 쓴다.
+ *
+ * header 를 신뢰할 수 없으면 null → 호출측이 tileset.boundingSphere(큐브)로 폴백한다.
+ */
+export function pointExtentRegion(
+  s: CopcSession,
+): { west: number; south: number; east: number; north: number; minH: number; maxH: number } | null {
+  const bounds = [...s.copc.header.min, ...s.copc.header.max];
+  const { xyUsable, xyHasSpan, zUsable, zHasSpan } = headerAxisValidity(bounds);
+  if (!(xyUsable && xyHasSpan)) return null; // 퇴화 XY → 조준 근거 없음
+  let west: number, south: number, east: number, north: number;
+  try {
+    [west, south, east, north] = horizontalRegion(s, bounds[0], bounds[1], bounds[3], bounds[4], !!s.reproj);
+  } catch {
+    return null; // 재투영 실패 — 프레이밍은 로드를 깨뜨리면 안 되므로 조용히 폴백
+  }
+  // Z 는 header 가 유효할 때만 쓰고, 아니면 큐브 Z 로 보수적 폴백(수직형 스캔 보존).
+  let minH = zUsable && zHasSpan ? bounds[2] * s.zUnit : s.cube[2] * s.zUnit;
+  let maxH = zUsable && zHasSpan ? bounds[5] * s.zUnit : s.cube[5] * s.zUnit;
+  if (!(Number.isFinite(minH) && Number.isFinite(maxH))) return null;
+  if (maxH <= minH) maxH = minH + 1;
+  return { west, south, east, north, minH, maxH };
+}
+
 function nodeRegionAndError(s: CopcSession, key: string): { region: number[]; geomError: number } {
   const parts = key.split('-').map(Number);
   const d = parts[0];

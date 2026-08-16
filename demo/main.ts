@@ -503,14 +503,30 @@ async function runDemo() {
     viewer.scene.primitives.add(tileset);
     installPickPanel(viewer, tileset);
     installStyleToggle(tileset);
-    await viewer.zoomTo(tileset);
+    // 조준은 옥트리 큐브(tileset.boundingSphere)가 아니라 실제 점 범위로 (이슈 #28).
+    await viewer.camera.flyToBoundingSphere(tileset.copcPointBoundingSphere, { duration: 0 });
     await new Promise((res) => setTimeout(res, 4000));
-    log(
-      `${ds.label} — CopcTileset.fromUrl()\n` +
-        `변환 없이 원본 COPC 직접 · LOD 스트리밍\n` +
-        `로드된 노드: ${tileLoaded} (실패 ${tileFailed})\n` +
-        `로드 ${(performance.now() - t0).toFixed(0)}ms · 줌하면 디테일이 채워집니다`,
-    );
+    // 이슈 #31: 노드 수는 계속 늘어나므로 HUD 를 주기적으로 다시 그린다. 한 번만 그리면
+    // 대형 데이터에서 "로드된 노드: 0" 같은 낡은 값이 화면에 박힌다.
+    // 초기 로드 시간은 여기서 확정해 고정하고(계속 늘어나면 안 됨), 노드 수만 갱신한다.
+    const loadMs = performance.now() - t0;
+    const paint = () =>
+      log(
+        `${ds.label} — CopcTileset.fromUrl()\n` +
+          `변환 없이 원본 COPC 직접 · LOD 스트리밍\n` +
+          `로드된 노드: ${tileLoaded} (실패 ${tileFailed})\n` +
+          `로드 ${loadMs.toFixed(0)}ms · 줌하면 디테일이 채워집니다`,
+      );
+    paint();
+    // 이벤트마다 그리면 스트리밍 부하 구간에서 DOM 갱신이 과해진다 → 4Hz 로 합친다.
+    let lastShown = -1;
+    setInterval(() => {
+      const sig = tileLoaded * 1e6 + tileFailed;
+      if (sig !== lastShown) {
+        lastShown = sig;
+        paint();
+      }
+    }, 250);
     console.log('DEMO RESULT ' + JSON.stringify({ tileLoaded, tileFailed }));
   } catch (e) {
     log('DEMO ERROR: ' + ((e as Error)?.message ?? e));

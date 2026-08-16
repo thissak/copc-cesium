@@ -1,9 +1,17 @@
-import { Cesium3DTileset, Cesium3DTileStyle, RequestScheduler } from 'cesium';
+import {
+  BoundingSphere,
+  Cesium3DTileset,
+  Cesium3DTileStyle,
+  Ellipsoid,
+  OrientedBoundingBox,
+  Rectangle,
+  RequestScheduler,
+} from 'cesium';
 import type { Scene, Cartesian2 } from 'cesium';
 import * as Comlink from 'comlink';
 import { Copc } from 'copc';
 import { openCopc, loadSubPage, type CopcSession, type CoalesceOpts } from './copc-core';
-import { buildTileset, buildSubtree } from './tileset';
+import { buildTileset, buildSubtree, pointExtentRegion } from './tileset';
 import type { DecodeApi } from './decode.worker';
 import type { ColorBy } from './colors';
 import type { AttributeRequest } from './attributes';
@@ -97,6 +105,19 @@ export interface CopcTilesetOptions {
 export type CopcCesiumTileset = Cesium3DTileset & {
   snapPoint(scene: Scene, windowPosition: Cartesian2): Promise<SnappedPoint | undefined>;
   attributeRange(name: string): Promise<[number, number]>;
+  /**
+   * 카메라 조준용 구 — LAS header 의 **실제 점 범위**를 감싼다 (이슈 #28).
+   *
+   * `tileset.boundingSphere` 는 3D Tiles 완전포함 계약상 옥트리 *큐브*에서 파생되므로
+   * 점이 없는 상공까지 포함한다. 초기 시점은 이 구를 쓴다:
+   *
+   * ```js
+   * viewer.camera.flyToBoundingSphere(tileset.copcPointBoundingSphere);
+   * ```
+   *
+   * header 를 신뢰할 수 없는 파일에서는 `tileset.boundingSphere` 와 같은 값으로 폴백한다.
+   */
+  readonly copcPointBoundingSphere: BoundingSphere;
 };
 
 let sidCounter = 0;
@@ -342,6 +363,29 @@ export const CopcTileset = {
       (tileset as unknown as { _runtimeContentCodec?: unknown })._runtimeContentCodec = {
         missingTilePolicy: { statusCodes: [404] },
       };
+      // 조준용 구 (이슈 #28): 타일 경계는 옥트리 큐브 그대로 두고(완전포함 계약), 카메라가 볼
+      // 구만 실제 점 범위로 잡는다. Cesium 의 flyToBoundingSphere/viewBoundingSphere 는 월드좌표
+      // BoundingSphere 를 그대로 받으므로 표준 경로다. header 불신 파일은 큐브 구로 폴백.
+      // region([W,S,E,N,minH,maxH]) → 구 변환은 Cesium 이 region boundingVolume 에 쓰는 경로와 같다:
+      // OrientedBoundingBox.fromRectangle(최소·최대 높이 반영) → BoundingSphere.fromOrientedBoundingBox.
+      const extent = pointExtentRegion(session);
+      let aimSphere: BoundingSphere | undefined;
+      if (extent) {
+        try {
+          aimSphere = BoundingSphere.fromOrientedBoundingBox(
+            OrientedBoundingBox.fromRectangle(
+              new Rectangle(extent.west, extent.south, extent.east, extent.north),
+              extent.minH,
+              extent.maxH,
+              Ellipsoid.WGS84,
+            ),
+          );
+        } catch {
+          aimSphere = undefined; // 광역(폭 ≥ π) 등 fromRectangle 제약 → 큐브 구로 폴백
+        }
+      }
+      (tileset as unknown as { copcPointBoundingSphere: BoundingSphere }).copcPointBoundingSphere =
+        aimSphere ?? BoundingSphere.clone(tileset.boundingSphere);
       // --8<-- [start:maxSSE]
       tileset.maximumScreenSpaceError = options.maximumScreenSpaceError ?? 8;
       // --8<-- [end:maxSSE]
