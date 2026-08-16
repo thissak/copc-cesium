@@ -82,7 +82,18 @@ headed   : ANGLE Metal Renderer, Apple M4 Pro      60 FPS
 | 피킹 패널 | `demo/pick-panel.ts` |
 | 데이터셋 | `demo/datasets.ts` |
 | 구 녹화 스크립트 | `scripts/video/record-demo.mjs` — **headless로 찍는 구버전이라 그대로 쓰면 안 된다.** 다만 `orbit()`(`camera.lookAt` 보간) 헬퍼와 UI 숨김 CSS는 재사용할 만하다 |
-| 합성·렌더 스크립트 | `scripts/video/render-{narration,composition,final}.mjs` — 다른 머신에서 도는 것들. 여기서 실행할 필요 없다(macOS `say` TTS + darwin ffmpeg 의존) |
+| 합성·렌더 스크립트 | `scripts/video/render-composition.mjs` → `render-final.mjs`. ffmpeg/ffprobe 를 PATH 또는 `FFMPEG`/`FFPROBE` 환경변수에서 찾으므로 **이 머신에서도 돈다** |
+| 나레이션 검사 | `scripts/video/check-narration.mjs` — 씬 길이가 오디오를 담을 수 있는지 확인. **렌더 전 반드시 통과시킬 것** |
+
+## 9. 녹화 다음 단계 (같은 머신에서 이어가도 된다)
+
+나레이션을 외부 TTS 서비스로 만들기로 해서 macOS 종속(`say` 명령)이 사라졌다. 즉 녹화·합성·렌더를 이 머신 한 대에서 끝낼 수 있다.
+
+1. 씬별 나레이션 오디오를 `docs/submission/video/assets/audio/raw/` 에 `01-hero.wav` 형식으로 넣는다
+2. `node scripts/video/check-narration.mjs` — **씬 길이보다 긴 오디오는 최종본에서 말끝이 잘린다.** 이 검사가 통과할 때까지 `timeline.js` 의 `duration` 을 늘린다
+3. `node scripts/video/render-composition.mjs` → `node scripts/video/render-final.mjs`
+
+`timeline.js`(씬 구조·나레이션 원고)와 대본은 gitignore 대상이라 클론에 없다. 합성까지 진행하려면 별도로 받아야 한다 — 녹화만 하고 넘길지, 끝까지 갈지는 감독에게 확인할 것.
 
 ## 8. 끝나면
 
