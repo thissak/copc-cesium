@@ -155,6 +155,32 @@ async function buildPageTileset(sid: string, key: string): Promise<string> {
   return JSON.stringify(buildSubtree(session, key, contentBase));
 }
 
+// 세션별 미응답 SW 요청. destroy 가 마지막 세션의 워커를 terminate 하면 진행 중이던 comlink RPC 는
+// 영영 미해소 → 페이지가 port 에 답을 못 줌 → SW 는 40s 백스톱까지 대기 → 그 fetch 들이 호스트당
+// 요청 슬롯을 붙들어 **다음 세션의 정착을 최대 40초 막는다**(측정: 정착 1.9s → 38s, in-flight 단조 누수).
+// 그래서 세션을 놓을 때 미응답 요청에 즉시 답을 준다 — SW 는 곧바로 500 을 내고 슬롯이 풀린다.
+type PendingReply = (reason: string) => void;
+const pendingReplies = new Map<string, Set<PendingReply>>();
+
+function addPending(sid: string, reply: PendingReply) {
+  let set = pendingReplies.get(sid);
+  if (!set) pendingReplies.set(sid, (set = new Set()));
+  set.add(reply);
+}
+function removePending(sid: string, reply: PendingReply) {
+  const set = pendingReplies.get(sid);
+  if (!set) return;
+  set.delete(reply);
+  if (set.size === 0) pendingReplies.delete(sid);
+}
+/** 세션의 미응답 요청을 전부 즉시 실패 처리(무한 대기 대신 명시적 실패 — [[no-silent-failures]]). */
+function abortPending(sid: string) {
+  const set = pendingReplies.get(sid);
+  if (!set) return;
+  pendingReplies.delete(sid);
+  for (const reply of set) reply(`COPC session ${sid} destroyed`);
+}
+
 let messageHandler: ((ev: MessageEvent) => void) | undefined;
 function installHandler() {
   if (messageHandler) return;
@@ -162,28 +188,43 @@ function installHandler() {
     const d = ev.data as { type?: string; path?: string };
     if (d?.type !== 'copc-tile' || !d.path) return;
     const port = ev.ports[0];
+    const slash = d.path.indexOf('/'); // "{sid}/{key}.pnts" 또는 "{sid}/page/{key}.json"
+    const sid = d.path.slice(0, slash);
+    const rest = d.path.slice(slash + 1);
+    const isTile = !rest.startsWith('page/');
+    // destroy 이후 도착한 낙오 요청 — 죽은 sid 로 워커를 재스폰하거나 pendingReplies 를 재생성하지 않는다.
+    if (!activeSids.has(sid)) return void port?.postMessage({ error: `COPC session ${sid} not active` });
+    // 이 요청에 대한 응답은 딱 한 번만 나간다 — 정상 완료든 destroy 취소든.
+    let answered = false;
+    const settle = () => {
+      if (answered) return false;
+      answered = true;
+      if (isTile) decodeStats.done++; // 진단(#20): 완료(성공/빈/예외/취소 무관) — in-flight 감소
+      return true;
+    };
+    const cancel: PendingReply = (reason) => {
+      if (settle()) port?.postMessage({ error: reason });
+    };
+    addPending(sid, cancel);
+    if (isTile) decodeStats.started++; // 진단(#20): 요청 시점 (취소돼도 여기까진 도달)
     try {
-      const slash = d.path.indexOf('/'); // "{sid}/{key}.pnts" 또는 "{sid}/page/{key}.json"
-      const sid = d.path.slice(0, slash);
-      const rest = d.path.slice(slash + 1);
-      if (rest.startsWith('page/')) {
+      if (!isTile) {
         const key = rest.slice('page/'.length).replace('.json', '');
-        port?.postMessage({ json: await buildPageTileset(sid, key) }); // 서브페이지 → child tileset
+        const json = await buildPageTileset(sid, key); // 서브페이지 → child tileset
+        if (settle()) port?.postMessage({ json });
       } else {
         const key = rest.replace('.pnts', '');
-        decodeStats.started++; // 진단(#20): 요청 시점 (취소돼도 여기까진 도달)
-        try {
-          const pnts = await decodeTile(sid, key); // 워커에서 디코드(메인스레드 밖)
-          // null = 빈 노드(0점·전부 노이즈) → SW 가 404 → Cesium missingTilePolicy 로 빈 타일(이슈 #03).
-          // 진짜 누락 노드는 worker 가 throw → 아래 catch → {error} → 500.
-          if (!pnts) return void port?.postMessage({ empty: true });
-          port?.postMessage(pnts, [pnts]); // zero-copy 로 SW 에 전달
-        } finally {
-          decodeStats.done++; // 진단(#20): 완료(성공/빈/예외 무관) — in-flight 감소
-        }
+        const pnts = await decodeTile(sid, key); // 워커에서 디코드(메인스레드 밖)
+        if (!settle()) return; // destroy 가 이미 답했다 — 결과는 버린다
+        // null = 빈 노드(0점·전부 노이즈) → SW 가 404 → Cesium missingTilePolicy 로 빈 타일(이슈 #03).
+        // 진짜 누락 노드는 worker 가 throw → 아래 catch → {error} → 500.
+        if (!pnts) return void port?.postMessage({ empty: true });
+        port?.postMessage(pnts, [pnts]); // zero-copy 로 SW 에 전달
       }
     } catch (err) {
-      port?.postMessage({ error: (err as Error)?.message ?? String(err) });
+      if (settle()) port?.postMessage({ error: (err as Error)?.message ?? String(err) });
+    } finally {
+      removePending(sid, cancel);
     }
   };
   navigator.serviceWorker.addEventListener('message', messageHandler);
@@ -206,6 +247,9 @@ function cleanupIfIdle() {
 // 한 세션(sid) 정리 — destroy 와 fromUrl 초기화 실패 양쪽에서 공유(누수 방지).
 function releaseSession(sid: string) {
   if (!activeSids.delete(sid)) return;
+  // 워커를 끄기 **전에** 미응답 SW 요청을 닫는다 — 안 그러면 그 요청들이 40s 백스톱까지
+  // 매달려 다음 세션의 요청 슬롯을 잡아먹는다.
+  abortPending(sid);
   releaseContentServerThrottle(sid);
   pageSessions.delete(sid);
   if (activeSids.size > 0) {
