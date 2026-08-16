@@ -37,15 +37,16 @@ smoke-*.png
 # 결과보고서 초안 — premature deliverable, 로컬 보존만. T1 정식 착수 시 다듬어 커밋
 docs/결과보고서.md
 
-# 출품 영상 제작 중간 산출물
+# 출품물 — 대용량 산출물만 제외하고 문서는 추적한다.
+# (2026-08-09 판 산출물이 `docs/submission/` 통째 ignore 때문에 전부 유실된 전례가 있다.
+#  영상·오디오·프레임은 재생성 가능하지만 결과보고서·대본은 다시 만들기 비싸다.)
 docs/submission/video/assets/audio/
 docs/submission/video/assets/render/
-docs/submission/video/assets/raw/*-demo.webm
-docs/submission/video/assets/raw/millsite-clean.webm
-docs/submission/video/assets/raw/playwright/
+docs/submission/video/assets/raw/
+docs/submission/video/*.mp4
+docs/submission/video/*.webm
+docs/submission/video/thumbnail*.png
 
 # 로컬 전용 문서·산출물
 docs/DIRECTION.md
-docs/submission/
-docs/handoff/2026-submission-video-handoff.md
 .vercel

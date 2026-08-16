@@ -1,0 +1,311 @@
+$ npm test
+
+> @goldenlabs/copc-cesium@0.1.0 test
+> tsx scripts/run-checks.ts unit
+
+
+▶ running "unit" suite — 9 checks
+
+────────────  check-crs  ────────────
+ok    no WKT + no override → throw
+ok    no WKT + no opts → throw
+ok    header CRS used (lon=-123.000)
+ok    mixed units: horizontal foot preserved (0.3048006096012192)
+ok    mixed units: vertical metre preserved (zUnit=1)
+ok    mixed units: snap chooses 3ft horizontal over 1m vertical distance
+ok    mixed units: snap distance remains isotropic in metres
+ok    geographic compound CRS extracts horizontal GEOGCS
+ok    geographic session metric takes ECEF branch
+ok    geographic grid metric matches proj4 fallback within 1mm
+ok    geographic cube XY is clamped to real header bounds
+ok    geographic center guard uses real header bbox, not min-anchored cube
+ok    EPSG:4326 resolves as angular CRS
+ok    WGS84 resolves as angular CRS
+ok    proj string vertical units preserved (0.3048)
+ok    ESRI VERTCS vertical metre preserved (1)
+ok    compound WKT keywords accept lowercase and whitespace before brackets
+ok    proj4 unit metadata is the linear-unit SSOT (horizontal=1000, z=1000)
+ok    crs override changes result (Δlon=-6.000)
+ok    defaultCrs ignored when header present
+ok    defaultCrs applied when header missing
+ok    garbage CRS → throw
+ok    in-range center passes
+ok    out-of-range center → throw
+ok    NaN reproject → throw
+ok    zero header bbox falls back to COPC cube side metric (4656)
+ok    zero header bbox uses COPC cube side × max(horizontalUnit,zUnit) (10000)
+ok    degenerate XY ignores shallow header Z and uses metric cube (10000)
+ok    projected zero bbox region falls back to hierarchy cube
+ok    projected zero bbox height falls back to hierarchy cube (0..1000)
+ok    projected node outside stale header Z keeps cube height (400..800)
+ok    stale-header session keeps parent-child Z containment (0..800)
+ok    partially overlapping root cube cannot let stale header cull point Z=700 (0..800)
+ok    projected edge reproject failure falls back to cube horizontal metric (4656)
+ok    geographic degenerate header fails loud independently of cube intersection
+ok    geographic vertical scan preserves header Z metric (200)
+ok    geographic vertical scan builds a 200m region
+ok    geographic valid XY survives damaged Z (2226.4m)
+ok    projected node partially outside stale header keeps its hierarchy cube region
+ok    1° horizontal span remains metric (111318.1m)
+ok    geographic CRS: geometricError is metric (6957.379867999029)
+ok    vertical scan: geometricError preserves 200m Z span (12.5)
+ok    curved CRS: region includes edge extrema (north=3.5)
+
+CRS PASS ✅
+
+────────────  check-ecef  ────────────
+-123.0687,44.0559,200  err(m)=1.397e-9
+0,0,0  err(m)=0.000e+0
+120.5,-33.2,1500  err(m)=1.041e-9
+-123.07,44.06,-50  err(m)=0.000e+0
+179.9,85,8000  err(m)=1.164e-10
+
+maxErr(m)=1.397e-9
+ECEF PASS ✅ (Cesium 과 sub-mm 일치)
+
+────────────  check-picking  ────────────
+ok   — a: 결과 정의됨
+ok   — a: featureId=7
+ok   — a: attributes
+ok   — a: lon≈-123.07
+ok   — a: lat≈44.06
+ok   — a: height≈100
+ok   — b: 타 primitive → undefined
+ok   — c: 하늘 → undefined
+ok   — d: 결과 정의됨
+ok   — d: position undefined
+ok   — d: cartographic undefined
+ok   — d: attributes 존재
+ok   — e: 결과 정의됨
+ok   — e: position undefined
+ok   — e: cartographic undefined
+ok   — e: attributes 존재
+ok   — f: 결과 정의됨(crash 없음)
+ok   — f: attributes 빈 객체
+ok   — f: featureId 부재
+ok   — f: 위치 존재
+
+C-picking PASS ✅
+
+────────────  check-pnts-batch  ────────────
+PASS pnts-batch
+
+────────────  check-style  ────────────
+PASS style
+
+────────────  check-request-throttle  ────────────
+REQUEST THROTTLE PASS
+
+────────────  check-sw-routing  ────────────
+missingStatus=503 expiredStatus=503 routedStatus=404 posts=1
+SW ROUTING PASS
+
+────────────  check-cesium-codec  ────────────
+{
+  "peer": ">=1.142.0",
+  "constructorContract": true,
+  "missingTileContract": true,
+  "peerContract": true
+}
+CESIUM CODEC PASS ✅
+
+────────────  check-public-types  ────────────
+
+> @goldenlabs/copc-cesium@0.1.0 check:public-types
+> tsc --ignoreConfig --noEmit --target ES2022 --module ESNext --moduleResolution bundler --strict --skipLibCheck --types vite/client scripts/check-public-types.ts
+
+
+============================================
+9/9 passed
+ALL PASS ✅
+
+$ npm run test:integration
+
+> @goldenlabs/copc-cesium@0.1.0 test:integration
+> tsx scripts/run-checks.ts integration
+
+
+▶ running "integration" suite — 9 checks
+
+────────────  verify  ────────────
+{
+  "url": "https://s3.amazonaws.com/hobu-lidar/autzen-classified.copc.laz",
+  "pointCount": 50000,
+  "crs": "COMPD_CS[\"NAD83 / Oregon GIC Lambert (ft) + NAVD88 height (f",
+  "center": {
+    "lon": -123.06875,
+    "lat": 44.05591
+  },
+  "bbox": {
+    "lonMin": -123.075,
+    "lonMax": -123.0625,
+    "latMin": 44.05,
+    "latMax": 44.06182
+  },
+  "heightM": {
+    "min": 123.9,
+    "max": 187.5
+  },
+  "timingsMs": {
+    "create": 1796,
+    "hierarchy": 223,
+    "fetchDecodeReproject": 1072,
+    "total": 3095
+  }
+}
+
+C1 PASS ✅  center is in Oregon
+
+────────────  check-attributes  ────────────
+[copc] attributes 해석: [Classification, Intensity, ReturnNumber, NumberOfReturns]
+[copc] attributes 해석: [Intensity, Classification, ReturnNumber, NumberOfReturns, GpsTime]
+[copc] 속성 'NopeDim' 없음 → skip
+[copc] attributes 해석: [Classification]
+PASS resolver
+[copc] attributes 해석: [Classification, Intensity]
+PASS decode-attributes
+
+────────────  check-attr-pipeline  ────────────
+[copc] attributes 해석: [Classification, Intensity, ReturnNumber, NumberOfReturns]
+PASS attr-pipeline
+
+────────────  check-classification  ────────────
+URL: https://s3.amazonaws.com/hobu-lidar/millsite.copc.laz
+헤더 전역 Z: [1544.4, 2803.8]  (span 1259.4m)
+샘플: 노드 60개 · 402,613점 · Classification 존재=true
+샘플 Z 범위: [1544.4, 2803.8]
+
+class | name          | count    | %     | minZ   | maxZ   | meanZ
+------+---------------+----------+-------+--------+--------+-------
+    1 | unclassified  |    72715 | 18.06 |   1815 |   2603 |   1973
+    2 | ground        |   274195 | 68.10 |   1812 |   2599 |   1932
+    7 | LOW NOISE     |       65 |  0.02 |   1544 |   2335 |   1745
+    9 | water         |     3066 |  0.76 |   1848 |   1877 |   1876
+   10 | ?             |       26 |  0.01 |   1848 |   1877 |   1873
+   17 | bridge deck   |        2 |  0.00 |   1857 |   1890 |   1874
+   18 | HIGH NOISE    |    52544 | 13.05 |   1844 |   2804 |   2347
+
+지면(class2) meanZ=1932m. 지면+30%span 이상 높이 뜨는 클래스: 18(HIGH NOISE)
+
+────────────  check-coalesce  ────────────
+ok: groupRuns: 인접 2노드 → 1 run
+ok: groupRuns: gap > maxGap → 2 run
+ok: groupRuns: span > maxBytes → 2 run
+ok: groupRuns: 역순 입력도 off 정렬 후 1 run
+ok: groupRuns: 빈 입력 → []
+ok: groupRuns: gap == maxGap → 병합
+Task 1 passed
+ok: regionCache: 덮는 lookup → 슬라이스
+ok: regionCache: 미덮음 → undefined
+ok: regionCache: 슬라이스는 복사본(원본 변형 무영향)
+ok: regionCache: 부분 덮음 → undefined
+ok: regionCache: 총바이트 초과 → LRU 축출(오래된 것)
+ok: regionCache: 최신 region 유지
+ok: regionCache: MRU 갱신된 region0 유지
+ok: regionCache: LRU(region1) 축출
+ok: regionCache: maxBytes 초과 단일 region → 미보관(cap 엄수)
+Task 2 passed
+ok: coalescing: 노드 읽기 byte-identical
+ok: coalescing: 같은 run 형제 → 캐시 히트(base 0)
+ok: coalescing: 3 인접노드 = 1 base 호출(=1 GET)
+ok: coalescing: 비-노드 읽기 → passthrough
+ok: coalescing: 동시 같은-run 요청 → in-flight 공유(base 1)
+ok: coalescing: gap>maxGap 인 두 노드 → 2 base 호출(병합 안 함)
+Task 3 passed
+ok: timeout: 작은 range → base 8s
+ok: timeout: 8MB → 16s
+ok: timeout: 1MB → max(8000, 2000)=8s
+ok: timeout: 5MB → 10s
+Task 4 passed
+ok: #04: 레이스 — 노드 A byte-identical
+ok: #04: 레이스 — run 확장돼도 노드 B 빈/잘린 바이트 0(byte-identical)
+Task 7 passed
+Task 6 골든파일 skip (COALESCE_NET=1 로 실행)
+check-coalesce 전체 passed
+
+────────────  check-hierarchy  ────────────
+{
+  "url": "https://s3.amazonaws.com/hobu-lidar/autzen-classified.copc.laz",
+  "rootPageNodes": 278,
+  "subPages_IGNORED": 0,
+  "subPageKeys": [],
+  "maxDepthReachable": 5,
+  "totalPointsInRootPage": 10653336
+}
+
+────────────  check-paging  ────────────
+{
+  "url": "https://s3.amazonaws.com/hobu-lidar/millsite.copc.laz",
+  "rootNodes": 3447,
+  "subPagesInRoot": 141,
+  "sampleKey": "4-0-7-1",
+  "before": {
+    "inNodes": false,
+    "decode": "null(미스)"
+  },
+  "loaded": true,
+  "concurrentlyLoaded": true,
+  "samplePageReads": 1,
+  "after": {
+    "inNodes": true,
+    "nodesAdded": 88,
+    "decodedPoints": 23423,
+    "deeperPagePtrs": 140
+  }
+}
+
+PAGING PASS ✅  서브페이지 노드가 로드 후 디코드됨
+
+────────────  check-retry  ────────────
+PASS  성공 1회: ok=true calls=1 (기대 ok=true calls=1)
+[copc] range 재시도 (시도 1, 남은 3): fetch failed
+[copc] range 재시도 (시도 2, 남은 2): fetch failed
+PASS  네트워크 2회 실패→성공: ok=true calls=3 (기대 ok=true calls=3)
+[copc] range 재시도 (시도 1, 남은 3): COPC range 0-3: HTTP 503 (http://mock/x)
+[copc] range 재시도 (시도 2, 남은 2): COPC range 0-3: HTTP 503 (http://mock/x)
+PASS  503 2회→성공: ok=true calls=3 (기대 ok=true calls=3)
+PASS  404 즉시실패(재시도X): ok=false calls=1 (기대 ok=false calls=1)  err=COPC range 0-3: HTTP 404 (http://moc
+PASS  416 즉시실패(재시도X): ok=false calls=1 (기대 ok=false calls=1)  err=COPC range 0-3: HTTP 416 (http://moc
+[copc] range 재시도 (시도 1, 남은 3): COPC range 0-3: HTTP 503 (http://mock/x)
+[copc] range 재시도 (시도 2, 남은 2): COPC range 0-3: HTTP 503 (http://mock/x)
+[copc] range 재시도 (시도 3, 남은 1): COPC range 0-3: HTTP 503 (http://mock/x)
+[copc] range 재시도 (시도 4, 남은 0): COPC range 0-3: HTTP 503 (http://mock/x)
+PASS  지속 503→소진 후 실패: ok=false calls=4 (기대 ok=false calls=4)  err=COPC range 0-3: HTTP 503 (http://moc
+[copc] range 재시도 (시도 1, 남은 3): cannot read 'x' of undefined
+PASS  버그 TypeError→즉시실패(가리지 않음): ok=false calls=1 (기대 ok=false calls=1)  err=cannot read 'x' of undefined
+[copc] range 재시도 (시도 1, 남은 3): The operation was aborted due to timeout
+[copc] range 재시도 (시도 2, 남은 2): The operation was aborted due to timeout
+[copc] range 재시도 (시도 3, 남은 1): The operation was aborted due to timeout
+[copc] range 재시도 (시도 4, 남은 0): The operation was aborted due to timeout
+PASS  타임아웃→재시도→표면화: timedOut=true calls=4 (기대 true/4)
+
+RETRY PASS ✅  재시도/분류/소진/타임아웃 모두 정확
+
+────────────  check-snap  ────────────
+ok   — L1: 노드 키 반환  key=4-11-1-0
+ok   — L1: 반환 노드가 s.nodes 에 실재
+ok   — L1: 씨앗이 노드 큐브 내
+ok   — L2: 큐브 밖 → undefined
+ok   — N: hit 반환
+ok   — N: dist == ECEF 실거리(미터)  dist=0.1293 ecef=0.1293
+ok   — N: ECEF-최근접 점 선택  Δdist=0.00e+0
+ok   — N: height 일치
+ok   — N2: iso≠aniso 씨앗서 구현이 등방(정답) 선택  isoBi=41
+ok   — E2E: hit 반환
+ok   — E2E: lon≈점0  lon=-123.06250021390507
+ok   — E2E: lat≈점0
+ok   — E2E: dist 작음(씨앗=실제점)
+ok   — S1: 결과
+ok   — S1: 속성
+ok   — S1: lon≈-123.0701
+ok   — S1: distanceM≈ECEF거리  d=13.736 exp=13.736
+ok   — S2: 타 primitive → undefined
+ok   — S2: query 미호출
+ok   — S3: pickPosition 미지원 → undefined
+ok   — S4: query null → undefined
+
+C-snap PASS ✅
+
+============================================
+9/9 passed
+ALL PASS ✅
